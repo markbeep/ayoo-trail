@@ -1,0 +1,8 @@
+/target
+/data
+/.superpowers
+/.worktrees
+node_modules
+/web/dist
+*.log
+.DS_Store

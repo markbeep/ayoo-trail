@@ -1,0 +1,8 @@
+[tools]
+just = "latest"
+node = "26.13.1"
+rust = "1.100.0"
+
+[settings.rust]
+rustup_home = "~/.local/share/rustup"
+cargo_home = "~/.local/share/cargo"
