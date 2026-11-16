@@ -182,3 +182,4 @@ swissmobility (difficulty imagery), MeteoSwiss snow map, SLF, OSM.
 | Q17 | What counts as "steep uphill" (preferred) vs "too steep downhill" for the cost model? | answered in part — defaults in design §8, tuned later via sliders |
 | Q18 | Travel-time reachability from home | answered — D19 (deferred) |
 | Q19 | Coverage beyond Switzerland | answered — design §6.3 region packs; CH only in v1 |
+| Q20 | PWA/offline: installable shell + cached routes, or offline generation via region packs + WASM | answered — D23 (not supported) |

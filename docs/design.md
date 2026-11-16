@@ -49,7 +49,7 @@ drag one point to adjust it, export the GPX.
 - Accounts, multi-user, database, billing.
 - Travel-time reachability from home (deferred; any map point is a start).
 - Live public-transport routing at request time.
-- Mobile app, offline mode, turn-by-turn navigation.
+- Mobile app, PWA/offline support, turn-by-turn navigation (D23).
 - Coverage outside Switzerland, including cross-border loops.
 - Viewshed, snow, sun/shade, POIs, webcams, photos, elevation-profile matching
   in the first usable version.
