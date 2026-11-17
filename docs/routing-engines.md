@@ -180,6 +180,43 @@ every option.
   the segment format and the profile data model.
 - No multi-objective or constraint support.
 
+### E2. Forking BRouter — assessed 2026-11-17
+
+Verified in the 2026-11-17 source/docs:
+
+- MIT. The server natively accepts `nogos` (lon, lat, radius, weight) and
+  `polygons` (lon/lat list, weight) per request, so exclusion areas are
+  requirement 4 solved.
+- It documents `profile:<var>=<value>` request parameters; those values reach
+  the path model through `RoutingContext.keyValues`. So one parameterised
+  profile file can serve per-request slider values. Profiles are still files
+  selected by name.
+- Cost is evaluated per way at route time from the rd5 tag bitstream, so a new
+  cost term is a profile edit **if** its input is already an encoded tag.
+- A genuinely new per-way input needs a tag in `lookups.dat`, regenerated rd5
+  tiles (lookup-table changes are version-gated), and importer work. The
+  production segment script supports "pseudo tags", the cheapest lever for
+  injecting computed viewshed/forest/official/snow values.
+- `costfactor >= 1` is required by the routing algorithm. The sub-1 bonuses in
+  design §8 (official 0.7, forest 0.9, uphill 0.95) must be rescaled.
+- Elevation comes from SRTM `.bef` tiles (1 or 3 arcsec), not swisstopo
+  DHM25/ALTI3D. Using the Swiss DEM means a converter and a resample, which
+  fights the design's native-grid constraint.
+- `roundtrip` parameters exist (distance, points, direction), but not
+  target-distance repair, anchor diversity, scoring, dedup, or hard
+  constraints.
+
+**Verdict: feasible to fork, not economical for this product.** The fork
+replaces tasks 1–5 (graph, snap, A*) with Java to maintain, leaves tasks 9–14
+(generation, scoring, API, UI) unchanged in Rust/TS, and adds a permanent
+upstream rebase plus a second language and import pipeline. The layers that
+differentiate the product are exactly what the fork makes expensive. D12
+stands. BRouter stays useful as (a) an offline oracle for route validation and
+(b) an optional throwaway spike to test the §8 factors and whether combining
+metrics washes out, using brouter-web's per-way Data tab. If the product ever
+drops to a few static profiles with point-to-point routing, forking becomes
+reasonable — bikerouter proves that shape.
+
 ## Rejected quickly
 
 - **OSRM** — car-centric, no elevation, no per-edge custom costs.
@@ -193,8 +230,8 @@ every option.
 | Language | Rust | Java | C++ (Rust bindings) | Java | Java |
 | License | ours | Apache 2.0 | MIT | GPLv3 | MIT |
 | Built-in attrs | we bake | strongest | good | good | medium |
-| Request-time weights | any | custom model | costing options | profiles | profiles |
-| Exclusion polygons | any | yes (request GeoJSON) | no | no | no |
+| Request-time weights | any | custom model | costing options | profiles | profile params |
+| Exclusion polygons | any | yes (request GeoJSON) | no | no | yes (nogo/polygon) |
 | New custom layer | natural | Java encoded value | C++ tile build | Java + Postgres | segment format |
 | Asymmetric slope cost | yes | yes (slope sign) | C++ edit | fork | profile (if attrs) |
 | Hard constraints | ours | ours | ours | ours | ours |
