@@ -6,3 +6,6 @@ node_modules
 /web/dist
 *.log
 .DS_Store
+# Impeccable skill install (reinstall with: npx impeccable install --project --providers=claude)
+.claude/
+.impeccable/

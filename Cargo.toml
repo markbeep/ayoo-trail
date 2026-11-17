@@ -1,0 +1,27 @@
+[package]
+name = "trail-route"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.100"
+publish = false
+
+[lib]
+name = "trail_route"
+path = "src/lib.rs"
+
+[[bin]]
+name = "trail-server"
+path = "src/bin/server.rs"
+
+[dependencies]
+axum = "0.8.9"
+tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "net", "signal"] }
+tower-http = { version = "0.7", features = ["fs", "trace"] }
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+serde_json = "1"

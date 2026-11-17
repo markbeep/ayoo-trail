@@ -4,11 +4,22 @@ Read this first, then `docs/brief.md`.
 
 ## Phase
 
-**Design iteration — implementation paused.** The owner approved
-`docs/design.md` in principle and `docs/milestones.md` holds the 16-task
-implementation plan, but the owner has explicitly paused execution: the project
-is still in the design phase. Do not write product code, scaffold, or start the
-plan until the owner says so.
+**Scaffold built; engine still paused.** The owner approved `docs/design.md`
+in principle and `docs/milestones.md` holds the 16-task plan. On 2026-11-18 the
+owner asked for the scaffold only (D24): the Rust server shell and the client
+with map, base-map switching and route rendering from synthetic data. Do not
+start the routing algorithm, importer or graph work (plan tasks 1–12) until the
+owner says so. Parts of tasks 1, 11 and 13 already exist as scaffold; reconcile
+them rather than recreating files when the plan resumes.
+
+## Layout
+
+- `src/` — Rust crate (`trail_route`), `src/bin/server.rs` is `trail-server`.
+- `web/` — Vite + Solid + MapLibre client. Synthetic routes live in
+  `web/src/routes/mock.ts`; the layer registry in `web/src/map/basemaps.ts`.
+- `PRODUCT.md`, `.impeccable/` — impeccable design context. The surface brief
+  `.impeccable/surfaces/web-src-app-tsx.md` is the visual direction contract.
+- `just dev` (server + Vite), `just web`, `just check`.
 
 ## What it is
 
@@ -28,6 +39,8 @@ pluggable, and layer gating/tiers may come later.
 | `docs/layers.md` | Per-layer data sources, licences, algorithms, precompute cost. |
 | `docs/design.md` | Approved design: architecture, graph format, cost model, API, frontend, setup. |
 | `docs/milestones.md` | 16-task implementation plan, executed subagent-driven. |
+| `PRODUCT.md` | Product context for design work (impeccable). |
+| `DESIGN.md` | Visual design system (impeccable), written from the built UI. |
 
 ## Working rules
 

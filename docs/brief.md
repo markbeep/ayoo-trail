@@ -183,3 +183,6 @@ swissmobility (difficulty imagery), MeteoSwiss snow map, SLF, OSM.
 | Q18 | Travel-time reachability from home | answered — D19 (deferred) |
 | Q19 | Coverage beyond Switzerland | answered — design §6.3 region packs; CH only in v1 |
 | Q20 | PWA/offline: installable shell + cached routes, or offline generation via region packs + WASM | answered — D23 (not supported) |
+| Q21 | Design review 2026-11-17 (`docs/report/report.pdf`): 28 proposed changes and choices R1–R28 (official-trail source, cost-model form, grade bands, closures, generation budget, personas, 3D terrain, border buffer, data spike first, …) | open — owner to review the decision register (report ch. 17) |
+| Q22 | Future layers (snow, heatmap, viewshed, …): separate base maps, overlays on top of Topo/Satellite, or both? The client registry has an exclusive base-map list and an empty overlay slot, so either fits; the UI lists Snow depth and Popular trails as disabled "Later" rows | open |
+| Q23 | Score-breakdown wording and choices ("Fine / Avoid / Strongly avoid" → weights 0.5 / 1 / 2) are placeholders mapped onto design §8 weights; confirm the labels and the value mapping once the engine exists | open |
