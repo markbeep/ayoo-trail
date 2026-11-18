@@ -1,6 +1,7 @@
 //! trail-route: trail-running loop generation for Switzerland.
 //!
-//! Only the web server shell exists so far; graph, cost and routing modules
-//! arrive with the engine milestones (`docs/milestones.md`).
+//! The web server shell and the graph file format exist so far; cost and
+//! routing modules arrive with the engine milestones (`docs/milestones.md`).
 
+pub mod graph;
 pub mod server;
