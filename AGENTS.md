@@ -4,13 +4,10 @@ Read this first, then `docs/brief.md`.
 
 ## Phase
 
-**Scaffold built; engine still paused.** The owner approved `docs/design.md`
-in principle and `docs/milestones.md` holds the 16-task plan. On 2026-11-18 the
-owner asked for the scaffold only (D24): the Rust server shell and the client
-with map, base-map switching and route rendering from synthetic data. Do not
-start the routing algorithm, importer or graph work (plan tasks 1–12) until the
-owner says so. Parts of tasks 1, 11 and 13 already exist as scaffold; reconcile
-them rather than recreating files when the plan resumes.
+**Engine and importer in implementation (D29).** Plan tasks 1–8 and 11 plus a
+dev-only `?dev=route` client mode are being built, with the 2026-11-18
+revisions (D30–D37) overriding `docs/milestones.md` where they differ. Loop
+generation, `/api/generate` and the cache (tasks 9, 10, 12) wait for the owner.
 
 ## Layout
 

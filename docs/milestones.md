@@ -10,6 +10,15 @@
 
 **Spec:** `docs/design.md`. Companions: `docs/brief.md`, `docs/decisions.md`, `docs/layers.md`, `docs/routing-engines.md`.
 
+> **Revision 2026-11-18 (D29–D37).** Tasks 1–8 and 11 run now; 9, 10, 12 wait. Where this text and the decisions differ, the decisions win:
+> - Task 1–2: format adds a CSR adjacency section, `grade[9]` histogram and `highway` byte per edge, bbox in the header; `bytemuck` zero-copy reads. `flatgeobuf`, `blake3`, `lru` are not needed yet.
+> - Task 3: R-tree over geometry segments; snap takes a traversability predicate.
+> - Task 4: slope cost is the length-weighted band factor over `grade`; missing-sac penalty only on `path`/`bridleway`; default `max_sac` 3; score is `100·min(0.63/mean_factor_default, 1)` per metre (the `route_score` tests below are wrong and are replaced).
+> - Task 6: highway inference for surface (D31); forest includes multipolygons, excludes `landuse=meadow`.
+> - Task 7: no `split_edges_at_extrema` (D30); DEM behind a trait with swissALTI3D tiles (default) and DHM25 ASCII; 10 m sampling; bridge/tunnel interpolation; Z densification.
+> - Task 8: official trails read from the GPKG with `rusqlite` and matched in LV95; no GDAL.
+> - Task 11: server starts without a graph (`/api/route` → 503); health adds `bbox`.
+
 ## Global Constraints
 
 - Rust stable, edition 2021. Node 26.13.1 and just pinned in `mise.toml`.

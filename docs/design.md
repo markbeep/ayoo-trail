@@ -1,8 +1,7 @@
 # Design — trail-route
 
-Status: **approved in principle; implementation paused**, 2026-11-16. The
-project is still in design iteration. The plan in `docs/milestones.md` is
-written but not being executed.
+Status: **approved; engine and importer in implementation** (D29), 2026-11-18.
+Generation, the generate API and the cache are not started.
 Companions: `brief.md` (intent and backlog), `decisions.md` (log),
 `routing-engines.md` (engine choice), `layers.md` (data sources and licences).
 
@@ -22,6 +21,10 @@ Revision history:
   route steps for mid-edge starts, edge splitting at elevation extrema,
   native-swiss-grid DEM, FlatGeobuf official trails, OSM land cover, midpoint
   drag handles, waypoints in the generate response, raster maxzoom.
+- **v5** — pre-implementation review, 2026-11-18 (D29–D37): grade histogram
+  instead of extrema splitting, CSR adjacency, highway class and tag
+  inference, non-saturating score in per-metre units, `max_sac` 3,
+  configurable DEM (swissALTI3D default, DHM25), no GDAL.
 
 ## 1. Intent
 
@@ -142,21 +145,32 @@ Single file, mmap'd, little-endian. The header carries magic, version, OSM
 date and counts; section offsets are derived from one layout function shared by
 the writer and the reader.
 
+Sections are struct-of-arrays, each 8-byte aligned, read zero-copy.
+
 | Section | Fields |
 |---|---|
 | Node | `f32 lat`, `f32 lon`, `i16 elev_m` |
-| Edge | `u32 from`, `u32 to`, `u32 length_cm`, `i16 gain_m`, `i16 loss_m`, `u8 surface`, `u8 sac`, `u8 forest_pct`, `u8 urban`, `u8 official_category`, `u8 flags`, `u32 geom_start`, `u32 geom_len` |
+| Adjacency (CSR) | `u32 node_first[n+1]`, `u32 adj[2m]` = `edge << 1 \| reversed` |
+| Edge | `u32 from`, `u32 to`, `u32 length_cm`, `i16 gain_m`, `i16 loss_m`, `u8 grade[9]`, `u8 surface`, `u8 sac`, `u8 highway`, `u8 forest_pct`, `u8 urban`, `u8 official_category`, `u8 flags`, `u32 geom_start`, `u32 geom_len` |
 | Geometry | `f32 lat`, `f32 lon` pairs, referenced by edges |
 | Geometry Z | `i16 elev_m` per geometry vertex, parallel to Geometry |
+| Anchors | `f32 lat`, `f32 lon`, `u8 kind`, `f32 weight` |
 
 Each edge is stored once. Reverse traversal swaps gain and loss and inverts the
 slope sign; other attributes are symmetric. `official_category` is 0 for none
 and 1–3 for the official network class (yellow/red/blue), so a marked Wanderweg
 can be weighted differently from an alpine route. `flags` holds informal /
-missing-tag / bridge / tunnel / ferry. Gain and loss accumulate with a 2 m
-vertical deadband to suppress DEM jitter. Edges are split at junctions and at
-local elevation extrema, so `loss/len` describes one descent instead of
-averaging a climb-and-descend way.
+missing-tag / bridge / tunnel / ferry / surface-inferred. Gain and loss
+accumulate with a 2 m vertical deadband to suppress DEM jitter and serve the
+climb statistics only. Edges are split at junctions only.
+
+`grade` is the slope histogram (D30): the share of the edge's length (sum 255)
+in nine signed bands with symmetric edges, ≤ −25, −25…−20, −20…−15, −15…−8,
+−8…8, 8…15, 15…20, 20…25, ≥ 25 %, for the forward direction. Reverse
+traversal reads the array backwards. The DEM is sampled every ~10 m and the
+grade measured over ~25 m windows. Bridges and tunnels interpolate elevation
+between their endpoints instead of sampling the ground. `highway` is the OSM
+highway class (D31).
 
 Storing Z per geometry vertex makes elevation profiles exact without shipping a
 DEM to the runtime; it costs 2 bytes per vertex.
@@ -171,13 +185,17 @@ the drag debugger):
 
 | Factor | Default |
 |---|---|
-| Slope | grade ≤ −25 %: 2.5; −25…−15: 1.8; −15…−8: 1.2; −8…8: 1.0; 8…20 up: 0.95; > 20 up: 1.0 |
+| Slope | per grade band, length-weighted over the histogram: ≤ −25 %: 2.5; −25…−15: 1.8; −15…−8: 1.2; −8…8: 1.0; 8…20 up: 0.95; > 20 up: 1.0 |
 | Surface | asphalt 2.0, paved 1.5, compacted 1.1, gravel 1.0, dirt 0.95, grass 1.1, rock 1.2, unknown 1.4 |
-| Technicality | T1 1.0, T2 1.05, T3 1.15, T4 1.4, T5+ excluded by default, missing tag 1.3 |
+| Technicality | T1 1.0, T2 1.05, T3 1.15, T4 1.4 (excluded by default, `max_sac` 3, D35), missing tag on `path`/`bridleway` 1.3; other highway types default to T1 |
 | Official trail | 0.7 |
 | Forest | 0.9 |
 | Urban | inside settlement 2.0, within 200 m 1.3 |
 | Exclusion marker | multiply by 5, or block if the marker is set to block |
+
+Missing surface tags are inferred from the highway type (D31): roads →
+asphalt, tracks from `tracktype` (grade1 paved … grade5 grass, none → gravel),
+paths and footways stay unknown. Inferred values carry a flag.
 
 Hard filters, applied before costing: sac above the profile maximum, motorway
 and trunk always, access restrictions, exclusion markers configured to block.
@@ -188,10 +206,11 @@ floor of 0.05, so no slider setting can produce a non-positive edge cost. The
 `slope` weight is labelled "slope sensitivity" in the UI: it scales the uphill
 bonus and the downhill penalty together.
 
-Score = `100 * clamp(0.75 / cost_per_km, 0, 1)`, where
-`cost_per_km = total_cost / (distance_m / 1000)`. 0.75 is the cost per km of a
-flat, plain rural gravel trail; an ideal official forest trail (0.63) clamps at
-100, a plain gravel route scores 75, asphalt-heavy routes land near 37. The
+Score = `100 * min(0.63 / mean_factor_default, 1)` (D32), where
+`mean_factor_default = cost / distance_m`, the cost per metre under **default
+weights**, without exclusion or repetition penalties, so the score does not
+move with the sliders. A flat official forest trail (0.63) scores 100, plain
+gravel 63, asphalt about 32; only routes better than that clamp. The
 per-term contribution is displayed as bars so the drag debugger shows *why* the
 score moved.
 
@@ -321,8 +340,11 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 
 - `mise` pins Rust, Node, just.
 - `just dev` runs the server and Vite with a proxy; requires `data/graph.bin`.
-- `just import REGION=ch` builds the full graph; `REGION=demo` builds a small
-  bbox for iteration.
+- `just data` fetches the sources: the Geofabrik CH PBF, swissALTI3D 2 m
+  tiles for the region bbox (STAC API) or DHM25, and the swissTLM3D Wanderwege
+  GPKG. Only curl, jq and unzip; no GDAL (D37).
+- `just import REGION=ch` builds the full graph; `REGION=demo` builds the
+  Wattwil–Ziegelbrücke bbox (D34). The DEM source is configurable (D33).
 - `docker compose up` is the full-stack path: an `import` service that exits
   immediately if `data/graph.bin` exists (otherwise builds `REGION`, default
   `demo`) and a `server` service that depends on its successful completion.
@@ -334,7 +356,7 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 
 ## 13. Testing
 
-- Unit: slope histogram direction, cost monotonicity (steeper descent costs
+- Unit: grade histogram direction, cost monotonicity (steeper descent costs
   more), surface/tech lookup, dedup, GPX serialisation.
 - Import fixture: a hand-written tiny `.osm` XML and a synthetic DEM in
   `tests/fixtures`, so the pipeline runs in CI without downloads.
