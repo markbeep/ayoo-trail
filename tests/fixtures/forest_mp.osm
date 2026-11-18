@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<osm version="0.6">
+  <!-- outer square, split over ways 100 and 101 (101 runs backwards) -->
+  <node id="1" lat="47.0000" lon="8.0000"/>
+  <node id="2" lat="47.0000" lon="8.0100"/>
+  <node id="3" lat="47.0100" lon="8.0100"/>
+  <node id="4" lat="47.0100" lon="8.0000"/>
+  <!-- inner square -->
+  <node id="5" lat="47.0040" lon="8.0040"/>
+  <node id="6" lat="47.0040" lon="8.0060"/>
+  <node id="7" lat="47.0060" lon="8.0060"/>
+  <node id="8" lat="47.0060" lon="8.0040"/>
+  <!-- meadow triangle -->
+  <node id="9" lat="47.0200" lon="8.0000"/>
+  <node id="10" lat="47.0200" lon="8.0100"/>
+  <node id="11" lat="47.0300" lon="8.0000"/>
+  <node id="20" lat="47.0500" lon="8.0500">
+    <tag k="place" v="village"/>
+    <tag k="name" v="Testdorf"/>
+  </node>
+  <way id="100"><nd ref="1"/><nd ref="2"/><nd ref="3"/></way>
+  <way id="101"><nd ref="1"/><nd ref="4"/><nd ref="3"/></way>
+  <way id="102"><nd ref="5"/><nd ref="6"/><nd ref="7"/><nd ref="8"/><nd ref="5"/></way>
+  <way id="103">
+    <nd ref="9"/><nd ref="10"/><nd ref="11"/><nd ref="9"/>
+    <tag k="landuse" v="meadow"/>
+  </way>
+  <relation id="200">
+    <member type="way" ref="100" role="outer"/>
+    <member type="way" ref="101" role="outer"/>
+    <member type="way" ref="102" role="inner"/>
+    <tag k="type" v="multipolygon"/>
+    <tag k="landuse" v="forest"/>
+  </relation>
+</osm>

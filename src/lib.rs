@@ -1,11 +1,13 @@
 //! trail-route: trail-running loop generation for Switzerland.
 //!
-//! The web server shell and the graph file format exist so far; cost and
-//! routing modules arrive with the engine milestones (`docs/milestones.md`).
+//! Modules: `graph` (the `graph.bin` format), `geodesy`, `snap` (edge
+//! snapping), `cost` (profile and scoring), `route` (forward A* and route
+//! assembly), `import` (offline OSM importer) and `server` (the web shell).
 
 pub mod cost;
 pub mod geodesy;
 pub mod graph;
+pub mod import;
 pub mod route;
 pub mod server;
 pub mod snap;
