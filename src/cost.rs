@@ -126,14 +126,19 @@ impl Profile {
     /// Admissible A* lower bound on cost per metre under these weights.
     pub fn min_cost_per_m(&self) -> f64 {
         // The slack absorbs f32 rounding in the slope average, keeping the bound admissible.
-        let w = &self.weights;
-        (1.0 - 1e-6)
-            * min_weighted(&SLOPE_BAND_FACTORS, w.slope)
-            * min_weighted(&SURFACE_FACTORS, w.surface)
-            * min_weighted(&TECH_FACTORS, w.tech)
-            * min_weighted(&OFFICIAL_FACTORS, w.official)
-            * min_weighted(&FOREST_FACTORS, w.forest)
-            * min_weighted(&URBAN_FACTORS, w.urban)
+        (1.0 - 1e-6) * term_minima(&self.weights).product()
+    }
+}
+
+/// Smallest weighted factor each term can take under `w`.
+pub fn term_minima(w: &Weights) -> Breakdown {
+    Breakdown {
+        slope: min_weighted(&SLOPE_BAND_FACTORS, w.slope) as f32,
+        surface: min_weighted(&SURFACE_FACTORS, w.surface) as f32,
+        tech: min_weighted(&TECH_FACTORS, w.tech) as f32,
+        official: min_weighted(&OFFICIAL_FACTORS, w.official) as f32,
+        forest: min_weighted(&FOREST_FACTORS, w.forest) as f32,
+        urban: min_weighted(&URBAN_FACTORS, w.urban) as f32,
     }
 }
 
@@ -291,4 +296,24 @@ pub fn score(mean_factor_default: f64) -> f32 {
         return 0.0;
     }
     (100.0 * (SCORE_REFERENCE / mean_factor_default).min(1.0)) as f32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn term_minima_follow_the_tables_and_weights() {
+        let m = term_minima(&Weights::default());
+        assert_eq!(
+            (m.slope, m.surface, m.official, m.forest),
+            (0.95, 0.95, 0.7, 0.9)
+        );
+        assert_eq!((m.tech, m.urban), (1.0, 1.0));
+        let off = term_minima(&Weights {
+            official: 0.0,
+            ..Weights::default()
+        });
+        assert_eq!(off.official, 1.0);
+    }
 }

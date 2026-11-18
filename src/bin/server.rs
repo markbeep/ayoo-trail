@@ -2,7 +2,10 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Instant;
 use tracing_subscriber::EnvFilter;
+use trail_route::graph::Graph;
 use trail_route::server::{app, ServerConfig};
 
 #[tokio::main]
@@ -21,9 +24,31 @@ async fn main() -> std::io::Result<()> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("web/dist"));
 
+    let graph_path = std::env::var_os("DATA_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("data"))
+        .join("graph.bin");
+    let graph = if graph_path.exists() {
+        let t = Instant::now();
+        let g = Graph::open(&graph_path).map_err(|e| {
+            std::io::Error::other(format!("cannot open {}: {e}", graph_path.display()))
+        })?;
+        g.warm_snap_index();
+        tracing::info!(
+            nodes = g.node_count(),
+            edges = g.edge_count(),
+            elapsed = ?t.elapsed(),
+            "graph loaded"
+        );
+        Some(Arc::new(g))
+    } else {
+        tracing::warn!(path = %graph_path.display(), "no graph found, running without routing");
+        None
+    };
+
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!(%addr, static_dir = %static_dir.display(), "trail-server listening");
-    axum::serve(listener, app(ServerConfig { static_dir }))
+    axum::serve(listener, app(ServerConfig { static_dir, graph }))
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
         })

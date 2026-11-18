@@ -6,7 +6,10 @@ use tower::ServiceExt;
 use trail_route::server::{app, ServerConfig};
 
 fn config(static_dir: PathBuf) -> ServerConfig {
-    ServerConfig { static_dir }
+    ServerConfig {
+        static_dir,
+        graph: None,
+    }
 }
 
 fn fixture_dist() -> PathBuf {
