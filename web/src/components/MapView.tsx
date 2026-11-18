@@ -1,4 +1,5 @@
 import { createEffect, on, onCleanup, onMount } from "solid-js";
+import { DEV_ROUTE, addWaypoint, devHealth, devWaypoints } from "../dev/routeDebug";
 import { MapController } from "../map/controller";
 import {
   baseMap, pickingStart, routes, selectedId, setPickingStart, setSelectedId, setStart, start,
@@ -26,11 +27,15 @@ export function MapView(props: { padding: () => { left: number; right: number; t
         if (pickingStart()) {
           setStart(p);
           setPickingStart(false);
-        }
+        } else if (DEV_ROUTE) addWaypoint(p);
       },
     });
     mapController = ctl;
     ctl.flyTo(start(), 12);
+    if (DEV_ROUTE) {
+      void devHealth().then((b) => b && ctl.fitBounds(b, props.padding()));
+      createEffect(() => void ctl.setWaypoints(devWaypoints()));
+    }
     onCleanup(() => ctl.destroy());
 
     createEffect(on(baseMap, (id) => ctl.setBaseMap(id), { defer: true }));

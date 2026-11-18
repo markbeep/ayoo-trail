@@ -22,7 +22,7 @@ export interface Weights {
   urban: number;
 }
 
-export type BreakdownKey = "official" | "surface" | "slope" | "forest" | "urban";
+export type BreakdownKey = "official" | "surface" | "slope" | "tech" | "forest" | "urban";
 
 /** One term of the score, normalised so 1 is ideal. */
 export interface BreakdownItem {

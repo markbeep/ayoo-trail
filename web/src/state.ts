@@ -38,6 +38,12 @@ export const FACTORS: Record<BreakdownKey, {
     question: "How much should steep downhills count against a loop?",
     choices: [{ label: "Fine", value: 0.5 }, { label: "Avoid", value: 1 }, { label: "Strongly avoid", value: 2 }],
   },
+  // Wording is a placeholder under open question Q23.
+  tech: {
+    label: "Technical terrain", weight: "tech",
+    question: "How much should technical trails count against a loop?",
+    choices: [{ label: "Fine", value: 0.5 }, { label: "Avoid", value: 1 }, { label: "Strongly avoid", value: 2 }],
+  },
   forest: {
     label: "Forest", weight: "forest",
     question: "How much do you want to run through forest?",

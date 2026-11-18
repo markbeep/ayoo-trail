@@ -1,6 +1,8 @@
 import { createEffect, createSignal, on, onMount, Show } from "solid-js";
 import { Layers, Plus, Minus, X } from "lucide-solid";
 import { MapView, mapController } from "./components/MapView";
+import { DevRouteCard } from "./components/DevRouteCard";
+import { DEV_ROUTE } from "./dev/routeDebug";
 import { QueryCard } from "./components/QueryCard";
 import { RouteCard } from "./components/RouteCard";
 import { RouteTiles } from "./components/RouteTiles";
@@ -59,6 +61,7 @@ export function App() {
         </div>
         <div class="panel-scroll" ref={scroller}>
           <Show when={!narrow()}><Brand /></Show>
+          <Show when={DEV_ROUTE}><DevRouteCard /></Show>
           <QueryCard />
           <Show when={selected()}>{(r) => (
             <>

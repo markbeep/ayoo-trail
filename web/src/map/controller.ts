@@ -22,6 +22,7 @@ maplibregl.setWorkerUrl(workerUrl);
 const SWITZERLAND: [[number, number], [number, number]] = [[5.9, 45.8], [10.5, 47.85]];
 const ROUTES = "routes";
 const START = "start";
+const WAYPOINTS = "waypoints";
 
 function buildStyle(base: BaseMapId): StyleSpecification {
   const sources: StyleSpecification["sources"] = {};
@@ -103,6 +104,7 @@ export class MapController {
     const c = this.colors;
     this.map.addSource(ROUTES, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     this.map.addSource(START, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    this.map.addSource(WAYPOINTS, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     const isSel: FilterSpecification = ["==", ["get", "selected"], true];
     const notSel: FilterSpecification = ["!=", ["get", "selected"], true];
     const join = { "line-join": "round", "line-cap": "round" } as const;
@@ -141,6 +143,10 @@ export class MapController {
       id: "start-point", type: "circle", source: START,
       paint: { "circle-radius": 7, "circle-color": c.start, "circle-stroke-color": c.casing, "circle-stroke-width": 3 },
     });
+    this.map.addLayer({
+      id: "waypoints", type: "circle", source: WAYPOINTS,
+      paint: { "circle-radius": 6, "circle-color": c.selected, "circle-stroke-color": c.casing, "circle-stroke-width": 2.5 },
+    });
   }
 
   setBaseMap(id: BaseMapId) {
@@ -172,6 +178,20 @@ export class MapController {
       type: "FeatureCollection",
       features: p ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [p.lon, p.lat] } }] : [],
     });
+  }
+
+  async setWaypoints(points: LatLon[]) {
+    await this.ready;
+    (this.map.getSource(WAYPOINTS) as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: points.map((p, i) => ({
+        type: "Feature", properties: { n: String(i + 1) }, geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+      })),
+    });
+  }
+
+  fitBounds(b: { min_lat: number; min_lon: number; max_lat: number; max_lon: number }, padding: maplibregl.PaddingOptions) {
+    this.map.fitBounds([[b.min_lon, b.min_lat], [b.max_lon, b.max_lat]], { padding, duration: 600 });
   }
 
   fitRoute(id: string, padding: maplibregl.PaddingOptions) {
