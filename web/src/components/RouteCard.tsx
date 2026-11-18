@@ -2,17 +2,17 @@ import { createSignal, For, Show } from "solid-js";
 import { RefreshCw, TriangleAlert } from "@lucide/solid";
 import type { BreakdownKey, Route } from "../routes/types";
 import { FACTORS, findRoutes, setWeight, stale, weights } from "../state";
-import { km, meters } from "../routes/format";
+import { km, meters, score } from "../routes/format";
 import { ElevationProfile } from "./ElevationProfile";
 
 export function RouteCard(props: { route: Route; name: string }) {
   const [open, setOpen] = createSignal<BreakdownKey | null>(null);
   const r = () => props.route;
   return (
-    <section class="card route-card" aria-label={`${props.name}, score ${r().score}`}>
+    <section class="card route-card" aria-label={`${props.name}, score ${score(r().score)}`}>
       <header class="rc-head">
         <h2>{props.name}</h2>
-        <span class="score" title="Score out of 100">{r().score}</span>
+        <span class="score" title="Score out of 100">{score(r().score)}</span>
       </header>
       <p class="meta">
         <span>{km(r().distance_m)}</span><span>{meters(r().climb_m)} up</span><span>{meters(r().descent_m)} down</span>
@@ -28,7 +28,7 @@ export function RouteCard(props: { route: Route; name: string }) {
         </div>
       </Show>
 
-      <h3 class="why">Why it scores {r().score}</h3>
+      <h3 class="why">Why it scores {score(r().score)}</h3>
       <ul class="bars">
         <For each={r().breakdown}>{(b) => {
           const f = FACTORS[b.key];

@@ -1,6 +1,6 @@
 import { For } from "solid-js";
 import type { Route } from "../routes/types";
-import { km, loopName, meters } from "../routes/format";
+import { km, loopName, meters, score } from "../routes/format";
 import { selectedId, setSelectedId } from "../state";
 
 export function RouteTiles(props: { routes: Route[] }) {
@@ -9,7 +9,7 @@ export function RouteTiles(props: { routes: Route[] }) {
       <For each={props.routes}>{(r, i) => (
         <button aria-pressed={`${selectedId() === r.id}`}
           class={["tile", { on: selectedId() === r.id }]} onClick={() => setSelectedId(r.id)}>
-          <span class="tile-head"><b>{loopName(i())}</b><b class="tile-score">{r.score}</b></span>
+          <span class="tile-head"><b>{loopName(i())}</b><b class="tile-score">{score(r.score)}</b></span>
           <small>{km(r.distance_m)} · {meters(r.climb_m)}</small>
         </button>
       )}</For>

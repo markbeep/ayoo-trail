@@ -12,8 +12,10 @@ export function DevRouteCard() {
       </p>
       <Show when={devNoGraph()}><p role="alert">No graph loaded — run `just data` and `just import`</p></Show>
       <Show when={devError()}>{(e) => <p role="alert">{e()}</p>}</Show>
-      <button class="link-btn" onClick={undoWaypoint} disabled={!devWaypoints().length}>Undo</button>
-      <button class="link-btn" onClick={clearWaypoints} disabled={!devWaypoints().length}>Clear</button>
+      <div class="chips-row">
+        <button class="link-btn" onClick={undoWaypoint} disabled={!devWaypoints().length}>Undo</button>
+        <button class="link-btn" onClick={clearWaypoints} disabled={!devWaypoints().length}>Clear</button>
+      </div>
       <Show when={(selected() as { stats?: unknown } | null)?.stats}>{(s) => (
         <details><summary>Stats</summary><pre>{JSON.stringify(s(), null, 1)}</pre></details>
       )}</Show>

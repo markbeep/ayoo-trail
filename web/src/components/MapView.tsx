@@ -50,11 +50,11 @@ export function MapView(props: { padding: () => { left: number; right: number; t
   createEffect(routes, (rs) => {
     const id = untrack(selectedId);
     void ctl?.setRoutes(rs, id);
-    if (id && !DEV_ROUTE) ctl?.fitRoute(id, props.padding());
+    if (id && !DEV_ROUTE) ctl?.fitRoute(id, untrack(props.padding));
   }, { defer: true });
   createEffect(selectedId, (id) => {
     void ctl?.select(id);
-    if (id && !DEV_ROUTE) ctl?.fitRoute(id, props.padding());
+    if (id && !DEV_ROUTE) ctl?.fitRoute(id, untrack(props.padding));
   }, { defer: true });
   createEffect(pickingStart, (p) => { el.classList.toggle("picking", p); }, { defer: true });
 
