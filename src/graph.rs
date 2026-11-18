@@ -631,6 +631,7 @@ pub struct Graph {
     bbox: Bbox,
     dem_source: u8,
     anchors: OnceLock<Vec<Anchor>>,
+    pub(crate) snap_index: OnceLock<crate::snap::SnapIndex>,
 }
 
 fn le_u32(b: &[u8], at: usize) -> u32 {
@@ -696,6 +697,7 @@ impl Graph {
             bbox,
             dem_source,
             anchors: OnceLock::new(),
+            snap_index: OnceLock::new(),
         };
         g.validate()?;
         Ok(g)
