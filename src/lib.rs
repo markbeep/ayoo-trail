@@ -6,5 +6,6 @@
 pub mod cost;
 pub mod geodesy;
 pub mod graph;
+pub mod route;
 pub mod server;
 pub mod snap;

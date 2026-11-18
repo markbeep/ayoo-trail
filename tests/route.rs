@@ -1,0 +1,295 @@
+use trail_route::cost::{score, Profile};
+use trail_route::geodesy::haversine_m;
+use trail_route::graph::{flags, Direction, EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
+use trail_route::route::*;
+use trail_route::snap::Snap;
+
+const LAT: f64 = 46.0;
+const LON: f64 = 7.0;
+const M_LAT: f64 = 111_195.0;
+
+fn ll(lat: f64, lon: f64) -> LatLon {
+    LatLon { lat, lon }
+}
+
+/// Point `x` metres east and `y` metres north of (LAT, LON).
+fn at(x: f64, y: f64) -> LatLon {
+    ll(LAT + y / M_LAT, LON + x / (M_LAT * LAT.to_radians().cos()))
+}
+
+fn attrs(surface: Surface, len: f64) -> EdgeAttrs {
+    EdgeAttrs {
+        length_m: len as f32,
+        surface,
+        sac: 1,
+        ..Default::default()
+    }
+}
+
+/// Adds an edge through the given (x, y, z) points; nodes are created per call
+/// unless `from`/`to` are given.
+fn edge(
+    w: &mut GraphWriter,
+    from: Option<u32>,
+    to: Option<u32>,
+    pts: &[(f64, f64, f32)],
+    a: EdgeAttrs,
+) -> u32 {
+    let geom: Vec<_> = pts
+        .iter()
+        .map(|&(x, y, z)| {
+            let p = at(x, y);
+            (p.lat, p.lon, z)
+        })
+        .collect();
+    let first = geom[0];
+    let last = geom[geom.len() - 1];
+    let a_n = from.unwrap_or_else(|| w.add_node(ll(first.0, first.1), first.2));
+    let b_n = to.unwrap_or_else(|| w.add_node(ll(last.0, last.1), last.2));
+    w.add_edge(a_n, b_n, a, &geom)
+}
+
+fn snap(g: &Graph, p: LatLon) -> Snap {
+    g.snap(p).unwrap()
+}
+
+const DIRECT_EDGE: u32 = 0;
+const DETOUR_EDGE: u32 = 1;
+
+/// Direct asphalt edge (1000 m, 2.0/m) and a gravel detour (1150 m, 1.0/m) between the same nodes.
+fn two_path_graph() -> Graph {
+    let mut w = GraphWriter::new(0);
+    let a = w.add_node(at(0.0, 0.0), 0.0);
+    let b = w.add_node(at(1000.0, 0.0), 0.0);
+    let h = (575.0f64.powi(2) - 500.0f64.powi(2)).sqrt();
+    edge(
+        &mut w,
+        Some(a),
+        Some(b),
+        &[(0.0, 0.0, 0.0), (1000.0, 0.0, 0.0)],
+        attrs(Surface::Asphalt, 1000.0),
+    );
+    edge(
+        &mut w,
+        Some(a),
+        Some(b),
+        &[(0.0, 0.0, 0.0), (500.0, h, 0.0), (1000.0, 0.0, 0.0)],
+        attrs(Surface::Gravel, 1150.0),
+    );
+    Graph::from_bytes(w.finish()).unwrap()
+}
+
+/// One straight 1000 m gravel edge east from the origin with z 100 -> 200.
+fn straight() -> Graph {
+    let mut w = GraphWriter::new(0);
+    let mut a = attrs(Surface::Gravel, 1000.0);
+    a.gain = 100;
+    edge(
+        &mut w,
+        None,
+        None,
+        &[(0.0, 0.0, 100.0), (500.0, 0.0, 150.0), (1000.0, 0.0, 200.0)],
+        a,
+    );
+    Graph::from_bytes(w.finish()).unwrap()
+}
+
+fn empty(g: &Graph) -> Visited {
+    Visited::new(g.edge_count())
+}
+
+#[test]
+fn picks_the_cheaper_of_two_paths() {
+    let g = two_path_graph();
+    let start = snap(&g, at(100.0, 0.0));
+    let end = snap(&g, at(900.0, 0.0));
+    assert_eq!(start.edge, DIRECT_EDGE);
+    let r = route(&g, &Profile::default(), start, end, &empty(&g)).unwrap();
+    assert!(r.steps.iter().any(|s| s.edge == DETOUR_EDGE), "{r:?}");
+    assert!((r.cost - (200.0 * 2.0 + 1150.0)).abs() < 1.0, "{}", r.cost);
+}
+
+#[test]
+fn visited_penalty_flips_the_choice() {
+    let g = two_path_graph();
+    let start = snap(&g, at(100.0, 0.0));
+    let end = snap(&g, at(900.0, 0.0));
+    let mut visited = empty(&g);
+    visited.insert(DETOUR_EDGE);
+    let r = route(&g, &Profile::default(), start, end, &visited).unwrap();
+    assert_eq!(r.steps.len(), 1);
+    assert_eq!(r.steps[0].edge, DIRECT_EDGE);
+}
+
+#[test]
+fn disconnected_returns_none() {
+    let mut w = GraphWriter::new(0);
+    edge(
+        &mut w,
+        None,
+        None,
+        &[(0.0, 0.0, 0.0), (500.0, 0.0, 0.0)],
+        attrs(Surface::Gravel, 500.0),
+    );
+    edge(
+        &mut w,
+        None,
+        None,
+        &[(0.0, 2000.0, 0.0), (500.0, 2000.0, 0.0)],
+        attrs(Surface::Gravel, 500.0),
+    );
+    let g = Graph::from_bytes(w.finish()).unwrap();
+    let a = snap(&g, at(250.0, 0.0));
+    let b = snap(&g, at(250.0, 2000.0));
+    assert!(route(&g, &Profile::default(), a, b, &empty(&g)).is_none());
+}
+
+#[test]
+fn same_edge_waypoints_connect_directly() {
+    let g = straight();
+    let start = snap(&g, at(200.0, 0.0));
+    let end = snap(&g, at(800.0, 0.0));
+    let r = route(&g, &Profile::default(), start, end, &empty(&g)).unwrap();
+    assert!((r.distance_m - 600.0).abs() < 1.0, "{}", r.distance_m);
+    assert_eq!(r.steps.len(), 1);
+}
+
+#[test]
+fn same_edge_backward_is_direct() {
+    let g = straight();
+    let start = snap(&g, at(800.0, 0.0));
+    let end = snap(&g, at(200.0, 0.0));
+    let r = route(&g, &Profile::default(), start, end, &empty(&g)).unwrap();
+    assert_eq!(r.steps.len(), 1);
+    assert!(r.steps[0].from_t > r.steps[0].to_t);
+    assert_eq!(r.steps[0].direction(), Direction::Backward);
+    assert!((r.distance_m - 600.0).abs() < 1.0, "{}", r.distance_m);
+}
+
+#[test]
+fn reversed_step_geometry_runs_in_travel_order() {
+    let g = straight();
+    let start = snap(&g, at(800.0, 0.0));
+    let end = snap(&g, at(200.0, 0.0));
+    let r = route(&g, &Profile::default(), start, end, &empty(&g)).unwrap();
+    let geom = route_geometry(&g, &r);
+    let (f, l) = (geom[0], geom[geom.len() - 1]);
+    assert!(haversine_m(ll(f.0, f.1), start.pos) < 1.0);
+    assert!(haversine_m(ll(l.0, l.1), end.pos) < 1.0);
+    assert!(
+        (f.2 - 180.0).abs() < 1.0 && (l.2 - 120.0).abs() < 1.0,
+        "{geom:?}"
+    );
+    assert!(geom.windows(2).all(|w| w[1].2 <= w[0].2), "{geom:?}");
+    // 180 -> 150 (interior vertex) -> 120.
+    assert_eq!(geom.len(), 3);
+    assert!((r.descent_m - 60.0).abs() < 1.0 && r.climb_m == 0.0);
+}
+
+#[test]
+fn route_via_merges_contiguous_steps() {
+    let g = straight();
+    let snaps: Vec<_> = [100.0, 500.0, 900.0]
+        .iter()
+        .map(|&x| snap(&g, at(x, 0.0)))
+        .collect();
+    let r = route_via(&g, &Profile::default(), &snaps).unwrap();
+    assert_eq!(r.steps.len(), 1, "{r:?}");
+    assert!((r.steps[0].from_t - 0.1).abs() < 1e-3);
+    assert!((r.steps[0].to_t - 0.9).abs() < 1e-3);
+    assert!(route_via(&g, &Profile::default(), &snaps[..1]).is_none());
+}
+
+#[test]
+fn route_via_allows_out_and_back() {
+    let g = straight();
+    let snaps: Vec<_> = [200.0, 800.0, 200.0]
+        .iter()
+        .map(|&x| snap(&g, at(x, 0.0)))
+        .collect();
+    let r = route_via(&g, &Profile::default(), &snaps).unwrap();
+    assert!((r.distance_m - 1200.0).abs() < 1.0, "{}", r.distance_m);
+}
+
+#[test]
+fn stats_sum_to_distance() {
+    let mut w = GraphWriter::new(0);
+    let b = w.add_node(at(500.0, 0.0), 0.0);
+    let mut a0 = attrs(Surface::Asphalt, 500.0);
+    a0.official_category = 1;
+    a0.forest_pct = 50;
+    edge(
+        &mut w,
+        None,
+        Some(b),
+        &[(0.0, 0.0, 0.0), (500.0, 0.0, 0.0)],
+        a0,
+    );
+    // Stored C -> B, travelled B -> C: grade band 2 forward reads as band 6.
+    let mut a1 = attrs(Surface::Gravel, 500.0);
+    a1.sac = 2;
+    a1.urban = 1;
+    a1.flags = flags::SURFACE_INFERRED;
+    a1.grade = [0, 0, 255, 0, 0, 0, 0, 0, 0];
+    edge(
+        &mut w,
+        None,
+        Some(b),
+        &[(1000.0, 0.0, 0.0), (500.0, 0.0, 0.0)],
+        a1,
+    );
+    let g = Graph::from_bytes(w.finish()).unwrap();
+    let start = snap(&g, at(100.0, 0.0));
+    let end = snap(&g, at(900.0, 0.0));
+    let p = Profile::default();
+    let r = route(&g, &p, start, end, &empty(&g)).unwrap();
+    assert_eq!(r.steps.len(), 2);
+    assert!((r.distance_m - 800.0).abs() < 1.0);
+
+    let s = route_stats(&g, &r, &p);
+    let d = s.distance_m;
+    for sum in [
+        s.surface_m.iter().sum::<f64>(),
+        s.grade_m.iter().sum(),
+        s.sac_m.iter().sum(),
+        s.urban_m.iter().sum(),
+    ] {
+        assert!((sum - d).abs() < 0.5, "{sum} vs {d}");
+    }
+    assert!((s.grade_m[6] - 400.0).abs() < 1.0, "{:?}", s.grade_m);
+    assert!((s.surface_m[Surface::Asphalt as usize] - 400.0).abs() < 1.0);
+    assert!((s.official_m - 400.0).abs() < 1.0);
+    assert!((0.0..=1.0).contains(&s.official_share));
+    assert!((s.forest_m - 200.0).abs() < 1.0);
+    assert!((s.surface_inferred_m - 400.0).abs() < 1.0);
+    assert_eq!(s.score, score(s.mean_factor_default));
+    assert!(s.breakdown.surface > 1.0 && s.breakdown.surface < 2.0);
+}
+
+#[test]
+fn partial_step_climb_from_geometry() {
+    let g = straight();
+    let start = snap(&g, at(0.0, 0.0));
+    let end = snap(&g, at(500.0, 0.0));
+    let r = route(&g, &Profile::default(), start, end, &empty(&g)).unwrap();
+    assert!((r.climb_m - 50.0).abs() < 1.0, "{}", r.climb_m);
+    assert_eq!(r.descent_m, 0.0);
+}
+
+#[test]
+fn untraversable_start_edge_returns_none() {
+    let mut w = GraphWriter::new(0);
+    let mut a = attrs(Surface::Rock, 1000.0);
+    a.sac = 5;
+    edge(
+        &mut w,
+        None,
+        None,
+        &[(0.0, 0.0, 0.0), (1000.0, 0.0, 0.0)],
+        a,
+    );
+    let g = Graph::from_bytes(w.finish()).unwrap();
+    let start = snap(&g, at(200.0, 0.0));
+    let end = snap(&g, at(800.0, 0.0));
+    assert!(route(&g, &Profile::default(), start, end, &empty(&g)).is_none());
+}
