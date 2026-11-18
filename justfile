@@ -55,7 +55,7 @@ data REGION="demo":
     list=$(mktemp)
     trap 'rm -f "$list"' EXIT
     while [ -n "$url" ]; do
-      page=$(curl -fsL --retry 3 "$url")
+      page=$(curl -fsSL --retry 3 "$url")
       # "<E-N> <year> <href>" per 2 m GeoTIFF asset.
       jq -r '.features[].assets | to_entries[] | select(.key | endswith("_2_2056_5728.tif"))
         | .value.href | . as $h | (split("/") | last | split("_")) as $p | "\($p[2]) \($p[1]) \($h)"' <<<"$page" >>"$list"

@@ -1,7 +1,7 @@
 // Dev-only (`?dev=route`): click waypoints, get the engine's route between them.
 import { createEffect, createRoot, createSignal } from "solid-js";
 import { getHealth, routeVia } from "../api";
-import type { LatLon } from "../routes/types";
+import type { LatLon, Weights } from "../routes/types";
 import { setRoutes, setSelectedId, setStale, weights } from "../state";
 
 export const DEV_ROUTE = new URLSearchParams(location.search).get("dev") === "route";
@@ -28,7 +28,7 @@ export const clearWaypoints = () => {
 let seq = 0;
 let shown = false; // a dev route is currently displayed
 const clearRoute = () => { shown = false; setRoutes([]); setSelectedId(null); setStale(false); };
-async function reroute(points: LatLon[]) {
+async function reroute(points: LatLon[], w: Weights) {
   const mine = ++seq;
   if (points.length < 2) {
     setDevBusy(false);
@@ -38,7 +38,7 @@ async function reroute(points: LatLon[]) {
   }
   setDevBusy(true);
   try {
-    const route = await routeVia(points, weights());
+    const route = await routeVia(points, w);
     if (mine !== seq) return; // a newer request superseded this one
     setRoutes([route]);
     setSelectedId(route.id);
@@ -52,4 +52,4 @@ async function reroute(points: LatLon[]) {
   setDevBusy(false);
 }
 
-if (DEV_ROUTE) createRoot(() => createEffect(() => void reroute(devWaypoints())));
+if (DEV_ROUTE) createRoot(() => createEffect(() => void reroute(devWaypoints(), weights())));

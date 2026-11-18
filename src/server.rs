@@ -74,10 +74,19 @@ async fn route(
 ) -> Result<Json<Value>, ApiError> {
     let g = g.ok_or_else(|| api_err(StatusCode::SERVICE_UNAVAILABLE, "no graph loaded"))?;
     let Json(req) = body.map_err(|_| unprocessable("invalid request body"))?;
+    // Queue (never reject) so concurrent requests can't oversubscribe the CPUs.
+    let _permit = permits().acquire().await.expect("semaphore never closed");
     tokio::task::spawn_blocking(move || compute_route(&g, req))
         .await
         .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "routing failed"))?
         .map(Json)
+}
+
+fn permits() -> &'static tokio::sync::Semaphore {
+    static S: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
+    S.get_or_init(|| {
+        tokio::sync::Semaphore::new(std::thread::available_parallelism().map_or(4, |n| n.get()))
+    })
 }
 
 fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {

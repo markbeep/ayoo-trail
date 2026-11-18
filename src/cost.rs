@@ -110,6 +110,9 @@ impl Profile {
         if !(1..=6).contains(&self.max_sac) {
             return Err(ProfileError::MaxSacOutOfRange);
         }
+        if self.exclude.len() > 32 {
+            return Err(ProfileError::BadExclusion);
+        }
         for x in &self.exclude {
             if !x.lat.is_finite()
                 || !x.lon.is_finite()
@@ -195,26 +198,26 @@ pub fn edge_factors(g: &Graph, e: u32, dir: Direction, w: &Weights) -> Breakdown
         s
     };
     let tech = match a.sac {
-        0 if a.flags & flags::MISSING_TAGS != 0 => 1.3,
-        0 | 1 => 1.0,
-        2 => 1.05,
-        3 => 1.15,
-        _ => 1.4,
+        0 if a.flags & flags::MISSING_TAGS != 0 => TECH_FACTORS[4],
+        0 | 1 => TECH_FACTORS[0],
+        2 => TECH_FACTORS[1],
+        3 => TECH_FACTORS[2],
+        _ => TECH_FACTORS[3],
     };
     Breakdown {
         slope,
         surface: weighted(SURFACE_FACTORS[(a.surface as usize).min(7)], w.surface),
         tech: weighted(tech, w.tech),
-        official: weighted(if a.official_category > 0 { 0.7 } else { 1.0 }, w.official),
-        forest: weighted(1.0 - 0.1 * a.forest_pct.min(100) as f32 / 100.0, w.forest),
-        urban: weighted(
-            match a.urban {
-                0 => 1.0,
-                1 => 1.3,
-                _ => 2.0,
-            },
-            w.urban,
+        official: weighted(
+            OFFICIAL_FACTORS[(a.official_category == 0) as usize],
+            w.official,
         ),
+        forest: weighted(
+            FOREST_FACTORS[1]
+                - (FOREST_FACTORS[1] - FOREST_FACTORS[0]) * a.forest_pct.min(100) as f32 / 100.0,
+            w.forest,
+        ),
+        urban: weighted(URBAN_FACTORS[(a.urban as usize).min(2)], w.urban),
     }
 }
 
@@ -315,5 +318,22 @@ mod tests {
             ..Weights::default()
         });
         assert_eq!(off.official, 1.0);
+    }
+
+    #[test]
+    fn more_than_32_exclusions_are_rejected() {
+        let x = Exclusion {
+            lat: 46.0,
+            lon: 7.0,
+            radius_m: 100.0,
+            mode: ExclusionMode::Block,
+        };
+        let mut p = Profile {
+            exclude: vec![x; 32],
+            ..Profile::default()
+        };
+        assert!(p.validate().is_ok());
+        p.exclude.push(x);
+        assert_eq!(p.validate(), Err(ProfileError::BadExclusion));
     }
 }

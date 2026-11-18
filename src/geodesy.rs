@@ -67,3 +67,38 @@ pub fn polyline_length_m(points: impl IntoIterator<Item = (f64, f64, f32)>) -> f
     }
     total
 }
+
+/// Forward gain and loss with a 2 m deadband: a rise or fall counts once it
+/// exceeds 2 m from the last turning point.
+pub fn gain_loss(z: &[f32]) -> (f64, f64) {
+    const DEADBAND: f64 = 2.0;
+    let Some(&z0) = z.first() else {
+        return (0.0, 0.0);
+    };
+    let (mut gain, mut loss) = (0.0, 0.0);
+    let (mut turn, mut ext, mut dir) = (z0 as f64, z0 as f64, 0i8);
+    for &z in &z[1..] {
+        let z = z as f64;
+        match dir {
+            0 if z - turn > DEADBAND => (dir, ext) = (1, z),
+            0 if turn - z > DEADBAND => (dir, ext) = (-1, z),
+            1 if z > ext => ext = z,
+            1 if ext - z > DEADBAND => {
+                gain += ext - turn;
+                (turn, ext, dir) = (ext, z, -1);
+            }
+            -1 if z < ext => ext = z,
+            -1 if z - ext > DEADBAND => {
+                loss += turn - ext;
+                (turn, ext, dir) = (ext, z, 1);
+            }
+            _ => {}
+        }
+    }
+    match dir {
+        1 => gain += ext - turn,
+        -1 => loss += turn - ext,
+        _ => {}
+    }
+    (gain, loss)
+}

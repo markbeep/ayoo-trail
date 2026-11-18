@@ -293,3 +293,116 @@ fn untraversable_start_edge_returns_none() {
     let end = snap(&g, at(800.0, 0.0));
     assert!(route(&g, &Profile::default(), start, end, &empty(&g)).is_none());
 }
+
+#[test]
+fn partial_step_reports_the_last_partial_swing() {
+    let mut w = GraphWriter::new(0);
+    let pts = [
+        (0.0, 0.0, 0.0),
+        (100.0, 0.0, 1.0),
+        (200.0, 0.0, 2.0),
+        (300.0, 0.0, 3.0),
+        (400.0, 0.0, 4.0),
+        (500.0, 0.0, 4.0),
+    ];
+    // Stored geometry z is whole metres, so 0 -> 4 stands in for 0 -> 4.5; the old deadband dropped the last 1 m.
+    edge(&mut w, None, None, &pts, attrs(Surface::Gravel, 500.0));
+    let g = Graph::from_bytes(w.finish()).unwrap();
+    let (start, end) = (snap(&g, at(0.0, 0.0)), snap(&g, at(450.0, 0.0)));
+    let r = route(&g, &Profile::default(), start, end, &empty(&g)).unwrap();
+    assert!((r.climb_m - 4.0).abs() < 1e-3, "{}", r.climb_m);
+}
+
+#[test]
+fn route_cost_matches_plain_dijkstra() {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    use trail_route::cost::edge_cost;
+
+    let mut seed = 0x2545_F491_4F6C_DD1Du64;
+    let mut rnd = move |n: usize| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed % n as u64) as usize
+    };
+    const N: usize = 10;
+    let mut w = GraphWriter::new(0);
+    let nodes: Vec<u32> = (0..N * N)
+        .map(|i| {
+            let (x, y) = ((i % N) as f64 * 100.0, (i / N) as f64 * 100.0);
+            w.add_node(at(x, y), rnd(40) as f32)
+        })
+        .collect();
+    let surfaces = [
+        Surface::Asphalt,
+        Surface::Gravel,
+        Surface::Dirt,
+        Surface::Rock,
+    ];
+    for i in 0..N * N {
+        for j in [i + 1, i + N] {
+            if j >= N * N || (j == i + 1 && j % N == 0) {
+                continue;
+            }
+            let mut a = attrs(surfaces[rnd(4)], 100.0);
+            a.grade[rnd(9)] = 255;
+            a.sac = 1 + rnd(3) as u8;
+            let (pa, pb) = (w.node_pos(nodes[i]), w.node_pos(nodes[j]));
+            let geom = [(pa.lat, pa.lon, 0.0), (pb.lat, pb.lon, 0.0)];
+            w.add_edge(nodes[i], nodes[j], a, &geom);
+        }
+    }
+    let g = Graph::from_bytes(w.finish()).unwrap();
+    let p = Profile::default();
+    let dijkstra = |src: u32, dst: u32| {
+        let mut dist = vec![f64::INFINITY; g.node_count()];
+        let mut heap = BinaryHeap::new();
+        dist[src as usize] = 0.0;
+        heap.push(Reverse((0f64.to_bits(), src)));
+        while let Some(Reverse((d, u))) = heap.pop() {
+            let d = f64::from_bits(d);
+            if d > dist[u as usize] {
+                continue;
+            }
+            for (e, dir) in g.neighbors(u) {
+                let Some(c) = edge_cost(&g, e, dir, &p) else {
+                    continue;
+                };
+                let v = match dir {
+                    Direction::Forward => g.edge_to(e),
+                    Direction::Backward => g.edge_from(e),
+                };
+                if d + c.cost < dist[v as usize] {
+                    dist[v as usize] = d + c.cost;
+                    heap.push(Reverse(((d + c.cost).to_bits(), v)));
+                }
+            }
+        }
+        dist[dst as usize]
+    };
+    let node_snap = |n: u32| {
+        let e = (0..g.edge_count() as u32)
+            .find(|&e| g.edge_from(e) == n || g.edge_to(e) == n)
+            .unwrap();
+        Snap {
+            edge: e,
+            t: if g.edge_from(e) == n { 0.0 } else { 1.0 },
+            pos: g.node(n),
+            dist_m: 0.0,
+        }
+    };
+    for _ in 0..8 {
+        let (a, b) = (nodes[rnd(N * N)], nodes[rnd(N * N)]);
+        if a == b {
+            continue;
+        }
+        let r = route(&g, &p, node_snap(a), node_snap(b), &empty(&g)).unwrap();
+        let want = dijkstra(a, b);
+        assert!(
+            (r.cost - want).abs() <= 1e-6 * want,
+            "{a}->{b}: {} vs {want}",
+            r.cost
+        );
+    }
+}

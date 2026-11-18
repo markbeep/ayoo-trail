@@ -7,12 +7,11 @@ use std::collections::BinaryHeap;
 use serde::Serialize;
 
 use crate::cost::{edge_cost, edge_factors, score, Breakdown, Profile, Weights};
-use crate::geodesy::{haversine_m, polyline_length_m};
+use crate::geodesy::{gain_loss, haversine_m, polyline_length_m};
 use crate::graph::{flags, Direction, Graph, LatLon, FLAT_BAND, GRADE_BANDS};
 use crate::snap::Snap;
 
 pub const REPEAT_PENALTY: f64 = 5.0;
-pub const CLIMB_DEADBAND_M: f64 = 2.0;
 
 /// One traversed piece of an edge. from_t < to_t = forward along the edge, from_t > to_t = backward.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -251,7 +250,7 @@ fn assemble(g: &Graph, mut steps: Vec<RouteStep>, cost: f64) -> Route {
             let a = g.edge_attrs(s.edge);
             (a.gain as f64, a.loss as f64)
         } else {
-            deadband_climb(slice(g, s).iter().map(|v| v.2 as f64))
+            gain_loss(&slice(g, s).iter().map(|v| v.2).collect::<Vec<_>>())
         };
         let (up, down) = match s.direction() {
             // Sliced geometry is already in travel order; stored gain/loss are forward.
@@ -272,23 +271,6 @@ fn assemble(g: &Graph, mut steps: Vec<RouteStep>, cost: f64) -> Route {
 
 fn step_len(g: &Graph, s: &RouteStep) -> f64 {
     s.fraction() * polyline_length_m(g.edge_geometry(s.edge))
-}
-
-/// A rise or fall counts once it exceeds the deadband from the last turning point.
-fn deadband_climb(z: impl Iterator<Item = f64>) -> (f64, f64) {
-    let (mut up, mut down) = (0.0, 0.0);
-    let mut last: Option<f64> = None;
-    for z in z {
-        let r = *last.get_or_insert(z);
-        if z - r > CLIMB_DEADBAND_M {
-            up += z - r;
-            last = Some(z);
-        } else if r - z > CLIMB_DEADBAND_M {
-            down += r - z;
-            last = Some(z);
-        }
-    }
-    (up, down)
 }
 
 /// The step's geometry between from_t and to_t (haversine-length fractions, as in snapping),
