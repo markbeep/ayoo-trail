@@ -507,3 +507,28 @@ fn real_alti3d_all_tiles_decode() {
     );
     assert!(failed.is_empty());
 }
+
+#[test]
+fn alti3d_huge_tile_header_is_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir
+        .path()
+        .join("swissalti3d_2020_2600-1200_2_2056_5728.tif");
+    write_lzw_tiled(false, &path, 24, 16, 2600, 1200, |_, _| 1.0);
+    let mut bytes = std::fs::read(&path).unwrap();
+    // IFD entry i starts at 8 + 2 + 12 i: tag, type, count (+4), value (+8).
+    let mut patch = |i: usize, tag: u16, at: usize, v: u32| {
+        let e = 10 + 12 * i;
+        assert_eq!(u16::from_le_bytes([bytes[e], bytes[e + 1]]), tag);
+        bytes[e + at..e + at + 4].copy_from_slice(&v.to_le_bytes());
+    };
+    // One 4e9 × 4e9 tile, so the tile count stays consistent for `tiff`.
+    patch(6, 322, 8, 4_000_000_000);
+    patch(7, 323, 8, 4_000_000_000);
+    patch(8, 324, 4, 1);
+    patch(9, 325, 4, 1);
+    std::fs::write(&path, bytes).unwrap();
+    let t = Alti3dTiles::open(dir.path()).unwrap();
+    // A load error samples as None; the process must not abort on allocation.
+    assert_eq!(t.sample_lv95(2_600_500.0, 1_200_500.0), None);
+}

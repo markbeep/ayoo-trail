@@ -16,6 +16,9 @@ use super::dem::{bilinear, ElevationSource, DEM_ALTI3D};
 use super::ImportError;
 
 const CACHE_TILES: usize = 64;
+/// Real tiles are 500 px (2 m) or 2000 px (0.5 m).
+const MAX_TILE_PX: usize = 4096;
+const MAX_CHUNK_BYTES: usize = 64 << 20;
 
 /// Tile key: south-west corner in km (E, N).
 type Key = (u32, u32);
@@ -128,6 +131,14 @@ fn read_band(dec: &mut Decoder<BufReader<File>>, size: usize) -> Result<Vec<f32>
     let counts = dec.get_tag_u64_vec(counts_tag).map_err(s)?;
     let (cw, ch) = dec.chunk_dimensions();
     let (cw, ch) = (cw as usize, ch as usize);
+    // Header sizes are untrusted: bound the allocations below before making them.
+    if size > MAX_TILE_PX {
+        return Err(format!("tile of {size} px exceeds {MAX_TILE_PX}"));
+    }
+    cw.checked_mul(ch)
+        .and_then(|v| v.checked_mul(4))
+        .filter(|&b| b > 0 && b <= MAX_CHUNK_BYTES)
+        .ok_or_else(|| format!("chunk of {cw}×{ch} px out of range"))?;
     let across = size.div_ceil(cw);
     let chunks = across * size.div_ceil(ch);
     if offsets.len() < chunks || counts.len() < chunks {
