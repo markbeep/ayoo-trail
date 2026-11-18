@@ -2,7 +2,7 @@
 import { createEffect, createRoot, createSignal } from "solid-js";
 import { getHealth, routeVia } from "../api";
 import type { LatLon } from "../routes/types";
-import { setRoutes, setSelectedId, weights } from "../state";
+import { setRoutes, setSelectedId, setStale, weights } from "../state";
 
 export const DEV_ROUTE = new URLSearchParams(location.search).get("dev") === "route";
 
@@ -22,21 +22,28 @@ export const addWaypoint = (p: LatLon) => setDevWaypoints((w) => [...w, p]);
 export const undoWaypoint = () => setDevWaypoints((w) => w.slice(0, -1));
 export const clearWaypoints = () => {
   setDevWaypoints([]);
-  setRoutes([]);
-  setSelectedId(null);
   setDevError(null);
 };
 
 let seq = 0;
+let shown = false; // a dev route is currently displayed
+const clearRoute = () => { shown = false; setRoutes([]); setSelectedId(null); setStale(false); };
 async function reroute(points: LatLon[]) {
   const mine = ++seq;
-  if (points.length < 2) { setDevBusy(false); return; }
+  if (points.length < 2) {
+    setDevBusy(false);
+    if (shown) clearRoute();
+    setDevError(null);
+    return;
+  }
   setDevBusy(true);
   try {
     const route = await routeVia(points, weights());
     if (mine !== seq) return; // a newer request superseded this one
     setRoutes([route]);
     setSelectedId(route.id);
+    setStale(false);
+    shown = true;
     setDevError(null);
   } catch (e) {
     if (mine !== seq) return;
