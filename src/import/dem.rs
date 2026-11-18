@@ -217,17 +217,27 @@ struct EdgeOut {
 /// Samples z along the edge, elevations of the bridge/tunnel deck interpolated.
 pub fn apply_dem(w: &mut GraphWriter, dem: &dyn ElevationSource) -> DemStats {
     let writer = &*w;
-    let outs: Vec<Option<EdgeOut>> = (0..writer.edge_count() as u32)
-        .into_par_iter()
-        .map(|e| {
-            let deck = writer.edge_attrs(e).flags & (flags::BRIDGE | flags::TUNNEL) != 0;
-            process_edge(writer.edge_geometry(e), deck, dem)
+    // Spatial order (1 km LV95 tile of the first vertex, row by row), in
+    // contiguous chunks per thread, so the tile cache sees few distinct tiles.
+    let mut order: Vec<u32> = (0..writer.edge_count() as u32).collect();
+    order.sort_by_cached_key(|&e| {
+        writer.edge_geometry(e).first().map(|&(la, lo, _)| {
+            let (east, north) = wgs84_to_lv95(la, lo);
+            ((north / 1000.0) as i64, (east / 1000.0) as i64)
+        })
+    });
+    let outs: Vec<(u32, Option<EdgeOut>)> = order
+        .par_chunks(1024)
+        .flat_map_iter(|chunk| {
+            chunk.iter().map(|&e| {
+                let deck = writer.edge_attrs(e).flags & (flags::BRIDGE | flags::TUNNEL) != 0;
+                (e, process_edge(writer.edge_geometry(e), deck, dem))
+            })
         })
         .collect();
     let mut stats = DemStats::default();
-    for (e, out) in outs.into_iter().enumerate() {
+    for (e, out) in outs {
         let Some(o) = out else { continue };
-        let e = e as u32;
         let (from, to) = w.edge_endpoints(e);
         w.set_node_elev(from, o.geometry[0].2);
         w.set_node_elev(to, o.geometry[o.geometry.len() - 1].2);

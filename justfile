@@ -32,6 +32,10 @@ check:
     cargo test
     cd web && npm run typecheck
 
+# Build data/graph.bin from data/raw (`just import ch`; default demo).
+import REGION="demo":
+    cargo run --release --bin trail-import -- --region {{REGION}}
+
 # Fetch OSM, swissALTI3D 2 m tiles and Wanderwege into data/raw (`just data REGION=demo|ch`).
 data REGION="demo":
     #!/usr/bin/env bash
@@ -59,7 +63,7 @@ data REGION="demo":
     done
     # Items repeat per survey year; keep the newest year per tile.
     sort -k1,1 -k2,2r "$list" | awk '!seen[$1]++ { print $3 }' \
-      | xargs -P 8 -n 1 sh -c 'f="$1/${2##*/}"; [ -f "$f" ] || { curl -fsL --retry 3 -o "$f.part" "$2" && mv "$f.part" "$f"; }' _ "$raw/alti3d"
+      | xargs -r -P 8 -n 1 sh -c 'f="$1/${2##*/}"; [ -f "$f" ] || { curl -fsSL --retry 3 -o "$f.part" "$2" && mv "$f.part" "$f"; }' _ "$raw/alti3d"
     echo "swissALTI3D: $(ls "$raw/alti3d" | grep -c '\.tif$') tiles"
     if ! ls "$raw/wanderwege"/*.gpkg >/dev/null 2>&1; then
       zip="$raw/wanderwege/wanderwege.gpkg.zip"

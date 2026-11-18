@@ -13,6 +13,10 @@ path = "src/lib.rs"
 name = "trail-server"
 path = "src/bin/server.rs"
 
+[[bin]]
+name = "trail-import"
+path = "src/bin/import.rs"
+
 [dependencies]
 axum = "0.8.9"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "net", "signal"] }
@@ -29,6 +33,8 @@ roxmltree = "0.21"
 geo = "0.33"
 tiff = { version = "0.11", default-features = false, features = ["lzw"] }
 rayon = "1"
+rusqlite = { version = "0.43.0", features = ["bundled"] }
+clap = { version = "4.6.8", features = ["derive", "env"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

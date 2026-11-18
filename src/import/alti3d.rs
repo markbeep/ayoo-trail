@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tiff::decoder::{Decoder, DecodingResult};
@@ -23,6 +24,7 @@ type Cache = (u64, HashMap<Key, (u64, Option<Arc<Tile>>)>);
 pub struct Alti3dTiles {
     paths: HashMap<Key, PathBuf>,
     cache: Mutex<Cache>,
+    decodes: AtomicU64,
 }
 
 struct Tile {
@@ -123,11 +125,17 @@ impl Alti3dTiles {
         Ok(Alti3dTiles {
             paths: best.into_iter().map(|(k, (_, p))| (k, p)).collect(),
             cache: Mutex::new((0, HashMap::new())),
+            decodes: AtomicU64::new(0),
         })
     }
 
     pub fn tile_count(&self) -> usize {
         self.paths.len()
+    }
+
+    /// Tile decodes so far, re-decodes after cache eviction included.
+    pub fn decode_count(&self) -> u64 {
+        self.decodes.load(Ordering::Relaxed)
     }
 
     /// Cached tile; decoded outside the lock so other threads keep sampling.
@@ -142,6 +150,7 @@ impl Alti3dTiles {
                 return entry.1.clone();
             }
         }
+        self.decodes.fetch_add(1, Ordering::Relaxed);
         let tile = match load_tile(path, key) {
             Ok(t) => Some(Arc::new(t)),
             Err(err) => {
