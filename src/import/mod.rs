@@ -1,6 +1,9 @@
 //! Offline importer: builds `graph.bin` from OSM (and, in later stages, the DEM
 //! and the official trail network).
 
+pub mod alti3d;
+pub mod ch1903;
+pub mod dem;
 pub mod osm;
 
 use crate::graph::Bbox;
