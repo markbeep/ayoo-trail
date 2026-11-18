@@ -1,5 +1,5 @@
-import { createEffect, createSignal, on, onMount, Show } from "solid-js";
-import { Layers, Plus, Minus, X } from "lucide-solid";
+import { createEffect, createSignal, onSettled, Show, untrack } from "solid-js";
+import { Layers, Plus, Minus, X } from "@lucide/solid";
 import { MapView, mapController } from "./components/MapView";
 import { DevRouteCard } from "./components/DevRouteCard";
 import { DEV_ROUTE } from "./dev/routeDebug";
@@ -22,7 +22,7 @@ function Brand() {
 }
 
 export function App() {
-  const [layersOpen, setLayersOpen] = createSignal(!narrow());
+  const [layersOpen, setLayersOpen] = createSignal(!untrack(narrow));
   let panel!: HTMLElement;
   let handle!: HTMLDivElement;
   let scroller!: HTMLDivElement;
@@ -34,21 +34,21 @@ export function App() {
     return { left: r.right + 40, right: 300, top: 60, bottom: 60 };
   };
 
-  onMount(() => attachSheetDrag(handle, panel));
+  onSettled(() => attachSheetDrag(handle, panel));
   // Sheet choreography: results open it halfway, picking a start lowers it.
-  createEffect(on(status, (s, prev) => {
-    if (prev === "loading" && s === "idle" && routes().length) {
+  createEffect(status, (s, prev) => {
+    if (prev === "loading" && s === "idle" && untrack(routes).length) {
       setSnap("half");
       scroller.scrollTo({ top: 0 });
     }
-  }, { defer: true }));
-  createEffect(on(pickingStart, (p) => { if (p) setSnap("peek"); }, { defer: true }));
-  createEffect(on(narrow, (n) => setLayersOpen(!n), { defer: true }));
+  }, { defer: true });
+  createEffect(pickingStart, (p) => { if (p) setSnap("peek"); }, { defer: true });
+  createEffect(narrow, (n) => { setLayersOpen(!n); }, { defer: true });
 
   const selectedIndex = () => routes().findIndex((r) => r.id === selectedId());
 
   return (
-    <div class="app" classList={{ narrow: narrow() }}>
+    <div class={["app", { narrow: narrow() }]}>
       <MapView padding={padding} />
 
       <Show when={narrow()}><div class="brand-float"><Brand /></div></Show>

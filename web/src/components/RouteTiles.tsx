@@ -7,8 +7,8 @@ export function RouteTiles(props: { routes: Route[] }) {
   return (
     <div class="tiles" role="group" aria-label="Loops">
       <For each={props.routes}>{(r, i) => (
-        <button class="tile" aria-pressed={selectedId() === r.id}
-          classList={{ on: selectedId() === r.id }} onClick={() => setSelectedId(r.id)}>
+        <button aria-pressed={`${selectedId() === r.id}`}
+          class={["tile", { on: selectedId() === r.id }]} onClick={() => setSelectedId(r.id)}>
           <span class="tile-head"><b>{loopName(i())}</b><b class="tile-score">{r.score}</b></span>
           <small>{km(r.distance_m)} · {meters(r.climb_m)}</small>
         </button>

@@ -52,4 +52,4 @@ async function reroute(points: LatLon[], w: Weights) {
   setDevBusy(false);
 }
 
-if (DEV_ROUTE) createRoot(() => createEffect(() => void reroute(devWaypoints(), weights())));
+if (DEV_ROUTE) createRoot(() => createEffect(() => [devWaypoints(), weights()] as const, ([p, w]) => void reroute(p, w)));

@@ -1,4 +1,4 @@
-import { createEffect, on, onCleanup, onMount } from "solid-js";
+import { createEffect, onSettled, untrack } from "solid-js";
 import { DEV_ROUTE, addWaypoint, devHealth, devWaypoints } from "../dev/routeDebug";
 import { MapController } from "../map/controller";
 import {
@@ -14,9 +14,12 @@ export let mapController: MapController | undefined;
 
 export function MapView(props: { padding: () => { left: number; right: number; top: number; bottom: number } }) {
   let el!: HTMLDivElement;
+  let ctl: MapController | undefined;
 
-  onMount(() => {
-    const ctl = new MapController(el, baseMap(), {
+  // 2.0 forbids creating effects inside onSettled, so they live here, deferred, and
+  // onSettled applies their initial values once the controller exists.
+  onSettled(() => {
+    const c = new MapController(el, untrack(baseMap), {
       selected: token("--route-active"),
       candidate: token("--route-candidate"),
       casing: token("--route-casing"),
@@ -30,27 +33,30 @@ export function MapView(props: { padding: () => { left: number; right: number; t
         } else if (DEV_ROUTE) addWaypoint(p);
       },
     });
-    mapController = ctl;
-    ctl.flyTo(start(), 12);
+    ctl = mapController = c;
+    c.flyTo(untrack(start), 12);
     if (DEV_ROUTE) {
-      void devHealth().then((b) => b && ctl.fitBounds(b, props.padding()));
-      createEffect(() => void ctl.setWaypoints(devWaypoints()));
+      void devHealth().then((b) => b && c.fitBounds(b, props.padding()));
+      void c.setWaypoints(untrack(devWaypoints));
     }
-    onCleanup(() => ctl.destroy());
-
-    createEffect(on(baseMap, (id) => ctl.setBaseMap(id), { defer: true }));
-    createEffect(() => void ctl.setStart(start()));
-    createEffect(on(routes, (rs) => {
-      void ctl.setRoutes(rs, selectedId());
-      const id = selectedId();
-      if (id && !DEV_ROUTE) ctl.fitRoute(id, props.padding());
-    }, { defer: true }));
-    createEffect(on(selectedId, (id) => {
-      void ctl.select(id);
-      if (id && !DEV_ROUTE) ctl.fitRoute(id, props.padding());
-    }, { defer: true }));
-    createEffect(() => el.classList.toggle("picking", pickingStart()));
+    void c.setStart(untrack(start));
+    el.classList.toggle("picking", untrack(pickingStart));
+    return () => c.destroy();
   });
+
+  if (DEV_ROUTE) createEffect(devWaypoints, (w) => void ctl?.setWaypoints(w), { defer: true });
+  createEffect(baseMap, (id) => ctl?.setBaseMap(id), { defer: true });
+  createEffect(start, (p) => void ctl?.setStart(p), { defer: true });
+  createEffect(routes, (rs) => {
+    const id = untrack(selectedId);
+    void ctl?.setRoutes(rs, id);
+    if (id && !DEV_ROUTE) ctl?.fitRoute(id, props.padding());
+  }, { defer: true });
+  createEffect(selectedId, (id) => {
+    void ctl?.select(id);
+    if (id && !DEV_ROUTE) ctl?.fitRoute(id, props.padding());
+  }, { defer: true });
+  createEffect(pickingStart, (p) => { el.classList.toggle("picking", p); }, { defer: true });
 
   return <div ref={el} class="map" role="region" aria-label="Map" />;
 }

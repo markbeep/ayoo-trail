@@ -1,5 +1,5 @@
 import { createSignal, For, Show } from "solid-js";
-import { RefreshCw, TriangleAlert } from "lucide-solid";
+import { RefreshCw, TriangleAlert } from "@lucide/solid";
 import type { BreakdownKey, Route } from "../routes/types";
 import { FACTORS, findRoutes, setWeight, stale, weights } from "../state";
 import { km, meters } from "../routes/format";
@@ -34,8 +34,8 @@ export function RouteCard(props: { route: Route; name: string }) {
           const f = FACTORS[b.key];
           const isOpen = () => open() === b.key;
           return (
-            <li classList={{ open: isOpen() }}>
-              <button class="bar" aria-expanded={isOpen()} onClick={() => setOpen(isOpen() ? null : b.key)}>
+            <li class={{ open: isOpen() }}>
+              <button class="bar" aria-expanded={`${isOpen()}`} onClick={() => setOpen(isOpen() ? null : b.key)}>
                 <span class="bar-label">{f.label}</span>
                 <span class="track" aria-hidden="true"><span class="fill" style={{ width: `${Math.round(b.value * 100)}%` }} /></span>
                 <span class="bar-value"><span class="sr-only">, </span>{Math.round(b.value * 100)}<span class="sr-only"> out of 100. </span></span>
@@ -46,8 +46,8 @@ export function RouteCard(props: { route: Route; name: string }) {
                   <p><strong>{b.detail}.</strong> {f.question}</p>
                   <div class="seg on-white" role="radiogroup" aria-label={f.label}>
                     <For each={f.choices}>{(c) => (
-                      <button role="radio" aria-checked={weights()[f.weight] === c.value}
-                        classList={{ on: weights()[f.weight] === c.value }}
+                      <button role="radio" aria-checked={`${weights()[f.weight] === c.value}`}
+                        class={{ on: weights()[f.weight] === c.value }}
                         onClick={() => setWeight(f.weight, c.value)}>{c.label}</button>
                     )}</For>
                   </div>

@@ -19,7 +19,7 @@ export function LayersCard(props: { onPicked?: () => void }) {
       <h2 class="layers-title">Map layers</h2>
       <div role="radiogroup" aria-label="Base map">
         <For each={BASE_MAPS}>{(b) => (
-          <button role="radio" class="layer" aria-checked={baseMap() === b.id} classList={{ on: baseMap() === b.id }}
+          <button role="radio" aria-checked={`${baseMap() === b.id}`} class={["layer", { on: baseMap() === b.id }]}
             onClick={() => { setBaseMap(b.id); props.onPicked?.(); }}>
             <span class="swatch" style={{ background: SWATCH[b.id] }} />{b.label}
           </button>

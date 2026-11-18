@@ -1,4 +1,4 @@
-import { render } from "solid-js/web";
+import { render } from "@solidjs/web";
 import "@fontsource-variable/nunito-sans";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
