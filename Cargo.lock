@@ -1540,6 +1540,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "weezl",
 ]
 
 [[package]]

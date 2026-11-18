@@ -33,6 +33,7 @@ roxmltree = "0.21"
 geo = "0.33"
 tiff = { version = "0.11", default-features = false, features = ["lzw"] }
 rayon = "1"
+weezl = "0.1"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 clap = { version = "4.6.8", features = ["derive", "env"] }
 

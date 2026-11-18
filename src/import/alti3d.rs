@@ -3,13 +3,14 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use tiff::decoder::{Decoder, DecodingResult};
-use tiff::tags::Tag;
+use tiff::decoder::{ChunkType, Decoder};
+use tiff::tags::{ByteOrder, Tag};
+use tiff::ColorType;
 
 use super::dem::{bilinear, ElevationSource, DEM_ALTI3D};
 use super::ImportError;
@@ -91,16 +92,101 @@ fn load_tile(path: &Path, (e_km, n_km): Key) -> Result<Tile, ImportError> {
         }
         None => -9999.0,
     };
-    let z = match dec.read_image().map_err(tiff)? {
-        DecodingResult::F32(z) if z.len() == size * size => z,
-        _ => return Err(bad("expected one float32 band".into())),
-    };
+    let z = read_band(&mut dec, size).map_err(bad)?;
     Ok(Tile {
         size,
         cell,
         nodata,
         z,
     })
+}
+
+/// The full-resolution float32 band, decoded chunk by chunk. tiff 0.11.3's
+/// own LZW reader fails on some valid padded tiles ("no lzw end code found":
+/// it drops output that arrives together with end of input), so the chunks
+/// go to weezl directly, which also accepts a stream without an end code.
+fn read_band(dec: &mut Decoder<BufReader<File>>, size: usize) -> Result<Vec<f32>, String> {
+    let s = |e: tiff::TiffError| e.to_string();
+    let float = dec.find_tag_unsigned::<u16>(Tag::SampleFormat).map_err(s)? == Some(3);
+    if dec.colortype().map_err(s)? != ColorType::Gray(32) || !float {
+        return Err("expected one float32 band".into());
+    }
+    let lzw = match dec.get_tag_unsigned::<u16>(Tag::Compression).map_err(s)? {
+        1 => false,
+        5 => true,
+        c => return Err(format!("unsupported compression {c}")),
+    };
+    match dec.find_tag_unsigned::<u16>(Tag::Predictor).map_err(s)? {
+        None | Some(1) => {}
+        Some(p) => return Err(format!("unsupported predictor {p}")),
+    }
+    let (offs_tag, counts_tag) = match dec.get_chunk_type() {
+        ChunkType::Tile => (Tag::TileOffsets, Tag::TileByteCounts),
+        ChunkType::Strip => (Tag::StripOffsets, Tag::StripByteCounts),
+    };
+    let offsets = dec.get_tag_u64_vec(offs_tag).map_err(s)?;
+    let counts = dec.get_tag_u64_vec(counts_tag).map_err(s)?;
+    let (cw, ch) = dec.chunk_dimensions();
+    let (cw, ch) = (cw as usize, ch as usize);
+    let across = size.div_ceil(cw);
+    let chunks = across * size.div_ceil(ch);
+    if offsets.len() < chunks || counts.len() < chunks {
+        return Err(format!(
+            "{} chunk offsets for {chunks} chunks",
+            offsets.len()
+        ));
+    }
+    let little = dec.byte_order() == ByteOrder::LittleEndian;
+    let mut z = vec![0.0f32; size * size];
+    let mut raw = Vec::new();
+    for i in 0..chunks {
+        let (x0, y0) = (i % across * cw, i / across * ch);
+        let rows = ch.min(size - y0);
+        // Tiles are padded to `cw` columns; strips are exactly the image width.
+        let need = rows * cw * 4;
+        let file = dec.inner();
+        file.seek(SeekFrom::Start(offsets[i]))
+            .map_err(|e| e.to_string())?;
+        raw.clear();
+        file.take(counts[i])
+            .read_to_end(&mut raw)
+            .map_err(|e| e.to_string())?;
+        let bytes = if lzw {
+            // Fixed-size output bounds a malformed stream's expansion.
+            let mut out = vec![0u8; need];
+            let mut d = weezl::decode::Decoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8);
+            let (mut ip, mut op) = (0, 0);
+            while op < need {
+                let r = d.decode_bytes(&raw[ip..], &mut out[op..]);
+                ip += r.consumed_in;
+                op += r.consumed_out;
+                match r.status {
+                    Ok(weezl::LzwStatus::Ok) if r.consumed_in + r.consumed_out > 0 => {}
+                    Ok(_) => break,
+                    Err(e) => return Err(format!("chunk {i}: LZW {e}")),
+                }
+            }
+            out.truncate(op);
+            out
+        } else {
+            std::mem::take(&mut raw)
+        };
+        if bytes.len() < need {
+            return Err(format!("chunk {i}: {} of {need} bytes", bytes.len()));
+        }
+        for r in 0..rows {
+            for c in 0..cw.min(size - x0) {
+                let k = (r * cw + c) * 4;
+                let b = [bytes[k], bytes[k + 1], bytes[k + 2], bytes[k + 3]];
+                z[(y0 + r) * size + x0 + c] = if little {
+                    f32::from_le_bytes(b)
+                } else {
+                    f32::from_be_bytes(b)
+                };
+            }
+        }
+    }
+    Ok(z)
 }
 
 impl Alti3dTiles {

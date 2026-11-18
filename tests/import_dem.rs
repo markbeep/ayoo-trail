@@ -357,3 +357,153 @@ fn real_alti3d_wattwil_station() {
     eprintln!("Wattwil station: {z} m");
     assert!((z - 615.0).abs() < 15.0, "got {z}");
 }
+
+/// Hand-written little-endian tiled float32 LZW GeoTIFF (the `tiff` encoder
+/// writes neither tiles nor custom LZW streams), optionally with each tile's
+/// end code cut off. Pixel (x, y) from the north-west corner holds `f(x, y)`.
+fn write_lzw_tiled(
+    cut_end_code: bool,
+    path: &Path,
+    size: u32,
+    tile: u32,
+    e_km: u32,
+    n_km: u32,
+    f: impl Fn(u32, u32) -> f32,
+) {
+    let across = size.div_ceil(tile);
+    let mut chunks = Vec::new();
+    for ty in 0..across {
+        for tx in 0..across {
+            let mut raw = Vec::new();
+            for r in 0..tile {
+                for c in 0..tile {
+                    let (x, y) = (tx * tile + c, ty * tile + r);
+                    let v = if x < size && y < size { f(x, y) } else { 0.0 };
+                    raw.extend(v.to_le_bytes());
+                }
+            }
+            let mut lzw = weezl::encode::Encoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8)
+                .encode(&raw)
+                .unwrap();
+            if cut_end_code {
+                // The end code is at least 9 bits, so dropping the last byte
+                // cuts only (part of) the end code, never data.
+                lzw.pop();
+                let strict = weezl::decode::Decoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8)
+                    .decode(&lzw);
+                assert!(strict.is_err(), "end code still present");
+            }
+            chunks.push(lzw);
+        }
+    }
+    let n = chunks.len() as u32;
+    assert!(n > 1, "offset arrays must not be inline");
+    const ENTRIES: u32 = 12;
+    let ifd_end = 8 + 2 + ENTRIES * 12 + 4;
+    let (offs_at, counts_at, tie_at) = (ifd_end, ifd_end + 4 * n, ifd_end + 8 * n);
+    let mut data_at = tie_at + 48;
+    let mut out: Vec<u8> = b"II*\0".to_vec();
+    out.extend(8u32.to_le_bytes());
+    out.extend((ENTRIES as u16).to_le_bytes());
+    let mut entry = |tag: u16, typ: u16, count: u32, value: u32| {
+        out.extend(tag.to_le_bytes());
+        out.extend(typ.to_le_bytes());
+        out.extend(count.to_le_bytes());
+        out.extend(value.to_le_bytes());
+    };
+    let (short, long, double) = (3, 4, 12);
+    entry(256, long, 1, size);
+    entry(257, long, 1, size);
+    entry(258, short, 1, 32);
+    entry(259, short, 1, 5); // LZW
+    entry(262, short, 1, 1);
+    entry(277, short, 1, 1);
+    entry(322, long, 1, tile);
+    entry(323, long, 1, tile);
+    entry(324, long, n, offs_at);
+    entry(325, long, n, counts_at);
+    entry(339, short, 1, 3); // IEEE float
+    entry(33922, double, 6, tie_at);
+    out.extend(0u32.to_le_bytes());
+    for c in &chunks {
+        out.extend(data_at.to_le_bytes());
+        data_at += c.len() as u32;
+    }
+    for c in &chunks {
+        out.extend((c.len() as u32).to_le_bytes());
+    }
+    for v in [
+        0.0,
+        0.0,
+        0.0,
+        e_km as f64 * 1000.0,
+        (n_km + 1) as f64 * 1000.0,
+        0.0,
+    ] {
+        out.extend(f64::to_le_bytes(v));
+    }
+    for c in &chunks {
+        out.extend(c);
+    }
+    std::fs::write(path, out).unwrap();
+}
+
+#[test]
+fn alti3d_decodes_lzw_tiles_without_end_code() {
+    // 24 px in 16 px tiles: the right and bottom tiles are padded, like the
+    // real 500 px tiles in 128 px blocks. With this noise, tiff 0.11.3's own
+    // reader fails on the padded tile ("no lzw end code found") with and
+    // without the end code, as it did on 82 of the 595 real tiles.
+    let f = |x: u32, y: u32| {
+        let mut h = 14 ^ ((x as u64) << 20) ^ ((y as u64) << 40);
+        h = h.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        h ^= h >> 29;
+        600.0 + x as f32 * 0.37 + y as f32 * 0.21 + (h >> 50) as f32 * 0.001
+    };
+    for cut in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir
+            .path()
+            .join("swissalti3d_2020_2600-1200_2_2056_5728.tif");
+        write_lzw_tiled(cut, &path, 24, 16, 2600, 1200, f);
+        let t = Alti3dTiles::open(dir.path()).unwrap();
+        let cell = 1000.0 / 24.0;
+        for (x, y) in [(0, 0), (5, 9), (20, 3), (3, 20), (23, 23)] {
+            let e = 2_600_000.0 + (x as f64 + 0.5) * cell;
+            let n = 1_201_000.0 - (y as f64 + 0.5) * cell;
+            let z = t.sample_lv95(e, n).expect("tile decodes");
+            assert!((z - f(x, y)).abs() < 0.01, "cut {cut} ({x}, {y}): {z}");
+        }
+    }
+}
+
+/// Every real tile decodes: `cargo test --release --test import_dem -- --ignored real_alti3d_all`.
+#[test]
+#[ignore]
+fn real_alti3d_all_tiles_decode() {
+    let dir = Path::new("data/raw/alti3d");
+    let t = Alti3dTiles::open(dir).unwrap();
+    let mut failed = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let name = entry.unwrap().file_name().into_string().unwrap();
+        let Some(en) = name
+            .strip_suffix("_2_2056_5728.tif")
+            .and_then(|s| s.rsplit('_').next())
+        else {
+            continue;
+        };
+        let (e, n) = en.split_once('-').unwrap();
+        let (e, n): (f64, f64) = (e.parse().unwrap(), n.parse().unwrap());
+        if t.sample_lv95(e * 1000.0 + 500.0, n * 1000.0 + 500.0)
+            .is_none()
+        {
+            failed.push(name);
+        }
+    }
+    eprintln!(
+        "{} tiles, {} failed: {failed:?}",
+        t.tile_count(),
+        failed.len()
+    );
+    assert!(failed.is_empty());
+}
