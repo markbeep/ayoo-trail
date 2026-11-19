@@ -215,15 +215,31 @@ pub fn route(g: &Graph, p: &Profile, start: Snap, end: Snap, visited: &Visited) 
 /// Concatenates steps; merges a step into the previous one when it is the same edge, same direction,
 /// and contiguous (prev.to_t == next.from_t). None if any leg fails or fewer than 2 snaps.
 pub fn route_via(g: &Graph, p: &Profile, snaps: &[Snap]) -> Option<Route> {
+    route_legs(g, p, snaps, &mut Visited::new(g.edge_count()), |_| false)
+}
+
+/// Like `route_via`, but after each leg the edges for which `mark` holds go into `visited`,
+/// so later legs pay the repetition penalty on them (loop generation).
+pub(crate) fn route_legs(
+    g: &Graph,
+    p: &Profile,
+    snaps: &[Snap],
+    visited: &mut Visited,
+    mark: impl Fn(u32) -> bool,
+) -> Option<Route> {
     if snaps.len() < 2 {
         return None;
     }
-    let visited = Visited::new(g.edge_count());
     let mut steps: Vec<RouteStep> = Vec::new();
     let mut cost = 0.0;
     for w in snaps.windows(2) {
-        let leg = route(g, p, w[0], w[1], &visited)?;
+        let leg = route(g, p, w[0], w[1], visited)?;
         cost += leg.cost;
+        for st in &leg.steps {
+            if mark(st.edge) {
+                visited.insert(st.edge);
+            }
+        }
         for st in leg.steps {
             match steps.last_mut() {
                 Some(prev)

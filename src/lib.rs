@@ -2,9 +2,10 @@
 //!
 //! Modules: `graph` (the `graph.bin` format), `geodesy`, `snap` (edge
 //! snapping), `cost` (profile and scoring), `route` (forward A* and route
-//! assembly), `import` (offline OSM importer) and `server` (the web shell).
+//! assembly), `generate` (loops), `import` (offline OSM importer) and `server` (the web shell).
 
 pub mod cost;
+pub mod generate;
 pub mod geodesy;
 pub mod graph;
 pub mod import;
