@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { MapPin, Search, LoaderCircle } from "@lucide/solid";
 import {
-  DISTANCE_PRESETS_KM, climbLabel, distanceKm, findRoutes, queryOpen, setDistanceKm, setQueryOpen, status, errorMsg,
+  DISTANCE_PRESETS_KM, climbLabel, distanceKm, editQuery, findRoutes, queryOpen, setDistanceKm, status, errorMsg,
 } from "../state";
 import { ClimbControl } from "./Controls";
 import { StartSearch, startLabel } from "./StartSearch";
@@ -11,10 +11,10 @@ export function QueryCard() {
     <section class="card query" aria-label="Route search">
       <Show when={queryOpen()} fallback={
         <div class="chips-row">
-          <button class="chip" onClick={() => setQueryOpen(true)}><MapPin size={15} /><span class="chip-text">{startLabel()}</span></button>
-          <button class="chip" onClick={() => setQueryOpen(true)}>{distanceKm()} km</button>
-          <button class="chip" onClick={() => setQueryOpen(true)}>{climbLabel()}</button>
-          <button class="link-btn push" onClick={() => setQueryOpen(true)}>Change</button>
+          <button class="chip" onClick={editQuery}><MapPin size={15} /><span class="chip-text">{startLabel()}</span></button>
+          <button class="chip" onClick={editQuery}>{distanceKm()} km</button>
+          <button class="chip" onClick={editQuery}>{climbLabel()}</button>
+          <button class="link-btn push" onClick={editQuery}>Change</button>
         </div>
       }>
         <h2 class="q-title">Where do you start?</h2>

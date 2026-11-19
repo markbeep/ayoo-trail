@@ -190,6 +190,19 @@ export function resetEdit(id: string) {
 }
 
 let seq = 0;
+/** "Change" (or a query chip): drop the loops and any pending refresh, so nothing regenerates until "Find loops". */
+export function editQuery() {
+  seq++; // a request already in flight is ignored when it returns
+  clearTimeout(liveTimer);
+  setRoutes([]);
+  setSelectedId(null);
+  setHistory({});
+  setEditError(null);
+  setStale(false);
+  setRefreshing(false);
+  setStatus("idle");
+  setQueryOpen(true);
+}
 /** Generate loops with `POST /api/generate`. A live refresh keeps the query card as it is and the same loop slot selected. */
 export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
   const mine = ++seq;
