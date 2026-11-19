@@ -287,8 +287,11 @@ fn on_route(g: &Graph, r: &Route, p: LatLon) -> LatLon {
 
 /// The nearest anchor within `max_m` of `pt`, else `pt` itself.
 fn pull(g: &Graph, pt: LatLon, max_m: f64) -> LatLon {
+    // A degree of latitude is >= 110.5 km, so this skips the haversine for far anchors.
+    let dlat = max_m / 110_000.0;
     g.anchors()
         .iter()
+        .filter(|a| (a.pos.lat - pt.lat).abs() <= dlat)
         .map(|a| (haversine_m(a.pos, pt), a.pos))
         .filter(|(d, _)| *d <= max_m)
         .min_by(|a, b| a.0.total_cmp(&b.0))

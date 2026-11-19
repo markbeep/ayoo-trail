@@ -7,7 +7,7 @@ use std::collections::BinaryHeap;
 use serde::Serialize;
 
 use crate::cost::{edge_cost_with, score, term_minima, Breakdown, FactorTable, Profile, Weights};
-use crate::geodesy::{gain_loss, haversine_m, polyline_length_m};
+use crate::geodesy::{gain_loss, haversine_m, polyline_length_m, LocalProjection};
 use crate::graph::{flags, Direction, Graph, LatLon, FLAT_BAND, GRADE_BANDS};
 use crate::snap::Snap;
 
@@ -99,13 +99,20 @@ pub fn route(g: &Graph, p: &Profile, start: Snap, end: Snap, visited: &Visited) 
     }
     // Full-edge cost in a direction, with the repetition penalty.
     let table = FactorTable::new(&p.weights);
+    let plain = p.exclude.is_empty();
     let full = |e: u32, dir: Direction| {
         let pen = if visited.contains(e) {
             REPEAT_PENALTY
         } else {
             1.0
         };
-        edge_cost_with(g, e, dir, p, &table).map(|c| c.cost * pen)
+        if !plain {
+            return edge_cost_with(g, e, dir, p, &table).map(|c| c.cost * pen);
+        }
+        // Same value as `edge_cost_with` without exclusions, from one record.
+        let a = g.hot_edge(e);
+        (a.sac <= p.max_sac)
+            .then(|| a.len_cm as f64 / 100.0 * table.hot_breakdown(a, dir).product() * pen)
     };
     let step = |edge, from_t, to_t| RouteStep { edge, from_t, to_t };
     let (s_fwd, s_bwd) = (
@@ -126,7 +133,15 @@ pub fn route(g: &Graph, p: &Profile, start: Snap, end: Snap, visited: &Visited) 
     }
 
     let h_per_m = p.min_cost_per_m();
-    let h = |n: u32| haversine_m(g.node(n), end.pos) * h_per_m;
+    // Planar distance at the goal's latitude: no trig per node. It overestimates the
+    // haversine by < 0.5 % for nodes within ~0.5° of latitude, which the 1 % slack covers.
+    let proj = LocalProjection::new(end.pos.lat);
+    let goal = proj.project(end.pos);
+    let h_per_m = h_per_m * 0.99;
+    let h = |n: u32| {
+        let q = proj.project(g.node(n));
+        (q[0] - goal[0]).hypot(q[1] - goal[1]) * h_per_m
+    };
     let (end_from, end_to) = (g.edge_from(end.edge), g.edge_to(end.edge));
 
     SCRATCH.with_borrow_mut(|s| {
@@ -189,9 +204,10 @@ pub fn route(g: &Graph, p: &Profile, start: Snap, end: Snap, visited: &Visited) 
             }
             for (e, dir) in g.neighbors(u) {
                 let Some(c) = full(e, dir) else { continue };
+                let a = g.hot_edge(e);
                 let (v, st) = match dir {
-                    Direction::Forward => (g.edge_to(e), step(e, 0.0, 1.0)),
-                    Direction::Backward => (g.edge_from(e), step(e, 1.0, 0.0)),
+                    Direction::Forward => (a.to, step(e, 0.0, 1.0)),
+                    Direction::Backward => (a.from, step(e, 1.0, 0.0)),
                 };
                 relax(s, &mut heap, v, d + c, (st, false));
             }

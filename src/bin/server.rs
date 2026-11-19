@@ -35,6 +35,9 @@ async fn main() -> std::io::Result<()> {
             std::io::Error::other(format!("cannot open {}: {e}", graph_path.display()))
         })?;
         g.main_component(Profile::default().max_sac); // label now, not on the first request
+        if g.edge_count() > 0 {
+            g.hot_edge(0); // pack the routing records now too
+        }
         tracing::info!(
             nodes = g.node_count(),
             edges = g.edge_count(),

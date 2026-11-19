@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::geodesy::{closest_on_segment, haversine_m, LocalProjection};
-use crate::graph::{flags, Direction, Graph, LatLon, GRADE_BANDS};
+use crate::graph::{flags, Direction, Graph, HotEdge, LatLon, GRADE_BANDS};
 
 /// Slope factors for the four descent bands, steepest first (<=-25, -25..-20, -20..-15,
 /// -15..-8 %), for gentle / any / steep (D45, D53). Starting points to tune (Q17).
@@ -266,7 +266,10 @@ impl FactorTable {
     }
 
     pub fn breakdown(&self, g: &Graph, e: u32, dir: Direction) -> Breakdown {
-        let a = g.edge_attrs(e);
+        self.hot_breakdown(g.hot_edge(e), dir)
+    }
+
+    pub fn hot_breakdown(&self, a: &HotEdge, dir: Direction) -> Breakdown {
         let sum: u32 = a.grade.iter().map(|&v| v as u32).sum();
         let slope = if sum == 0 {
             1.0

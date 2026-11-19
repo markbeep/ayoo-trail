@@ -144,6 +144,22 @@ pub struct EdgeAttrs {
     pub flags: u8,
 }
 
+/// What A* reads per edge, packed into one record: the SoA columns cost ~10 cache misses
+/// per relaxed edge. Built once per graph (`Graph::hot_edge`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HotEdge {
+    pub from: u32,
+    pub to: u32,
+    pub len_cm: u32,
+    pub grade: [u8; GRADE_BANDS],
+    pub surface: u8,
+    pub sac: u8,
+    pub forest_pct: u8,
+    pub urban: u8,
+    pub official_category: u8,
+    pub flags: u8,
+}
+
 impl Default for EdgeAttrs {
     fn default() -> Self {
         EdgeAttrs {
@@ -661,6 +677,7 @@ pub struct Graph {
     /// Per `max_sac` (0..=6): connected-component id per node over the edges with
     /// `sac <= max_sac`, and the id of the largest component.
     components: [OnceLock<(Vec<u32>, u32)>; 7],
+    hot: OnceLock<Vec<HotEdge>>,
     snap_grid: SnapGrid,
 }
 
@@ -735,6 +752,7 @@ impl Graph {
             dem_source,
             anchors: OnceLock::new(),
             components: Default::default(),
+            hot: OnceLock::new(),
             snap_grid,
         };
         g.validate()?;
@@ -921,6 +939,31 @@ impl Graph {
             };
             (v >> 1, dir)
         })
+    }
+
+    /// The edge's routing attributes in one record (~100 MB on the CH graph, built on first use).
+    pub fn hot_edge(&self, e: u32) -> &HotEdge {
+        &self.hot.get_or_init(|| {
+            use rayon::prelude::*;
+            (0..self.edge_count() as u32)
+                .into_par_iter()
+                .map(|e| {
+                    let a = self.edge_attrs(e);
+                    HotEdge {
+                        from: self.edge_from(e),
+                        to: self.edge_to(e),
+                        len_cm: self.edge_col(self.layout.edge_len_cm, e),
+                        grade: a.grade,
+                        surface: a.surface as u8,
+                        sac: a.sac,
+                        forest_pct: a.forest_pct,
+                        urban: a.urban,
+                        official_category: a.official_category,
+                        flags: a.flags,
+                    }
+                })
+                .collect()
+        })[e as usize]
     }
 
     /// Connected component of an edge over the edges a `max_sac` limit leaves open. Islands
