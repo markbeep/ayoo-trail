@@ -6,7 +6,7 @@ import {
 } from "../state";
 import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
-import { ClimbPresets, ClimbSlider, HillsPanel, StrictnessSlider, WeightSlider } from "./Controls";
+import { ClimbSlider, HillsPanel, StrictnessSlider, WeightSlider } from "./Controls";
 import { downloadGpx } from "../routes/gpx";
 import { km, meters, score } from "../routes/format";
 import { ElevationProfile } from "./ElevationProfile";
@@ -17,6 +17,9 @@ const PREFERENCE = ["preferred", "good", "fine", "avoided", "strongly avoided"];
 export function RouteCard(props: { route: Route; name: string }) {
   const [open, setOpen] = createSignal<BreakdownKey | null>(null);
   const r = () => props.route;
+  // With Max there is no target to score against, but the row stays so its climb controls don't vanish (D78).
+  const bars = () => r().breakdown.some((b) => b.key === "climb") ? r().breakdown
+    : [{ key: "climb" as const, value: null, detail: `${meters(r().climb_m)} of climb, as much as possible` }, ...r().breakdown];
   const best = () => Math.min(...(r().cost_per_m ?? []).filter((c) => c > 0));
   const hoverAt = () => {
     const i = hoverIndex(), c = i === null ? undefined : r().cost_per_m?.[i];
@@ -85,7 +88,7 @@ export function RouteCard(props: { route: Route; name: string }) {
 
       <h3 class="why">Why it scores {score(r().score)}<Show when={termsHere()}><span class="why-here"> · colors show the point you're on</span></Show><Show when={refreshing()}><span class="updating"><LoaderCircle size={13} class="spin" />Updating</span></Show></h3>
       <ul class="bars">
-        <For each={r().breakdown}>{(b) => {
+        <For each={bars()}>{(b) => {
           const f = FACTORS[b.key];
           const isOpen = () => open() === b.key;
           return (
@@ -93,10 +96,10 @@ export function RouteCard(props: { route: Route; name: string }) {
               <button class="bar" aria-expanded={`${isOpen()}`} onClick={() => setOpen(isOpen() ? null : b.key)}>
                 <span class="bar-label">{f.label}</span>
                 <span class="track" aria-hidden="true"><span class="fill" style={{
-                  width: `${Math.round(b.value * 100)}%`,
+                  width: `${Math.round((b.value ?? 0) * 100)}%`,
                   background: termsHere() && b.key !== "climb" ? `var(--cost-${termBucket(termsHere()![b.key]) + 1})` : undefined,
                 }} /></span>
-                <span class="bar-value"><span class="sr-only">, </span>{Math.round(b.value * 100)}<span class="sr-only"> out of 100. </span></span>
+                <span class="bar-value"><Show when={b.value !== null} fallback={<span class="sr-only">, not scored. </span>}><span class="sr-only">, </span>{Math.round(b.value! * 100)}<span class="sr-only"> out of 100. </span></Show></span>
                 <span class="link-btn">{isOpen() ? "Close" : "Adjust"}</span>
               </button>
               <Show when={isOpen()}>
@@ -107,7 +110,6 @@ export function RouteCard(props: { route: Route; name: string }) {
                       <HillsPanel />
                     </Show>
                   }>
-                    <ClimbPresets />
                     <div class="climb-slider"><ClimbSlider /></div>
                     <StrictnessSlider />
                   </Show>

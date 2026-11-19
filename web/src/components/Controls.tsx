@@ -2,8 +2,8 @@
 // runs once per gesture.
 import { createSignal, For, Show } from "solid-js";
 import {
-  CLIMB_STEP_M, FACTORS, HILLINESS, climb, climbMaxM, climbTargetM, distanceKm, positionOf, setClimb, setHill,
-  setStrictness, setWeight, strength, strictness, weightAt, weights, type Hilliness, type NumericWeight,
+  CLIMB_STEP_M, FACTORS, HILLINESS, climbMaxM, climbTargetM, distanceKm, positionOf, setClimb, setHill,
+  setStrictness, setWeight, strength, strictness, weightAt, weights, type Climb, type Hilliness, type NumericWeight,
 } from "../state";
 
 const STEPS = 1000;
@@ -12,6 +12,8 @@ const STEPS = 1000;
 export function Slider(props: {
   value: number; label: string; text: (v: number) => string; onCommit: (v: number) => void;
   min?: number; notch?: number; ends?: [string, string];
+  /** Labelled notches under the track, positions 0–1. */
+  marks?: { at: number; label: string }[];
 }) {
   const [drag, setDrag] = createSignal<number | null>(null);
   const min = () => props.min ?? 0;
@@ -21,6 +23,7 @@ export function Slider(props: {
     <div class="slider">
       <div class="slider-track" style={{ "--p": `${pct()}%`, "--notch": `${(((props.notch ?? -1) - min()) / (1 - min())) * 100}%` }}>
         <Show when={props.notch !== undefined}><span class="slider-notch" aria-hidden="true" /></Show>
+        <For each={props.marks}>{(m) => <span class="slider-notch" style={{ "--notch": `${m.at * 100}%` }} aria-hidden="true" />}</For>
         <input
           type="range" min={min() * STEPS} max={STEPS} step="1" value={Math.round(v() * STEPS)}
           aria-label={props.label} aria-valuetext={props.text(v())}
@@ -28,6 +31,11 @@ export function Slider(props: {
           onChange={(e) => { const x = Number(e.currentTarget.value) / STEPS; setDrag(null); props.onCommit(x); }}
         />
       </div>
+      <Show when={props.marks}>{(marks) => (
+        <div class="slider-marks" aria-hidden="true">
+          <For each={marks()}>{(m) => <span style={{ "--at": `${m.at * 100}%` }}>{m.label}</span>}</For>
+        </div>
+      )}</Show>
       <Show when={props.ends}>{(ends) => (
         <div class="slider-ends" aria-hidden="true"><span>{ends()[0]}</span><span>{ends()[1]}</span></div>
       )}</Show>
@@ -79,23 +87,6 @@ export function HillsPanel() {
   );
 }
 
-const PRESETS = Object.entries(HILLINESS) as [Hilliness, { label: string; mPerKm: number }][];
-const presetOn = (k: Hilliness) => { const c = climb(); return c !== "max" && "preset" in c && c.preset === k; };
-
-/** Gentle / Hilly / Mountain / Max quick picks; they set the ruler below. */
-export function ClimbPresets() {
-  return (
-    <div class="seg" role="radiogroup" aria-label="Hilliness">
-      <For each={PRESETS}>{([k, h]) => (
-        <button role="radio" aria-checked={`${presetOn(k)}`} class={{ on: presetOn(k) }}
-          onClick={() => setClimb({ preset: k })} title={`About ${h.mPerKm} m of climb per km`}>{h.label}</button>
-      )}</For>
-      <button role="radio" aria-checked={`${climb() === "max"}`} class={{ on: climb() === "max" }}
-        onClick={() => setClimb("max")} title="As much climb as the area has">Max</button>
-    </div>
-  );
-}
-
 /** How hard the generator chases the climb (D52). */
 export function StrictnessSlider() {
   const max = () => climbTargetM() === null;
@@ -115,18 +106,31 @@ export function StrictnessSlider() {
   );
 }
 
-/** A slider over 0…climbMax meters whose last stop is Max. */
+const PRESETS = Object.entries(HILLINESS) as [Hilliness, { label: string; mPerKm: number }][];
+/** Thumb drops this close to a notch snap to it. */
+const SNAP = 0.03;
+
+/** One slider over 0…climbMax meters: Gentle, Hilly and Mountain are notches that follow the distance, Max is the end (D78). */
 export function ClimbSlider() {
   const maxM = climbMaxM;
   // The top 4 % of the track is the Max stop.
-  const toPos = () => { const t = climbTargetM(); return t === null ? 1 : Math.min(t / maxM(), 1) * 0.96; };
-  const fromPos = (p: number): number | null => (p > 0.98 ? null : Math.round(((p / 0.96) * maxM()) / CLIMB_STEP_M) * CLIMB_STEP_M);
+  const posOf = (m: number) => Math.min(m / maxM(), 1) * 0.96;
+  const marks = () => [
+    ...PRESETS.map(([k, h]) => ({ k, at: posOf(h.mPerKm * distanceKm()), label: h.label })),
+    { k: "max" as const, at: 1, label: "Max" },
+  ];
+  const toPos = () => { const t = climbTargetM(); return t === null ? 1 : posOf(t); };
+  const fromPos = (p: number): Climb => {
+    const near = marks().find((m) => Math.abs(m.at - p) <= SNAP);
+    if (near) return near.k === "max" ? "max" : { preset: near.k };
+    return { m: Math.round(((p / 0.96) * maxM()) / CLIMB_STEP_M) * CLIMB_STEP_M };
+  };
+  const word = (c: Climb) => c === "max" ? "As much as possible" : "preset" in c ? `${HILLINESS[c.preset].label}, ${HILLINESS[c.preset].mPerKm * distanceKm()} m` : `${c.m} m`;
   return (
     <Slider
-      label="Meters of climb" value={toPos()}
-      text={(p) => { const m = fromPos(p); return m === null ? "As much as possible" : `${m} m`; }}
-      ends={["0 m", "Max"]}
-      onCommit={(p) => { const m = fromPos(p); setClimb(m === null ? "max" : { m }); }}
+      label="Climb" value={toPos()} marks={marks()}
+      text={(p) => word(fromPos(p))}
+      onCommit={(p) => setClimb(fromPos(p))}
     />
   );
 }
@@ -135,7 +139,6 @@ export function ClimbSlider() {
 export function ClimbControl() {
   return (
     <>
-      <ClimbPresets />
       <div class="climb-slider"><ClimbSlider /></div>
       <p class="hint">
         {climbTargetM() === null ? "As much climb as the area has" : `About ${climbTargetM()} m of climb over ${distanceKm()} km`}
