@@ -18,6 +18,8 @@
 > - Task 7: no `split_edges_at_extrema` (D30); DEM behind a trait with swissALTI3D tiles (default) and DHM25 ASCII; 10 m sampling; bridge/tunnel interpolation; Z densification.
 > - Task 8: official trails read from the GPKG with `rusqlite` and matched in LV95; no GDAL.
 > - Task 11: server starts without a graph (`/api/route` → 503); health adds `bbox`.
+>
+> **Revision 2026-11-19 (D39–D42).** Tasks 9, 10 and the endpoint half of 12 run now. Generation is triangle seeds with radius rescaling (D39), not anchor ranking plus anchor insertion; there is no refinement round and no response cache yet. The frontend gets an OSM vector default base map, hillshade, and toggleable overlays (D40–D42).
 
 ## Global Constraints
 

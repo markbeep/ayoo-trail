@@ -43,8 +43,11 @@ official-trail share honestly instead of hiding weak data.
 - Map-centric: swisstopo topographic map (default) and SWISSIMAGE satellite,
   fetched directly from `wmts.geo.admin.ch`. Satellite exists to confirm that a
   trail is real.
-- Further map layers will be added later (snow, heatmaps, viewshed, sun/shade,
-  POIs); whether these are overlays or separate base layers is undecided.
+- Default base map is an own-styled OSM vector map (Europe-wide, colours follow
+  the UI); swisstopo Topo and Satellite are alternates (D40).
+- Everything else is a toggleable overlay on any base map: relief, marked
+  trails, forest now; snow, popular trails, path steepness, 360° view and
+  sun/shade later (D41, D42).
 - Output goes to GPX, then to a sports watch (e.g. Coros).
 
 ## Capabilities and Constraints
@@ -56,8 +59,7 @@ official-trail share honestly instead of hiding weak data.
   rendering from mock data. No routing backend yet. Manual click-to-draw is not
   in scope (D13).
 - Attribution required: ©swisstopo on the map, © OpenStreetMap contributors.
-- Undecided: tiering/paywalls for layers (later), overlay vs. base-layer model
-  for future layers.
+- Undecided: tiering/paywalls for layers (later).
 
 ## Brand Commitments
 

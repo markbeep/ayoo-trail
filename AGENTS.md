@@ -7,7 +7,8 @@ Read this first, then `docs/brief.md`.
 **Engine and importer in implementation (D29).** Plan tasks 1–8 and 11 plus a
 dev-only `?dev=route` client mode are being built, with the 2026-11-18
 revisions (D30–D37) overriding `docs/milestones.md` where they differ. Loop
-generation, `/api/generate` and the cache (tasks 9, 10, 12) wait for the owner.
+generation and `/api/generate` (D39) plus the map/overlay redesign (D40–D42)
+are in progress; the response cache waits for latency numbers.
 
 ## Layout
 
