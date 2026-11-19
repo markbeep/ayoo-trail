@@ -658,8 +658,9 @@ pub struct Graph {
     bbox: Bbox,
     dem_source: u8,
     anchors: OnceLock<Vec<Anchor>>,
-    /// Connected-component id per node and the id of the largest component.
-    components: OnceLock<(Vec<u32>, u32)>,
+    /// Per `max_sac` (0..=6): connected-component id per node over the edges with
+    /// `sac <= max_sac`, and the id of the largest component.
+    components: [OnceLock<(Vec<u32>, u32)>; 7],
     snap_grid: SnapGrid,
 }
 
@@ -733,7 +734,7 @@ impl Graph {
             bbox,
             dem_source,
             anchors: OnceLock::new(),
-            components: OnceLock::new(),
+            components: Default::default(),
             snap_grid,
         };
         g.validate()?;
@@ -922,21 +923,23 @@ impl Graph {
         })
     }
 
-    /// Connected component of an edge, ignoring profiles. Islands (station stairs, courtyards)
-    /// can't be reached from the main network, and A* only gives up on one after exploring
-    /// everything reachable, so snaps stay inside the start's component.
-    pub fn edge_component(&self, e: u32) -> u32 {
-        self.components().0[self.edge_from(e) as usize]
+    /// Connected component of an edge over the edges a `max_sac` limit leaves open. Islands
+    /// (station stairs, courtyards, paths cut off by harder trails) can't be reached from the
+    /// main network, and A* only gives up on one after exploring everything reachable, so
+    /// snaps stay inside the start's component.
+    pub fn edge_component(&self, e: u32, max_sac: u8) -> u32 {
+        self.components(max_sac).0[self.edge_from(e) as usize]
     }
 
-    /// The largest connected component (the main network).
-    pub fn main_component(&self) -> u32 {
-        self.components().1
+    /// The largest connected component (the main network) under `max_sac`.
+    pub fn main_component(&self, max_sac: u8) -> u32 {
+        self.components(max_sac).1
     }
 
-    /// Union-find over all edges, once (~0.1 s on the CH graph).
-    fn components(&self) -> &(Vec<u32>, u32) {
-        self.components.get_or_init(|| {
+    /// Union-find over the edges with `sac <= max_sac`, once per limit (~0.15 s on the CH graph).
+    fn components(&self, max_sac: u8) -> &(Vec<u32>, u32) {
+        let i = (max_sac as usize).min(self.components.len() - 1);
+        self.components[i].get_or_init(|| {
             fn find(p: &mut [u32], mut x: u32) -> u32 {
                 while p[x as usize] != x {
                     p[x as usize] = p[p[x as usize] as usize];
@@ -947,6 +950,9 @@ impl Graph {
             let n = self.node_count();
             let mut parent: Vec<u32> = (0..n as u32).collect();
             for e in 0..self.edge_count() as u32 {
+                if self.edge_attrs(e).sac as usize > i {
+                    continue;
+                }
                 let (a, b) = (
                     find(&mut parent, self.edge_from(e)),
                     find(&mut parent, self.edge_to(e)),

@@ -165,3 +165,34 @@ fn start_next_to_an_island_snaps_to_the_main_network() {
     let loops = generate(&g, &req(at(1055.0, 1220.0), 6_000.0)).unwrap();
     assert!(!loops.is_empty(), "start stayed on the island");
 }
+
+#[test]
+fn components_follow_the_sac_limit() {
+    // Grid node 0 –(T5 edge)– x –(easy edge)– y: x–y is an island unless T5 is allowed.
+    let mut w = grid_writer(3, 200.0);
+    let (px, py) = (at(-200.0, 0.0), at(-400.0, 0.0));
+    let (x, y) = (w.add_node(px, 500.0), w.add_node(py, 500.0));
+    let edge = |sac| EdgeAttrs {
+        length_m: 200.0,
+        surface: Surface::Gravel,
+        sac,
+        ..Default::default()
+    };
+    let o = at(0.0, 0.0);
+    w.add_edge(
+        0,
+        x,
+        edge(5),
+        &[(o.lat, o.lon, 500.0), (px.lat, px.lon, 500.0)],
+    );
+    let island = w.add_edge(
+        x,
+        y,
+        edge(1),
+        &[(px.lat, px.lon, 500.0), (py.lat, py.lon, 500.0)],
+    );
+    let g = Graph::from_bytes(w.finish()).unwrap();
+
+    assert_ne!(g.edge_component(island, 3), g.main_component(3));
+    assert_eq!(g.edge_component(island, 5), g.main_component(5));
+}

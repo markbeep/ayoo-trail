@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing_subscriber::EnvFilter;
+use trail_calc::cost::Profile;
 use trail_calc::graph::Graph;
 use trail_calc::server::{app, ServerConfig};
 
@@ -33,7 +34,7 @@ async fn main() -> std::io::Result<()> {
         let g = Graph::open(&graph_path).map_err(|e| {
             std::io::Error::other(format!("cannot open {}: {e}", graph_path.display()))
         })?;
-        g.main_component(); // label components now, not on the first request
+        g.main_component(Profile::default().max_sac); // label now, not on the first request
         tracing::info!(
             nodes = g.node_count(),
             edges = g.edge_count(),

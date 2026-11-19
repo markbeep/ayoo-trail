@@ -232,42 +232,70 @@ pub struct EdgeCost {
 
 /// Pure factor computation: no hard filters, no exclusions.
 pub fn edge_factors(g: &Graph, e: u32, dir: Direction, w: &Weights) -> Breakdown {
-    let a = g.edge_attrs(e);
-    let sum: u32 = a.grade.iter().map(|&v| v as u32).sum();
-    let slope = if sum == 0 {
-        1.0
-    } else {
-        let mut s = 0.0f32;
-        for (i, &f) in weighted_slope(w).iter().enumerate() {
-            let share = match dir {
-                Direction::Forward => a.grade[i],
-                Direction::Backward => a.grade[GRADE_BANDS - 1 - i],
-            };
-            s += share as f32 / sum as f32 * f;
+    FactorTable::new(w).breakdown(g, e, dir)
+}
+
+/// Every weighted factor for one set of weights, so the A* inner loop does lookups instead
+/// of ~14 `powf` per edge. Same values as computing them per edge.
+pub struct FactorTable {
+    slope: [f32; GRADE_BANDS],
+    surface: [f32; 8],
+    tech: [f32; 5],
+    official: [f32; 2],
+    /// By forest share 0..=100 %.
+    forest: [f32; 101],
+    urban: [f32; 3],
+}
+
+impl FactorTable {
+    pub fn new(w: &Weights) -> Self {
+        FactorTable {
+            slope: weighted_slope(w),
+            surface: SURFACE_FACTORS.map(|f| weighted(f, w.surface)),
+            tech: TECH_FACTORS.map(|f| weighted(f, w.tech)),
+            official: OFFICIAL_FACTORS.map(|f| weighted(f, w.official)),
+            forest: std::array::from_fn(|pct| {
+                weighted(
+                    FOREST_FACTORS[1]
+                        - (FOREST_FACTORS[1] - FOREST_FACTORS[0]) * pct as f32 / 100.0,
+                    w.forest,
+                )
+            }),
+            urban: URBAN_FACTORS.map(|f| weighted(f, w.urban)),
         }
-        s
-    };
-    let tech = match a.sac {
-        0 if a.flags & flags::MISSING_TAGS != 0 => TECH_FACTORS[4],
-        0 | 1 => TECH_FACTORS[0],
-        2 => TECH_FACTORS[1],
-        3 => TECH_FACTORS[2],
-        _ => TECH_FACTORS[3],
-    };
-    Breakdown {
-        slope,
-        surface: weighted(SURFACE_FACTORS[(a.surface as usize).min(7)], w.surface),
-        tech: weighted(tech, w.tech),
-        official: weighted(
-            OFFICIAL_FACTORS[(a.official_category == 0) as usize],
-            w.official,
-        ),
-        forest: weighted(
-            FOREST_FACTORS[1]
-                - (FOREST_FACTORS[1] - FOREST_FACTORS[0]) * a.forest_pct.min(100) as f32 / 100.0,
-            w.forest,
-        ),
-        urban: weighted(URBAN_FACTORS[(a.urban as usize).min(2)], w.urban),
+    }
+
+    pub fn breakdown(&self, g: &Graph, e: u32, dir: Direction) -> Breakdown {
+        let a = g.edge_attrs(e);
+        let sum: u32 = a.grade.iter().map(|&v| v as u32).sum();
+        let slope = if sum == 0 {
+            1.0
+        } else {
+            let mut s = 0.0f32;
+            for (i, &f) in self.slope.iter().enumerate() {
+                let share = match dir {
+                    Direction::Forward => a.grade[i],
+                    Direction::Backward => a.grade[GRADE_BANDS - 1 - i],
+                };
+                s += share as f32 / sum as f32 * f;
+            }
+            s
+        };
+        let tech = match a.sac {
+            0 if a.flags & flags::MISSING_TAGS != 0 => 4,
+            0 | 1 => 0,
+            2 => 1,
+            3 => 2,
+            _ => 3,
+        };
+        Breakdown {
+            slope,
+            surface: self.surface[(a.surface as usize).min(7)],
+            tech: self.tech[tech],
+            official: self.official[(a.official_category == 0) as usize],
+            forest: self.forest[a.forest_pct.min(100) as usize],
+            urban: self.urban[(a.urban as usize).min(2)],
+        }
     }
 }
 
@@ -326,10 +354,21 @@ pub fn traversable(g: &Graph, e: u32, p: &Profile) -> bool {
 }
 
 pub fn edge_cost(g: &Graph, e: u32, dir: Direction, p: &Profile) -> Option<EdgeCost> {
+    edge_cost_with(g, e, dir, p, &FactorTable::new(&p.weights))
+}
+
+/// `edge_cost` with the profile's factor table built once (`FactorTable::new(&p.weights)`).
+pub fn edge_cost_with(
+    g: &Graph,
+    e: u32,
+    dir: Direction,
+    p: &Profile,
+    t: &FactorTable,
+) -> Option<EdgeCost> {
     if !traversable(g, e, p) {
         return None;
     }
-    let breakdown = edge_factors(g, e, dir, &p.weights);
+    let breakdown = t.breakdown(g, e, dir);
     let penalized = p
         .exclude
         .iter()

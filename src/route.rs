@@ -6,7 +6,7 @@ use std::collections::BinaryHeap;
 
 use serde::Serialize;
 
-use crate::cost::{edge_cost, edge_factors, score, term_minima, Breakdown, Profile, Weights};
+use crate::cost::{edge_cost_with, score, term_minima, Breakdown, FactorTable, Profile, Weights};
 use crate::geodesy::{gain_loss, haversine_m, polyline_length_m};
 use crate::graph::{flags, Direction, Graph, LatLon, FLAT_BAND, GRADE_BANDS};
 use crate::snap::Snap;
@@ -98,13 +98,14 @@ pub fn route(g: &Graph, p: &Profile, start: Snap, end: Snap, visited: &Visited) 
         return None;
     }
     // Full-edge cost in a direction, with the repetition penalty.
+    let table = FactorTable::new(&p.weights);
     let full = |e: u32, dir: Direction| {
         let pen = if visited.contains(e) {
             REPEAT_PENALTY
         } else {
             1.0
         };
-        edge_cost(g, e, dir, p).map(|c| c.cost * pen)
+        edge_cost_with(g, e, dir, p, &table).map(|c| c.cost * pen)
     };
     let step = |edge, from_t, to_t| RouteStep { edge, from_t, to_t };
     let (s_fwd, s_bwd) = (
@@ -379,8 +380,9 @@ pub fn route_geometry(g: &Graph, r: &Route) -> Vec<(f64, f64, f32)> {
 /// leaving that vertex, so the last vertex repeats the last step's. For coloring the line.
 pub fn route_cost_per_m(g: &Graph, r: &Route, p: &Profile) -> Vec<f64> {
     let mut out: Vec<f64> = Vec::new();
+    let t = FactorTable::new(&p.weights);
     for s in &r.steps {
-        let c = edge_cost(g, s.edge, s.direction(), p).map_or(0.0, |c| c.per_m);
+        let c = edge_cost_with(g, s.edge, s.direction(), p, &t).map_or(0.0, |c| c.per_m);
         let n = slice(g, s).len();
         if let Some(last) = out.last_mut() {
             *last = c;
@@ -406,8 +408,9 @@ pub fn route_term_steps(g: &Graph, r: &Route, p: &Profile) -> Vec<(usize, Breakd
     };
     let mut out: Vec<(usize, Breakdown)> = Vec::new();
     let mut at = 0usize;
+    let t = FactorTable::new(&p.weights);
     for s in &r.steps {
-        let f = edge_factors(g, s.edge, s.direction(), &p.weights);
+        let f = t.breakdown(g, s.edge, s.direction());
         let b = Breakdown {
             slope: rel(f.slope, best.slope),
             surface: rel(f.surface, best.surface),
@@ -453,6 +456,10 @@ pub struct RouteStats {
 }
 
 pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
+    let (t, t_default) = (
+        FactorTable::new(&p.weights),
+        FactorTable::new(&Weights::default()),
+    );
     let mut st = RouteStats {
         distance_m: r.distance_m,
         climb_m: r.climb_m,
@@ -500,14 +507,14 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
         if a.flags & flags::SURFACE_INFERRED != 0 {
             st.surface_inferred_m += len;
         }
-        let f = edge_factors(g, s.edge, dir, &p.weights);
+        let f = t.breakdown(g, s.edge, dir);
         for (acc, v) in bd
             .iter_mut()
             .zip([f.slope, f.surface, f.tech, f.official, f.forest, f.urban])
         {
             *acc += len * v as f64;
         }
-        st.mean_factor_default += len * edge_factors(g, s.edge, dir, &Weights::default()).product();
+        st.mean_factor_default += len * t_default.breakdown(g, s.edge, dir).product();
     }
     let d = r.distance_m;
     if d > 0.0 {

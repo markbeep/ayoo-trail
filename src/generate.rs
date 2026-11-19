@@ -21,6 +21,8 @@ const STEM_M: f64 = 500.0;
 const TOLERANCE: f64 = 0.10;
 const MAX_OVERLAP: f64 = 0.5;
 const ATTEMPTS: usize = 8;
+/// Below this bracket width the climb-pressure bisection stops: the loops barely change.
+const MIN_PRESSURE_STEP: f32 = 0.05;
 /// Accepted climb error at strictness 0 and 1: "roughly" is ±15 %, "exactly" ±3 % (D63).
 const CLIMB_TOLERANCE: [f64; 2] = [0.15, 0.03];
 /// Via-point bearings around the seed heading: a triangle, and a 3-via loop that can cross
@@ -78,7 +80,7 @@ impl Candidate {
 pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>, GenerateError> {
     let p = &req.profile;
     let ok = |e: u32| traversable(g, e, p);
-    let start = match g.snap_start(req.start, SNAP_LIMIT_M, ok) {
+    let start = match g.snap_start(req.start, SNAP_LIMIT_M, p.max_sac, ok) {
         Some(s) => s,
         None if g.snap(req.start).is_some() => return Err(GenerateError::StartBlocked),
         None => return Err(GenerateError::StartOffNetwork),
@@ -141,7 +143,8 @@ fn seed(
     bearings: &[f64],
 ) -> Option<Candidate> {
     let target = req.distance_m;
-    let home = g.edge_component(start.edge);
+    let sac = req.profile.max_sac;
+    let home = g.edge_component(start.edge, sac);
     let proj = LocalProjection::new(start.pos.lat);
     let o = proj.project(start.pos);
     // Perimeter of the seed polygon in units of r: two spokes plus the chords between vias.
@@ -176,7 +179,7 @@ fn seed(
                     r / 3.0,
                 );
                 g.snap_filtered(pt, VIA_SNAP_M, |e| {
-                    g.edge_component(e) == home && traversable(g, e, p)
+                    g.edge_component(e, sac) == home && traversable(g, e, p)
                 })
             })
             .collect();
@@ -253,13 +256,20 @@ fn seed(
         if err <= TOLERANCE && climb_ok {
             break;
         }
+        // Climb is settled when it fits, or no pressure in the bracket can change it.
+        let mut climb_settled = climb_ok;
         if let Some(e) = climb_err.filter(|_| goal.is_some()) {
             if e < -tol {
                 lo = pressure;
+                pressure = (lo + hi) / 2.0;
             } else if e > tol {
                 hi = pressure;
+                pressure = (lo + hi) / 2.0;
             }
-            pressure = (lo + hi) / 2.0;
+            climb_settled |= hi - lo < MIN_PRESSURE_STEP;
+        }
+        if err <= TOLERANCE && climb_settled {
+            break;
         }
         r *= scale;
     }
