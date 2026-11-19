@@ -31,7 +31,7 @@ export function RouteCard(props: { route: Route; name: string }) {
     return ts[lo]!;
   };
   return (
-    <section class="card route-card" aria-label={`${props.name}, score ${score(r().score)}`}>
+    <section class={["card route-card", { refreshing: refreshing() }]} aria-busy={`${refreshing()}`} aria-label={`${props.name}, score ${score(r().score)}`}>
       <header class="rc-head">
         <h2>{props.name}</h2>
         <button class="icon-btn" aria-label={`Download ${props.name} as GPX`} title="Download GPX"

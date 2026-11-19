@@ -118,6 +118,7 @@ let liveTimer: ReturnType<typeof setTimeout> | undefined;
 function settingsChanged() {
   if (!routes().length) return;
   clearTimeout(liveTimer);
+  setRefreshing(true); // fade the old numbers right away, not only once the request starts
   liveTimer = setTimeout(() => void findRoutes({ keepOpen: true }), 250);
 }
 export function setHill(k: "uphill" | "downhill", v: number) {

@@ -465,15 +465,6 @@ pub fn climb_match(climb_m: f64, target_m: f64) -> f64 {
     c.min(target_m) / c.max(target_m)
 }
 
-/// D63: with a climb target the score adds that match as a seventh term of D44's geometric mean.
-pub fn score_with_climb(mean_factor_default: f64, climb_match: f64) -> f32 {
-    if !mean_factor_default.is_finite() || mean_factor_default <= 0.0 {
-        return 0.0;
-    }
-    let ratio = (SCORE_REFERENCE / mean_factor_default).min(1.0);
-    (100.0 * (ratio * climb_match.clamp(0.0, 1.0)).powf(1.0 / 7.0)) as f32
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

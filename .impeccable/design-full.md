@@ -272,6 +272,7 @@ The selected loop explains its own score. The header holds the 23px route name a
 - **Edit bar (D54):** once a loop is dragged, an indigo-wash row reads "Edited" with "Undo" and "Reset" links. Before that, a muted hint says how to edit.
 - **Color by preference (D54, D60):** a switch row like the map overlays. When on, the selected line is painted in a five-step ramp (`--cost-1` green … `--cost-5` red) under an 8px legend strip labeled "Preferred … Avoided". The caption says green is what your settings like and red what they avoid. Hovering the line turns it into "Here: **avoided**, 2.4× the cost of this loop's best stretch". No raw cost numbers are shown. This is a debug view, so it is the one data mark allowed to be colored on the map.
 - **Bars show the route only (D73, D74):** full-width ink-on-stone tracks whose fill is the route's own value at unit weight. The weight lives only in the Adjust slider.
+- **Live refresh (D75):** from the moment a setting changes until the new loops arrive, the headline score and the bar rows fade to 35 % opacity (.2s) and the heading shows the Updating spinner; an open Adjust panel stays at full strength.
 - **Bars at the hovered point (D61):** while the route or the elevation profile is hovered, each score bar's fill takes the cost-ramp color for that term at that point (green ideal … red far from ideal), and the heading adds "· colors show the point you're on". Bar lengths stay the loop-wide values. Off hover the fills return to ink.
 
 ### Map context menu

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use crate::cost::{climb_match, score_with_climb, term_minima, traversable, Profile, ProfileError};
+use crate::cost::{climb_match, term_minima, traversable, Profile, ProfileError, Weights};
 use crate::generate::{generate, ClimbGoal, GenerateError, GenerateRequest};
 use crate::graph::{Graph, LatLon};
 use crate::route::{
@@ -183,6 +183,7 @@ fn route_json(
     distance_met: bool,
 ) -> Value {
     let stats = route_stats(g, r, profile);
+    let bars = breakdown(&stats, profile, climb_target_m);
     let r6 = |x: f64| (x * 1e6).round() / 1e6;
     let coordinates: Vec<_> = route_geometry(g, r)
         .into_iter()
@@ -195,11 +196,9 @@ fn route_json(
         "distance_m": r.distance_m,
         "climb_m": r.climb_m,
         "descent_m": r.descent_m,
-        "score": climb_target_m.map_or(stats.score, |t| {
-            score_with_climb(stats.mean_factor_default, climb_match(r.climb_m, t))
-        }),
+        "score": weighted_score(&bars, &profile.weights),
         "official_share": stats.official_share,
-        "breakdown": breakdown(&stats, profile, climb_target_m),
+        "breakdown": bars,
         "distance_met": distance_met,
         "climb_pressure": profile.weights.climb_pressure,
         "terms": route_term_steps(g, r, profile).iter().map(|(i, b)| json!({
@@ -341,6 +340,30 @@ fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value 
          "detail": format!("{} through built-up areas", km(s.urban_m[1] + s.urban_m[2]))}),
     ]);
     Value::Array(bars)
+}
+
+/// The headline score (D75): 100 · the bars' geometric mean, each weighted by the user's
+/// exponent for that term, so Off terms don't count. The climb match counts with weight 1.
+fn weighted_score(bars: &Value, w: &Weights) -> f32 {
+    let (mut num, mut den) = (0.0f64, 0.0f64);
+    for b in bars.as_array().into_iter().flatten() {
+        let wt = match b["key"].as_str() {
+            Some("official") => w.official,
+            Some("surface") => w.surface,
+            Some("slope") => w.slope,
+            Some("tech") => w.tech,
+            Some("forest") => w.forest,
+            Some("urban") => w.urban,
+            _ => 1.0,
+        } as f64;
+        num += wt * b["value"].as_f64().unwrap_or(0.0).max(1e-6).ln();
+        den += wt;
+    }
+    if den > 0.0 {
+        (100.0 * (num / den).exp()) as f32
+    } else {
+        100.0
+    }
 }
 
 async fn api_not_found() -> StatusCode {
