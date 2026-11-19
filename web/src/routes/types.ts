@@ -27,7 +27,9 @@ export interface Weights {
   climb_pressure?: number;
 }
 
-export type BreakdownKey = "official" | "surface" | "slope" | "tech" | "forest" | "urban";
+export type BreakdownKey = "climb" | "official" | "surface" | "slope" | "tech" | "forest" | "urban";
+/** The cost terms; "climb" is the Elevation bar, present only with a climb target (D63). */
+export type TermKey = Exclude<BreakdownKey, "climb">;
 
 /** One term of the score, normalized so 1 is ideal. */
 export interface BreakdownItem {
@@ -55,6 +57,6 @@ export interface Route {
   /** Cost per meter at each coordinate (the step leaving it). */
   cost_per_m: number[];
   /** From coordinate `i` on, each term relative to its best possible value (1 = ideal), D61. */
-  terms: ({ i: number } & Record<BreakdownKey, number>)[];
+  terms: ({ i: number } & Record<TermKey, number>)[];
   graph_date: string | null;
 }

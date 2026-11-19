@@ -154,8 +154,9 @@ export class MapController {
       touchPitch: false,
     });
     this.map.touchZoomRotate.disableRotation();
+    // Left unset, `compact` folds the credits into an ⓘ button on narrow maps (phones): it starts
+    // open and collapses once the map is moved; desktop keeps the full line.
     this.map.addControl(new maplibregl.AttributionControl({
-      compact: false,
       customAttribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>',
     }), "bottom-right");
     this.map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");

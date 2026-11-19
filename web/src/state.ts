@@ -31,11 +31,13 @@ export function strength(w: number) {
   return "Above all";
 }
 
-/** How each score term maps to a weight, and how it's asked in plain language. Wording under Q23. */
-export const FACTORS: Record<BreakdownKey, { label: string; question: string; weight: NumericWeight }> = {
+/** How each score term maps to a weight, and how it's asked in plain language. Wording under Q23.
+ * Elevation has no weight: its Adjust panel holds the climb controls (D63). */
+export const FACTORS: Record<BreakdownKey, { label: string; question: string; weight?: NumericWeight }> = {
+  climb: { label: "Elevation", question: "How much climb do you want, and how closely should loops match it?" },
   official: { label: "Marked trails", weight: "official", question: "How much should marked hiking trails count?" },
   surface: { label: "Surface", weight: "surface", question: "How much should asphalt and paved paths be avoided?" },
-  slope: { label: "Hills", weight: "slope", question: "What kind of climbs and descents do you like?" },
+  slope: { label: "Gradient", weight: "slope", question: "How steep do you like your climbs and descents? This is about steepness, not how much you climb." },
   tech: { label: "Technical terrain", weight: "tech", question: "How much should technical trails count against a loop?" },
   forest: { label: "Forest", weight: "forest", question: "How much do you want to run through forest?" },
   urban: { label: "Away from towns", weight: "urban", question: "How much should villages and towns be avoided?" },
@@ -64,7 +66,7 @@ export const [start, setStartRaw] = createSignal<LatLon>(stored.start ?? DEFAULT
 export const [startName, setStartName] = createSignal<string | null>(stored.start ? (stored.startName ?? null) : "Wattwil");
 export const [distanceKm, setDistanceKm] = createSignal(15);
 export const [climb, setClimbRaw] = createSignal<Climb>({ preset: "hilly" });
-export const [strictness, setStrictnessRaw] = createSignal(0.5);
+export const [strictness, setStrictnessRaw] = createSignal(0.8);
 export const [weights, setWeights] = createSignal<Weights>({ ...DEFAULT_WEIGHTS });
 export const [baseMap, setBaseMapRaw] = createSignal<BaseMapId>(stored.baseMap ?? DEFAULT_BASE_MAP);
 export const [overlays, setOverlaysRaw] = createSignal<readonly string[]>(stored.overlays ?? DEFAULT_OVERLAYS);
@@ -147,7 +149,7 @@ export const MAX_WAYPOINTS = 20;
 const withinDistance = (m: number) => Math.abs(m - distanceKm() * 1000) / (distanceKm() * 1000) <= 0.1;
 /** Re-route a loop through its waypoints under the current weights and its own climb pressure. */
 async function reroute(r: Route, wps: LatLon[], id: string): Promise<Route> {
-  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure });
+  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, climbTargetM());
   return { ...next, id, climb_pressure: r.climb_pressure, distance_met: withinDistance(next.distance_m) };
 }
 const replaceRoute = (id: string, r: Route) => setRoutes((rs) => rs.map((x) => (x.id === id ? r : x)));

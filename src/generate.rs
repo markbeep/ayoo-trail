@@ -21,7 +21,8 @@ const STEM_M: f64 = 500.0;
 const TOLERANCE: f64 = 0.10;
 const MAX_OVERLAP: f64 = 0.5;
 const ATTEMPTS: usize = 8;
-const CLIMB_TOLERANCE: f64 = 0.15;
+/// Accepted climb error at strictness 0 and 1: "roughly" is ±15 %, "exactly" ±3 % (D63).
+const CLIMB_TOLERANCE: [f64; 2] = [0.15, 0.03];
 /// Via-point bearings around the seed heading: a triangle, and a 3-via loop that can cross
 /// more hills.
 const SHAPES: [&[f64]; 2] = [&[-30.0, 30.0], &[-40.0, 0.0, 40.0]];
@@ -241,14 +242,18 @@ fn seed(
         if best.as_ref().is_none_or(|b| c.better_than(b)) {
             best = Some(c);
         }
-        let climb_ok = climb_err.is_none_or(|e| e.abs() <= CLIMB_TOLERANCE);
+        let tol = req.climb.map_or(CLIMB_TOLERANCE[0], |c| {
+            let s = c.strictness.clamp(0.0, 1.0) as f64;
+            CLIMB_TOLERANCE[0] + (CLIMB_TOLERANCE[1] - CLIMB_TOLERANCE[0]) * s
+        });
+        let climb_ok = climb_err.is_none_or(|e| e.abs() <= tol);
         if err <= TOLERANCE && climb_ok {
             break;
         }
         if let Some(e) = climb_err.filter(|_| goal.is_some()) {
-            if e < -CLIMB_TOLERANCE {
+            if e < -tol {
                 lo = pressure;
-            } else if e > CLIMB_TOLERANCE {
+            } else if e > tol {
                 hi = pressure;
             }
             pressure = (lo + hi) / 2.0;

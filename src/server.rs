@@ -15,7 +15,7 @@ use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use crate::cost::{term_minima, traversable, Profile, ProfileError};
+use crate::cost::{climb_match, score_with_climb, term_minima, traversable, Profile, ProfileError};
 use crate::generate::{generate, ClimbGoal, GenerateError, GenerateRequest};
 use crate::graph::{Graph, LatLon};
 use crate::route::{
@@ -69,6 +69,8 @@ struct RouteRequest {
     waypoints: Vec<LatLon>,
     #[serde(default)]
     profile: Profile,
+    /// The climb the user asked for; adds the Elevation bar and counts in the score (D63).
+    climb_target_m: Option<f64>,
 }
 
 async fn route(
@@ -108,7 +110,14 @@ fn check_profile(profile: &Profile) -> Result<(), ApiError> {
 }
 
 fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
-    let RouteRequest { waypoints, profile } = req;
+    let RouteRequest {
+        waypoints,
+        profile,
+        climb_target_m,
+    } = req;
+    if climb_target_m.is_some_and(|m| !(1.0..=20_000.0).contains(&m)) {
+        return Err(unprocessable("climb_target_m out of range"));
+    }
     if !(2..=20).contains(&waypoints.len()) {
         return Err(unprocessable("need 2-20 waypoints"));
     }
@@ -135,7 +144,15 @@ fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
     if r.distance_m < 1.0 {
         return Err(unprocessable("waypoints are too close together"));
     }
-    Ok(route_json(g, &r, &waypoints, &profile, "manual", true))
+    Ok(route_json(
+        g,
+        &r,
+        &waypoints,
+        &profile,
+        climb_target_m,
+        "manual",
+        true,
+    ))
 }
 
 fn route_json(
@@ -143,6 +160,7 @@ fn route_json(
     r: &Route,
     waypoints: &[LatLon],
     profile: &Profile,
+    climb_target_m: Option<f64>,
     id: &str,
     distance_met: bool,
 ) -> Value {
@@ -159,9 +177,11 @@ fn route_json(
         "distance_m": r.distance_m,
         "climb_m": r.climb_m,
         "descent_m": r.descent_m,
-        "score": stats.score,
+        "score": climb_target_m.map_or(stats.score, |t| {
+            score_with_climb(stats.mean_factor_default, climb_match(r.climb_m, t))
+        }),
         "official_share": stats.official_share,
-        "breakdown": breakdown(&stats, profile),
+        "breakdown": breakdown(&stats, profile, climb_target_m),
         "distance_met": distance_met,
         "climb_pressure": profile.weights.climb_pressure,
         "terms": route_term_steps(g, r, profile).iter().map(|(i, b)| json!({
@@ -252,14 +272,23 @@ fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
         .enumerate()
         .map(|(i, r)| {
             let id = format!("loop-{i}");
-            route_json(g, &r.route, &r.waypoints, &r.profile, &id, r.distance_met)
+            let target = req.climb.and_then(|c| c.target_m).filter(|m| *m > 0.0);
+            route_json(
+                g,
+                &r.route,
+                &r.waypoints,
+                &r.profile,
+                target,
+                &id,
+                r.distance_met,
+            )
         })
         .collect();
     Ok(json!({ "routes": routes }))
 }
 
 /// Per-term score items: 1 means the route hit the best factor the weights allow.
-fn breakdown(s: &RouteStats, p: &Profile) -> Value {
+fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value {
     let (best, mean) = (term_minima(&p.weights), s.breakdown);
     let value = |b: f32, m: f32| if m <= b { 1.0 } else { (b / m).clamp(0.0, 1.0) };
     let km = |m: f64| format!("{:.1} km", m / 1000.0);
@@ -273,21 +302,27 @@ fn breakdown(s: &RouteStats, p: &Profile) -> Value {
     } else {
         0.0
     };
-    json!([
-        {"key": "official", "value": value(best.official, mean.official),
-         "detail": format!("{} on marked trails", km(s.official_m))},
-        {"key": "surface", "value": value(best.surface, mean.surface),
-         "detail": format!("{} on asphalt or paved", km(surface[0] + surface[1]))},
-        {"key": "slope", "value": value(best.slope, mean.slope),
+    let mut bars = vec![];
+    if let Some(t) = climb_target_m {
+        bars.push(json!({"key": "climb", "value": climb_match(s.climb_m, t),
+            "detail": format!("{:.0} m of climb, aiming for {:.0} m", s.climb_m, t)}));
+    }
+    bars.extend([
+        json!({"key": "official", "value": value(best.official, mean.official),
+         "detail": format!("{} on marked trails", km(s.official_m))}),
+        json!({"key": "surface", "value": value(best.surface, mean.surface),
+         "detail": format!("{} on asphalt or paved", km(surface[0] + surface[1]))}),
+        json!({"key": "slope", "value": value(best.slope, mean.slope),
          "detail": format!("{} steep uphill and {} steep downhill (over 15 %)",
-             km(s.grade_m[6..].iter().sum()), km(s.grade_m[..3].iter().sum()))},
-        {"key": "tech", "value": value(best.tech, mean.tech),
-         "detail": format!("{} T3 or harder{tech}", km(s.sac_m[3..].iter().sum()))},
-        {"key": "forest", "value": value(best.forest, mean.forest),
-         "detail": format!("{forest:.0} % in forest")},
-        {"key": "urban", "value": value(best.urban, mean.urban),
-         "detail": format!("{} through built-up areas", km(s.urban_m[1] + s.urban_m[2]))},
-    ])
+             km(s.grade_m[6..].iter().sum()), km(s.grade_m[..3].iter().sum()))}),
+        json!({"key": "tech", "value": value(best.tech, mean.tech),
+         "detail": format!("{} T3 or harder{tech}", km(s.sac_m[3..].iter().sum()))}),
+        json!({"key": "forest", "value": value(best.forest, mean.forest),
+         "detail": format!("{forest:.0} % in forest")}),
+        json!({"key": "urban", "value": value(best.urban, mean.urban),
+         "detail": format!("{} through built-up areas", km(s.urban_m[1] + s.urban_m[2]))}),
+    ]);
+    Value::Array(bars)
 }
 
 async fn api_not_found() -> StatusCode {

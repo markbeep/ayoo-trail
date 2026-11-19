@@ -65,7 +65,7 @@ fn finds_a_loop_like_the_bichelsee_run() {
         distance_m: 15_000.0,
         climb: Some(ClimbGoal {
             target_m: Some(900.0),
-            strictness: 0.5,
+            strictness: 0.8, // the default (D63)
         }),
         profile: p.clone(),
         count: 6,

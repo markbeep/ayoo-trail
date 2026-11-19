@@ -6,7 +6,7 @@ import {
 } from "../state";
 import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
-import { HillsPanel, WeightSlider } from "./Controls";
+import { ClimbPresets, ClimbSlider, HillsPanel, StrictnessSlider, WeightSlider } from "./Controls";
 import { downloadGpx } from "../routes/gpx";
 import { km, meters, score } from "../routes/format";
 import { ElevationProfile } from "./ElevationProfile";
@@ -94,7 +94,7 @@ export function RouteCard(props: { route: Route; name: string }) {
                 <span class="bar-label">{f.label}</span>
                 <span class="track" aria-hidden="true"><span class="fill" style={{
                   width: `${Math.round(b.value * 100)}%`,
-                  background: termsHere() ? `var(--cost-${termBucket(termsHere()![b.key]) + 1})` : undefined,
+                  background: termsHere() && b.key !== "climb" ? `var(--cost-${termBucket(termsHere()![b.key]) + 1})` : undefined,
                 }} /></span>
                 <span class="bar-value"><span class="sr-only">, </span>{Math.round(b.value * 100)}<span class="sr-only"> out of 100. </span></span>
                 <span class="link-btn">{isOpen() ? "Close" : "Adjust"}</span>
@@ -102,8 +102,14 @@ export function RouteCard(props: { route: Route; name: string }) {
               <Show when={isOpen()}>
                 <div class="adjust">
                   <p><strong>{b.detail}.</strong> {f.question}</p>
-                  <Show when={b.key === "slope"} fallback={<WeightSlider weight={f.weight} />}>
-                    <HillsPanel />
+                  <Show when={b.key === "climb"} fallback={
+                    <Show when={b.key === "slope"} fallback={<WeightSlider weight={f.weight!} />}>
+                      <HillsPanel />
+                    </Show>
+                  }>
+                    <ClimbPresets />
+                    <div class="climb-slider"><ClimbSlider /></div>
+                    <StrictnessSlider />
                   </Show>
                 </div>
               </Show>

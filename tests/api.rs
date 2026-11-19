@@ -327,3 +327,38 @@ async fn route_carries_per_stretch_term_ratios() {
         }
     }
 }
+
+#[tokio::test]
+async fn climb_target_adds_an_elevation_bar_that_counts_in_the_score() {
+    let plain = two((LAT, 7.4), (LAT, 7.402));
+    let (_, a) = post(Some(graph()), plain.clone()).await;
+    assert!(
+        a["breakdown"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|b| b["key"] != "climb"),
+        "no target, no bar"
+    );
+
+    let mut with = plain;
+    with["climb_target_m"] = json!(500.0);
+    let (status, b) = post(Some(graph()), with).await;
+    assert_eq!(status, StatusCode::OK, "{b}");
+    let bars = b["breakdown"].as_array().unwrap();
+    assert_eq!(bars[0]["key"], "climb", "elevation leads the bars");
+    let c = bars[0]["value"].as_f64().unwrap();
+    let climb = b["climb_m"].as_f64().unwrap();
+    assert!(
+        (c - climb.clamp(1.0, 500.0) / climb.max(500.0)).abs() < 1e-6,
+        "{c} for {climb} m of 500"
+    );
+    // Score = 100 · (six-term ratio · climb match)^(1/7): a missed target lowers it.
+    let (sa, sb) = (a["score"].as_f64().unwrap(), b["score"].as_f64().unwrap());
+    let six = (sa / 100.0).powi(6);
+    assert!(
+        (sb - 100.0 * (six * c).powf(1.0 / 7.0)).abs() < 0.05,
+        "{sa} → {sb} with match {c}"
+    );
+    assert!(sb < sa);
+}
