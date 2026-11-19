@@ -9,7 +9,10 @@ use rayon::prelude::*;
 use crate::cost::{traversable, Profile};
 use crate::geodesy::{haversine_m, LocalProjection};
 use crate::graph::{Graph, LatLon};
-use crate::route::{drop_backtracks, route_geometry, route_legs, route_stats, Route, Visited};
+use crate::region::Region;
+use crate::route::{
+    drop_backtracks, route, route_geometry, route_legs_with, route_stats, Route, Visited,
+};
 use crate::snap::{Snap, SNAP_LIMIT_M};
 
 const HEADINGS: usize = 12;
@@ -21,6 +24,9 @@ const STEM_M: f64 = 500.0;
 const TOLERANCE: f64 = 0.10;
 const MAX_OVERLAP: f64 = 0.5;
 const ATTEMPTS: usize = 8;
+/// Search region radius over the target distance. A loop of length D stays within D/2 of
+/// its start; legs that leave the region fall back to the whole graph.
+const REGION_RADIUS: f64 = 0.5;
 /// Below this bracket width the climb-pressure bisection stops: the loops barely change.
 const MIN_PRESSURE_STEP: f32 = 0.05;
 /// Accepted climb error at strictness 0 and 1: "roughly" is ±15 %, "exactly" ±3 % (D63).
@@ -64,7 +70,8 @@ pub enum GenerateError {
 
 struct Candidate {
     route: Route,
-    waypoints: Vec<LatLon>,
+    /// Snapped via points; moved onto the loop only for the loops that are kept.
+    vias: Vec<LatLon>,
     err: f64,
     rank: f64,
     pressure: f32,
@@ -86,12 +93,13 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
         None => return Err(GenerateError::StartOffNetwork),
     };
     let target = req.distance_m;
+    let region = Region::new(g, p, start, REGION_RADIUS * target);
 
     let mut cands: Vec<Candidate> = (0..HEADINGS * SHAPES.len())
         .into_par_iter()
         .filter_map(|i| {
             let heading = (i % HEADINGS) as f64 * 360.0 / HEADINGS as f64;
-            seed(g, req, start, heading, SHAPES[i / HEADINGS])
+            seed(g, &region, req, start, heading, SHAPES[i / HEADINGS])
         })
         .collect();
     cands.sort_by(|a, b| {
@@ -121,8 +129,11 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
         .into_iter()
         .map(|(c, _)| GeneratedRoute {
             distance_met: (c.route.distance_m - target).abs() / target <= TOLERANCE,
+            waypoints: std::iter::once(req.start)
+                .chain(c.vias.iter().map(|&v| on_route(g, &c.route, v)))
+                .chain(std::iter::once(req.start))
+                .collect(),
             route: c.route,
-            waypoints: c.waypoints,
             profile: with_pressure(p, c.pressure),
         })
         .collect())
@@ -137,6 +148,7 @@ fn with_pressure(p: &Profile, pressure: f32) -> Profile {
 /// One heading and shape: the best loop over a few radius and climb-pressure corrections.
 fn seed(
     g: &Graph,
+    region: &Region,
     req: &GenerateRequest,
     start: Snap,
     heading_deg: f64,
@@ -197,7 +209,8 @@ fn seed(
                 || haversine_m(g.node(g.edge_to(e)), start.pos) > STEM_M
         };
         let mut visited = Visited::new(g.edge_count());
-        let Some(route) = route_legs(g, p, &snaps, &mut visited, away_from_start) else {
+        let leg = |a, b, v: &Visited| region.leg(p, a, b, v).or_else(|| route(g, p, a, b, v));
+        let Some(route) = route_legs_with(g, &snaps, &mut visited, away_from_start, leg) else {
             r *= 0.7;
             continue;
         };
@@ -236,10 +249,7 @@ fn seed(
         let rank = err + climb_term - 0.2 * score / 100.0;
         let scale = (target / route.distance_m).clamp(0.5, 2.0);
         let c = Candidate {
-            waypoints: std::iter::once(req.start)
-                .chain(vias.iter().map(|v| on_route(g, &route, v.pos)))
-                .chain(std::iter::once(req.start))
-                .collect(),
+            vias: vias.iter().map(|v| v.pos).collect(),
             route,
             err,
             rank,

@@ -9,6 +9,7 @@ pub mod generate;
 pub mod geodesy;
 pub mod graph;
 pub mod import;
+mod region;
 pub mod route;
 pub mod server;
 pub mod snap;

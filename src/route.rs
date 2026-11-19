@@ -55,6 +55,10 @@ impl Visited {
         self.bits[i] |= 1 << (e % 64);
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.bits.iter().all(|&w| w == 0)
+    }
+
     pub fn contains(&self, e: u32) -> bool {
         self.bits
             .get(e as usize / 64)
@@ -244,13 +248,24 @@ pub(crate) fn route_legs(
     visited: &mut Visited,
     mark: impl Fn(u32) -> bool,
 ) -> Option<Route> {
+    route_legs_with(g, snaps, visited, mark, |a, b, v| route(g, p, a, b, v))
+}
+
+/// `route_legs` with each leg routed by `leg(from, to, visited)`.
+pub(crate) fn route_legs_with(
+    g: &Graph,
+    snaps: &[Snap],
+    visited: &mut Visited,
+    mark: impl Fn(u32) -> bool,
+    leg: impl Fn(Snap, Snap, &Visited) -> Option<Route>,
+) -> Option<Route> {
     if snaps.len() < 2 {
         return None;
     }
     let mut steps: Vec<RouteStep> = Vec::new();
     let mut cost = 0.0;
     for w in snaps.windows(2) {
-        let leg = route(g, p, w[0], w[1], visited)?;
+        let leg = leg(w[0], w[1], visited)?;
         cost += leg.cost;
         for st in &leg.steps {
             if mark(st.edge) {
@@ -297,7 +312,7 @@ pub fn drop_backtracks(g: &Graph, r: Route) -> Route {
 }
 
 /// Drops zero-length steps and totals distance, climb and descent.
-fn assemble(g: &Graph, mut steps: Vec<RouteStep>, cost: f64) -> Route {
+pub(crate) fn assemble(g: &Graph, mut steps: Vec<RouteStep>, cost: f64) -> Route {
     steps.retain(|s| s.from_t != s.to_t);
     let (mut distance_m, mut climb_m, mut descent_m) = (0.0, 0.0, 0.0);
     for s in &steps {

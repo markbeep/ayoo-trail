@@ -356,6 +356,59 @@ pub fn traversable(g: &Graph, e: u32, p: &Profile) -> bool {
         .any(|x| x.mode == ExclusionMode::Block && touches(g, e, x))
 }
 
+fn penalized(g: &Graph, e: u32, p: &Profile) -> bool {
+    p.exclude
+        .iter()
+        .any(|x| x.mode == ExclusionMode::Penalize && touches(g, e, x))
+}
+
+/// Climb pressure scales the graded (non-flat) part of the slope factor by this.
+pub(crate) fn climb_discount(pressure: f32) -> f64 {
+    (1.0 - CLIMB_DISCOUNT * pressure) as f64
+}
+
+/// `edge_cost_with`'s cost forward and backward, each as `(flat, graded)`, so that under
+/// climb pressure `x` it is `flat + climb_discount(x) * graded`. `t` must be built at climb
+/// pressure 0. None when the edge isn't traversable.
+pub(crate) fn edge_cost_split(
+    g: &Graph,
+    e: u32,
+    p: &Profile,
+    t: &FactorTable,
+) -> Option<[(f64, f64); 2]> {
+    let a = g.hot_edge(e);
+    if a.sac > p.max_sac || (!p.exclude.is_empty() && !traversable(g, e, p)) {
+        return None;
+    }
+    let b = t.hot_breakdown(a, Direction::Forward);
+    let pen = if penalized(g, e, p) {
+        EXCLUSION_PENALTY
+    } else {
+        1.0
+    };
+    let rest = Breakdown { slope: 1.0, ..b }.product() * pen * a.len_cm as f64 / 100.0;
+    let sum: u32 = a.grade.iter().map(|&v| v as u32).sum();
+    if sum == 0 {
+        return Some([(rest, 0.0); 2]);
+    }
+    let mut out = [(0.0, 0.0); 2];
+    for (i, &f) in t.slope.iter().enumerate() {
+        // Backward travel reads the bands mirrored.
+        for (k, share) in [a.grade[i], a.grade[GRADE_BANDS - 1 - i]]
+            .into_iter()
+            .enumerate()
+        {
+            let c = share as f64 / sum as f64 * f as f64;
+            if i == GRADE_BANDS / 2 {
+                out[k].0 += c;
+            } else {
+                out[k].1 += c;
+            }
+        }
+    }
+    Some(out.map(|(flat, graded)| (rest * flat, rest * graded)))
+}
+
 pub fn edge_cost(g: &Graph, e: u32, dir: Direction, p: &Profile) -> Option<EdgeCost> {
     edge_cost_with(g, e, dir, p, &FactorTable::new(&p.weights))
 }
@@ -372,10 +425,7 @@ pub fn edge_cost_with(
         return None;
     }
     let breakdown = t.breakdown(g, e, dir);
-    let penalized = p
-        .exclude
-        .iter()
-        .any(|x| x.mode == ExclusionMode::Penalize && touches(g, e, x));
+    let penalized = penalized(g, e, p);
     let per_m = breakdown.product() * if penalized { EXCLUSION_PENALTY } else { 1.0 };
     Some(EdgeCost {
         cost: g.edge_len_m(e) * per_m,

@@ -37,14 +37,20 @@ fn main() {
                 count: 3,
             };
             let mut best = f64::MAX;
-            let mut n = 0;
+            let (mut n, mut loops) = (0, String::new());
             for _ in 0..3 {
                 let t = Instant::now();
-                n = generate(&g, &req).map(|r| r.len()).unwrap_or(0);
+                let r = generate(&g, &req).unwrap_or_default();
+                n = r.len();
+                loops = r
+                    .iter()
+                    .map(|l| format!("{:.0}m/{:.0}up", l.route.distance_m, l.route.climb_m))
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 best = best.min(t.elapsed().as_secs_f64() * 1e3);
             }
             println!(
-                "{name:10} climb={:5} {best:8.1} ms  {n} loops",
+                "{name:10} climb={:5} {best:8.1} ms  {n} loops  {loops}",
                 climb.is_some()
             );
         }
