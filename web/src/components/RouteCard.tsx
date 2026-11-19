@@ -1,7 +1,8 @@
 import { createSignal, For, Show } from "solid-js";
-import { Download, RefreshCw, TriangleAlert } from "@lucide/solid";
+import { Download, LoaderCircle, RefreshCw, TriangleAlert } from "@lucide/solid";
 import type { BreakdownKey, Route } from "../routes/types";
-import { FACTORS, HILL_CHOICES, findRoutes, setHill, setWeight, stale, weights } from "../state";
+import { FACTORS, findRoutes, refreshing, stale } from "../state";
+import { HillsPanel, WeightSlider } from "./Controls";
 import { downloadGpx } from "../routes/gpx";
 import { km, meters, score } from "../routes/format";
 import { ElevationProfile } from "./ElevationProfile";
@@ -33,7 +34,7 @@ export function RouteCard(props: { route: Route; name: string }) {
         </div>
       </Show>
 
-      <h3 class="why">Why it scores {score(r().score)}</h3>
+      <h3 class="why">Why it scores {score(r().score)}<Show when={refreshing()}><span class="updating"><LoaderCircle size={13} class="spin" />Updating</span></Show></h3>
       <ul class="bars">
         <For each={r().breakdown}>{(b) => {
           const f = FACTORS[b.key];
@@ -49,27 +50,8 @@ export function RouteCard(props: { route: Route; name: string }) {
               <Show when={isOpen()}>
                 <div class="adjust">
                   <p><strong>{b.detail}.</strong> {f.question}</p>
-                  <Show when={b.key === "slope"} fallback={
-                    <div class="seg on-white" role="radiogroup" aria-label={f.label}>
-                      <For each={f.choices}>{(c) => (
-                        <button role="radio" aria-checked={`${weights()[f.weight] === c.value}`}
-                          class={{ on: weights()[f.weight] === c.value }}
-                          onClick={() => setWeight(f.weight, c.value)}>{c.label}</button>
-                      )}</For>
-                    </div>
-                  }>
-                    <For each={[["uphill", "Uphills"], ["downhill", "Downhills"]] as const}>{([k, label]) => (
-                      <div class="hill-row">
-                        <span class="hill-label">{label}</span>
-                        <div class="seg on-white" role="radiogroup" aria-label={label}>
-                          <For each={HILL_CHOICES}>{(c) => (
-                            <button role="radio" aria-checked={`${weights()[k] === c.value}`}
-                              class={{ on: weights()[k] === c.value }}
-                              onClick={() => setHill(k, c.value)}>{c.label}</button>
-                          )}</For>
-                        </div>
-                      </div>
-                    )}</For>
+                  <Show when={b.key === "slope"} fallback={<WeightSlider weight={f.weight} />}>
+                    <HillsPanel />
                   </Show>
                 </div>
               </Show>

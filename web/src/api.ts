@@ -24,9 +24,12 @@ export const routeVia = (waypoints: LatLon[], weights: Weights) =>
     body: JSON.stringify({ waypoints, profile: { weights } }),
   });
 
-export const generate = (start: LatLon, distance_m: number, climb_m: number, weights: Weights) =>
+/** `target_m: null` asks for as much climb as possible (D52). */
+export interface ClimbGoal { target_m: number | null; strictness: number }
+
+export const generate = (start: LatLon, distance_m: number, climb: ClimbGoal, weights: Weights) =>
   call<{ routes: Route[] }>("/api/generate", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ start, distance_m, climb_m, profile: { weights } }),
+    body: JSON.stringify({ start, distance_m, climb, profile: { weights } }),
   }).then((r) => r.routes);

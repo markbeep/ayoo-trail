@@ -1,10 +1,10 @@
 import { For, Show } from "solid-js";
 import { MapPin, Crosshair, Search, LoaderCircle } from "@lucide/solid";
 import {
-  DISTANCE_PRESETS_KM, HILLINESS, distanceKm, findRoutes, hilliness, pickingStart, queryOpen,
-  setDistanceKm, setHilliness, setPickingStart, setQueryOpen, start, status, type Hilliness,
-  DEFAULT_START, errorMsg,
+  DISTANCE_PRESETS_KM, climbLabel, distanceKm, findRoutes, pickingStart, queryOpen,
+  setDistanceKm, setPickingStart, setQueryOpen, start, status, DEFAULT_START, errorMsg,
 } from "../state";
+import { ClimbControl } from "./Controls";
 import { coord } from "../routes/format";
 
 function startLabel() {
@@ -19,7 +19,7 @@ export function QueryCard() {
         <div class="chips-row">
           <button class="chip" onClick={() => setQueryOpen(true)}><MapPin size={15} /><span class="chip-text">{startLabel()}</span></button>
           <button class="chip" onClick={() => setQueryOpen(true)}>{distanceKm()} km</button>
-          <button class="chip" onClick={() => setQueryOpen(true)}>{HILLINESS[hilliness()].label}</button>
+          <button class="chip" onClick={() => setQueryOpen(true)}>{climbLabel()}</button>
           <button class="link-btn push" onClick={() => setQueryOpen(true)}>Change</button>
         </div>
       }>
@@ -50,12 +50,7 @@ export function QueryCard() {
         </div>
 
         <h2 class="q-title">How hilly?</h2>
-        <div class="seg" role="radiogroup" aria-label="Hilliness">
-          <For each={Object.entries(HILLINESS) as [Hilliness, { label: string; mPerKm: number }][]}>{([k, h]) => (
-            <button role="radio" aria-checked={`${hilliness() === k}`} class={{ on: hilliness() === k }} onClick={() => setHilliness(k)} title={`About ${h.mPerKm} m of climb per km`}>{h.label}</button>
-          )}</For>
-        </div>
-        <p class="hint">About {Math.round(HILLINESS[hilliness()].mPerKm * distanceKm())} m of climb</p>
+        <ClimbControl />
 
         <button class="primary" onClick={() => void findRoutes()} disabled={status() === "loading"}>
           <Show when={status() === "loading"} fallback={<><Search size={18} />Find loops</>}>

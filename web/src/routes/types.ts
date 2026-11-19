@@ -12,18 +12,19 @@ export interface RouteGeometry {
   coordinates: [number, number, number][];
 }
 
-export type Hill = "gentle" | "any" | "steep";
-
-/** Design §8 cost weights; each 0–3, 1 is neutral. `uphill`/`downhill` pick the slope direction preference (D45). */
+/** Cost weights (D51): each term is `factor^w`, w in 0–4, 0 ignores it, 1 is the default.
+ * `uphill`/`downhill` run −1 gentle … 0 any … +1 steep (D53). */
 export interface Weights {
   slope: number;
-  uphill: Hill;
-  downhill: Hill;
+  uphill: number;
+  downhill: number;
   surface: number;
   tech: number;
   official: number;
   forest: number;
   urban: number;
+  /** 0–1, set by the generator per route (D52); 0 for anything the user asks for. */
+  climb_pressure?: number;
 }
 
 export type BreakdownKey = "official" | "surface" | "slope" | "tech" | "forest" | "urban";
@@ -49,5 +50,9 @@ export interface Route {
   official_share: number;
   breakdown: BreakdownItem[];
   distance_met: boolean;
+  /** Climb pressure this route was generated with; drag edits re-route with it. */
+  climb_pressure: number;
+  /** Cost per metre at each coordinate (the step leaving it). */
+  cost_per_m: number[];
   graph_date: string | null;
 }
