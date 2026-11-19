@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use crate::cost::{traversable, Profile};
 use crate::geodesy::{haversine_m, LocalProjection};
 use crate::graph::{Graph, LatLon};
-use crate::route::{route_legs, route_stats, Route, Visited};
+use crate::route::{drop_backtracks, route_geometry, route_legs, route_stats, Route, Visited};
 use crate::snap::{Snap, SNAP_LIMIT_M};
 
 const HEADINGS: usize = 12;
@@ -132,6 +132,14 @@ fn seed(g: &Graph, req: &GenerateRequest, start: Snap, heading_deg: f64) -> Opti
             r *= 0.7;
             continue;
         };
+        // A via point on a dead end would leave an out-and-back spur; cut it. Where the
+        // network allows only out-and-backs (trimming removes most of it), keep the original.
+        let trimmed = drop_backtracks(g, route.clone());
+        let route = if trimmed.distance_m >= 0.5 * route.distance_m {
+            trimmed
+        } else {
+            route
+        };
         if route.distance_m < 1.0 {
             r *= 1.5;
             continue;
@@ -146,7 +154,12 @@ fn seed(g: &Graph, req: &GenerateRequest, start: Snap, heading_deg: f64) -> Opti
         let scale = (target / route.distance_m).clamp(0.5, 2.0);
         if best.as_ref().is_none_or(|b| err < b.err) {
             best = Some(Candidate {
-                waypoints: vec![req.start, vias[0].pos, vias[1].pos, req.start],
+                waypoints: vec![
+                    req.start,
+                    on_route(g, &route, vias[0].pos),
+                    on_route(g, &route, vias[1].pos),
+                    req.start,
+                ],
                 route,
                 err,
                 rank,
@@ -158,6 +171,15 @@ fn seed(g: &Graph, req: &GenerateRequest, start: Snap, heading_deg: f64) -> Opti
         r *= scale;
     }
     best
+}
+
+/// The route vertex nearest `p`: a via point cut off with its spur moves back onto the loop.
+fn on_route(g: &Graph, r: &Route, p: LatLon) -> LatLon {
+    route_geometry(g, r)
+        .into_iter()
+        .map(|(lat, lon, _)| LatLon { lat, lon })
+        .min_by(|a, b| haversine_m(*a, p).total_cmp(&haversine_m(*b, p)))
+        .unwrap_or(p)
 }
 
 /// The nearest anchor within `max_m` of `pt`, else `pt` itself.

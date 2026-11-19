@@ -256,6 +256,29 @@ pub(crate) fn route_legs(
     Some(assemble(g, steps, cost))
 }
 
+/// Cancels immediate out-and-backs (along an edge, then straight back along it), so a via point
+/// on a dead end does not leave a spur in a generated loop. Stack-based, so multi-edge spurs
+/// unwind fully. `cost` is kept from the input; distance, climb and descent are recomputed.
+pub fn drop_backtracks(g: &Graph, r: Route) -> Route {
+    let mut out: Vec<RouteStep> = Vec::with_capacity(r.steps.len());
+    for st in r.steps {
+        match out.last_mut() {
+            Some(prev)
+                if prev.edge == st.edge
+                    && prev.direction() != st.direction()
+                    && prev.to_t == st.from_t =>
+            {
+                prev.to_t = st.to_t;
+                if prev.from_t == prev.to_t {
+                    out.pop();
+                }
+            }
+            _ => out.push(st),
+        }
+    }
+    assemble(g, out, r.cost)
+}
+
 /// Drops zero-length steps and totals distance, climb and descent.
 fn assemble(g: &Graph, mut steps: Vec<RouteStep>, cost: f64) -> Route {
     steps.retain(|s| s.from_t != s.to_t);

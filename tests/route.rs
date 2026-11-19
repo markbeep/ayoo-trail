@@ -406,3 +406,51 @@ fn route_cost_matches_plain_dijkstra() {
         );
     }
 }
+
+#[test]
+fn backtracks_into_a_dead_end_are_dropped() {
+    // A-B-C straight east, with a 300 m dead-end spur B-D going north.
+    let mut w = GraphWriter::new(0);
+    let a = edge(
+        &mut w,
+        None,
+        None,
+        &[(0.0, 0.0, 0.0), (500.0, 0.0, 0.0)],
+        attrs(Surface::Gravel, 500.0),
+    );
+    let b = w.edge_endpoints(a).1;
+    edge(
+        &mut w,
+        Some(b),
+        None,
+        &[(500.0, 0.0, 0.0), (1000.0, 0.0, 0.0)],
+        attrs(Surface::Gravel, 500.0),
+    );
+    edge(
+        &mut w,
+        Some(b),
+        None,
+        &[(500.0, 0.0, 0.0), (500.0, 300.0, 0.0)],
+        attrs(Surface::Gravel, 300.0),
+    );
+    let g = Graph::from_bytes(w.finish()).unwrap();
+    let snaps = [
+        snap(&g, at(100.0, 0.0)),
+        snap(&g, at(500.0, 280.0)),
+        snap(&g, at(900.0, 0.0)),
+    ];
+    let r = route_via(&g, &Profile::default(), &snaps).unwrap();
+    assert!(
+        (r.distance_m - 1360.0).abs() < 5.0,
+        "spur is in the raw route: {}",
+        r.distance_m
+    );
+
+    let t = drop_backtracks(&g, r);
+    assert!(
+        (t.distance_m - 800.0).abs() < 5.0,
+        "spur removed: {}",
+        t.distance_m
+    );
+    assert_eq!(t.steps.len(), 2);
+}
