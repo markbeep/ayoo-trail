@@ -23,6 +23,8 @@ const VIA_SNAP_M: f32 = 500.0;
 /// Edges this close to the start may be reused without penalty (the access stem).
 const STEM_M: f64 = 500.0;
 const TOLERANCE: f64 = 0.10;
+/// Via points may move this share of the seed radius to reach cheaper terrain (D85).
+const VIA_SEARCH: f64 = 0.5;
 /// Weight of a loop's preference (0–1) in its rank, against distance and climb error.
 const PREFERENCE_RANK: f64 = 1.0;
 const MAX_OVERLAP: f64 = 0.5;
@@ -192,7 +194,7 @@ fn seed(
                 // D82: the via goes where the user's costs are low, a peak or viewpoint if close.
                 let anchor = anchor_near(g, ideal, r / 3.0);
                 let pt = region
-                    .via_near(pressure, ideal, r / 3.0, anchor)
+                    .via_near(pressure, ideal, r * VIA_SEARCH, anchor)
                     .or(anchor)
                     .unwrap_or(ideal);
                 g.snap_filtered(pt, VIA_SNAP_M, |e| {

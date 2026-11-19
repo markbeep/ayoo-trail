@@ -583,15 +583,15 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
     st
 }
 
-/// Each term's bar value under `p` (1 = the best its weights and grade limit allow, measured
-/// at unit weight: D73, D81) paired with the user's weight for it (D75).
-pub fn term_values(st: &RouteStats, p: &Profile) -> [(&'static str, f64, f64); 6] {
+/// Each term's bar value under `p`: 1 = the best its weights and grade limit allow, measured at
+/// unit weight (D73, D81).
+pub fn term_values(st: &RouteStats, p: &Profile) -> [(&'static str, f64); 6] {
     let unit = p.weights.unit();
     let best = Breakdown {
         tech: best_tech_factor(&unit, p.max_sac),
         ..term_minima(&unit)
     };
-    let (m, w) = (st.breakdown, &p.weights);
+    let m = st.breakdown;
     let v = |b: f32, x: f32| {
         if x <= b {
             1.0
@@ -600,25 +600,11 @@ pub fn term_values(st: &RouteStats, p: &Profile) -> [(&'static str, f64, f64); 6
         }
     };
     [
-        ("official", v(best.official, m.official), w.official as f64),
-        ("surface", v(best.surface, m.surface), w.surface as f64),
-        ("slope", v(best.slope, m.slope), w.slope as f64),
-        ("tech", v(best.tech, m.tech), w.tech as f64),
-        ("forest", v(best.forest, m.forest), w.forest as f64),
-        ("urban", v(best.urban, m.urban), w.urban as f64),
+        ("official", v(best.official, m.official)),
+        ("surface", v(best.surface, m.surface)),
+        ("slope", v(best.slope, m.slope)),
+        ("tech", v(best.tech, m.tech)),
+        ("forest", v(best.forest, m.forest)),
+        ("urban", v(best.urban, m.urban)),
     ]
-}
-
-/// 100 · the weighted geometric mean of `(value, weight)` pairs; all weights 0 gives 100 (D75).
-pub fn weighted_score(terms: impl IntoIterator<Item = (f64, f64)>) -> f32 {
-    let (mut num, mut den) = (0.0f64, 0.0f64);
-    for (v, w) in terms {
-        num += w * v.max(1e-6).ln();
-        den += w;
-    }
-    if den > 0.0 {
-        (100.0 * (num / den).exp()) as f32
-    } else {
-        100.0
-    }
 }

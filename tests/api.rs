@@ -363,32 +363,19 @@ async fn climb_target_adds_an_elevation_bar_that_counts_in_the_score() {
         (c - climb.clamp(1.0, 500.0) / climb.max(500.0)).abs() < 1e-6,
         "{c} for {climb} m of 500"
     );
-    // The climb match counts like a Normal-weight term (D75): a missed target lowers the score.
+    // D84: score = 100 · (preference · climb match)^(1/7): a missed target lowers it.
+    let pref = b["stats"]["preference"].as_f64().unwrap();
     assert!(
-        (b["score"].as_f64().unwrap() - weighted_score(&b, &json!({}))).abs() < 0.05,
+        (b["score"].as_f64().unwrap() - 100.0 * (pref * c).powf(1.0 / 7.0)).abs() < 0.05,
         "{b}"
     );
     assert!(b["score"].as_f64().unwrap() < a["score"].as_f64().unwrap());
 }
 
-/// 100 · the bars' geometric mean, each weighted by its exponent (climb 1, D75).
-fn weighted_score(v: &Value, w: &Value) -> f64 {
-    let (mut num, mut den) = (0.0, 0.0);
-    for b in v["breakdown"].as_array().unwrap() {
-        let k = b["key"].as_str().unwrap();
-        let wt = w.get(k).and_then(Value::as_f64).unwrap_or(1.0);
-        num += wt * b["value"].as_f64().unwrap().max(1e-6).ln();
-        den += wt;
-    }
-    if den > 0.0 {
-        100.0 * (num / den).exp()
-    } else {
-        100.0
-    }
-}
-
 #[tokio::test]
-async fn score_follows_the_users_weights() {
+async fn score_is_how_close_the_loop_gets_to_the_best_the_weights_allow() {
+    // D84: 100 · preference^(1/6); preference is 1 when every meter is as good as it gets, and
+    // all weights off makes every meter ideal.
     for w in [
         json!({}),
         json!({"urban": 4.0, "official": 0.0}),
@@ -398,10 +385,17 @@ async fn score_follows_the_users_weights() {
         body["profile"] = json!({ "weights": w });
         let (status, v) = post(Some(graph()), body).await;
         assert_eq!(status, StatusCode::OK, "{v}");
-        let s = v["score"].as_f64().unwrap();
+        let (s, pref) = (
+            v["score"].as_f64().unwrap(),
+            v["stats"]["preference"].as_f64().unwrap(),
+        );
+        assert!((0.0..=1.0).contains(&pref), "{pref}");
         assert!(
-            (s - weighted_score(&v, &w)).abs() < 0.05,
+            (s - 100.0 * pref.powf(1.0 / 6.0)).abs() < 0.05,
             "{s} for {w}: {v}"
         );
     }
+    let mut off = two((LAT, 7.4), (LAT, 7.402));
+    off["profile"] = json!({"weights": {"slope": 0.0, "surface": 0.0, "tech": 0.0, "official": 0.0, "forest": 0.0, "urban": 0.0}});
+    assert!((post(Some(graph()), off).await.1["score"].as_f64().unwrap() - 100.0).abs() < 0.05);
 }

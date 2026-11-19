@@ -19,8 +19,8 @@ use crate::cost::{climb_match, traversable, Profile, ProfileError};
 use crate::generate::{generate, ClimbGoal, GenerateError, GenerateRequest};
 use crate::graph::{Graph, LatLon};
 use crate::route::{
-    route_cost_per_m, route_geometry, route_stats, route_term_steps, route_via, term_values,
-    weighted_score, Route, RouteStats,
+    route_cost_per_m, route_geometry, route_stats, route_term_steps, route_via, term_values, Route,
+    RouteStats,
 };
 use crate::snap::{Snap, SNAP_LIMIT_M};
 
@@ -197,9 +197,12 @@ fn route_json(
         "distance_m": r.distance_m,
         "climb_m": r.climb_m,
         "descent_m": r.descent_m,
-        // D75: the bars weighted by the user's exponents; the climb match counts with weight 1.
-        "score": weighted_score(term_values(&stats, profile).iter().map(|t| (t.1, t.2)).chain(
-            climb_target_m.map(|t| (climb_match(r.climb_m, t), 1.0)))),
+        // D84: how close the loop gets to the best the user's weights allow, the measure the
+        // generator ranks by; a climb target adds its match as a seventh term.
+        "score": match climb_target_m {
+            Some(t) => 100.0 * (stats.preference * climb_match(r.climb_m, t)).powf(1.0 / 7.0),
+            None => 100.0 * stats.preference.powf(1.0 / 6.0),
+        },
         "official_share": stats.official_share,
         "breakdown": bars,
         "distance_met": distance_met,
