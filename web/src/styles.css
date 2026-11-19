@@ -56,8 +56,9 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
-/* No page pinch/double-tap zoom: iOS leaves the zoomed layout offset behind, which slides the sheet up over a blank gap. The map pinch-zooms itself. */
-html { touch-action: pan-x pan-y; }
+/* No page pinch/double-tap zoom: iOS leaves the zoomed layout offset behind, which slides the sheet up over a blank gap. The map pinch-zooms itself.
+   On every element, not just html: a scroll container (.panel-scroll, .tiles) restarts the touch-action chain. Class rules below still override. */
+* { touch-action: pan-x pan-y; }
 body {
   font-family: var(--font);
   font-size: 15px;
@@ -239,7 +240,9 @@ button { cursor: pointer; border: 0; background: none; }
 .bar-value { font-weight: 900; font-size: 13px; text-align: right; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .bar:hover .link-btn { color: var(--accent-deep); }
-.track { height: 10px; border-radius: 5px; background: var(--ground); overflow: hidden; }
+/* The lane is the importance slider's full range; the track inside it is as long as the term's weight. */
+.lane { display: flex; align-items: center; height: 10px; background: linear-gradient(var(--ground-deep), var(--ground-deep)) center / 100% 2px no-repeat; }
+.track { height: 10px; border-radius: 5px; background: var(--ground); overflow: hidden; transition: width .5s cubic-bezier(.2,.8,.2,1); }
 .fill { display: block; height: 100%; border-radius: 5px; background: var(--ink); transition: width .5s cubic-bezier(.2,.8,.2,1); }
 .adjust {
   background: var(--accent-wash); border-radius: 14px; padding: 11px 12px 12px; margin: 2px -6px 8px;

@@ -2,7 +2,7 @@ import { createSignal, For, Show } from "solid-js";
 import { Download, LoaderCircle, RefreshCw, RotateCcw, TriangleAlert, Undo2 } from "@lucide/solid";
 import type { BreakdownKey, Route } from "../routes/types";
 import {
-  FACTORS, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, stale, undoEdit,
+  FACTORS, costView, positionOf, strictness, weights, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, stale, undoEdit,
 } from "../state";
 import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
@@ -13,6 +13,9 @@ import { ElevationProfile } from "./ElevationProfile";
 
 /** Plain words for each color of the cost ramp, best first. */
 const PREFERENCE = ["preferred", "good", "fine", "avoided", "strongly avoided"];
+
+/** Where this term's importance slider sits, 0 (off) to 1 (above all); climb uses "Stick to it". */
+const weightPos = (k: BreakdownKey) => (k === "climb" ? strictness() : positionOf(weights()[FACTORS[k].weight!]));
 
 export function RouteCard(props: { route: Route; name: string }) {
   const [open, setOpen] = createSignal<BreakdownKey | null>(null);
@@ -92,10 +95,11 @@ export function RouteCard(props: { route: Route; name: string }) {
             <li class={{ open: isOpen() }}>
               <button class="bar" aria-expanded={`${isOpen()}`} onClick={() => setOpen(isOpen() ? null : b.key)}>
                 <span class="bar-label">{f.label}</span>
-                <span class="track" aria-hidden="true"><span class="fill" style={{
+                {/* Track length is the term's weight at its slider position, so a gap that grows with the weight reads as "costs more because you care". */}
+                <span class="lane" aria-hidden="true"><span class="track" style={{ width: `${Math.max(weightPos(b.key) * 100, 4)}%` }}><span class="fill" style={{
                   width: `${Math.round(b.value * 100)}%`,
                   background: termsHere() && b.key !== "climb" ? `var(--cost-${termBucket(termsHere()![b.key]) + 1})` : undefined,
-                }} /></span>
+                }} /></span></span>
                 <span class="bar-value"><span class="sr-only">, </span>{Math.round(b.value * 100)}<span class="sr-only"> out of 100. </span></span>
                 <span class="link-btn">{isOpen() ? "Close" : "Adjust"}</span>
               </button>
