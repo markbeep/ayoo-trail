@@ -8,7 +8,7 @@ Read this first, then `docs/brief.md`.
 dev-only `?dev=route` client mode are being built, with the 2026-11-18
 revisions (D30–D37) overriding `docs/milestones.md` where they differ. Loop
 generation and `/api/generate` (D39) plus the map/overlay redesign (D40–D42)
-are in progress; the response cache waits for latency numbers.
+are in progress; no response cache (generation takes tens of ms, D39).
 
 ## Layout
 

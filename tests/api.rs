@@ -78,7 +78,15 @@ async fn post(g: Option<Arc<Graph>>, body: Value) -> (StatusCode, Value) {
 }
 
 async fn post_raw(g: Option<Arc<Graph>>, body: String) -> (StatusCode, Value) {
-    let req = Request::post("/api/route")
+    post_to(g, "/api/route", body).await
+}
+
+async fn generate(g: Option<Arc<Graph>>, body: Value) -> (StatusCode, Value) {
+    post_to(g, "/api/generate", body.to_string()).await
+}
+
+async fn post_to(g: Option<Arc<Graph>>, path: &str, body: String) -> (StatusCode, Value) {
+    let req = Request::post(path)
         .header("content-type", "application/json")
         .body(Body::from(body))
         .unwrap();
@@ -215,4 +223,45 @@ async fn route_without_graph_is_503() {
     let (status, v) = post(None, two((LAT, 7.4), (LAT, 7.402))).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(err(&v), "no graph loaded");
+}
+
+#[tokio::test]
+async fn generate_returns_loops_with_waypoints() {
+    let body = json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":500,"profile":{},"count":3});
+    let (status, v) = generate(Some(graph()), body).await;
+    assert_eq!(status, StatusCode::OK, "{v}");
+    let routes = v["routes"].as_array().unwrap();
+    assert!(!routes.is_empty() && routes.len() <= 3);
+    for r in routes {
+        assert!(r["waypoints"].as_array().unwrap().len() >= 3);
+        assert!(r["distance_met"].as_bool().is_some());
+        assert!(r["geometry"]["coordinates"].as_array().unwrap().len() >= 2);
+    }
+}
+
+#[tokio::test]
+async fn generate_off_network_start_is_422() {
+    let body = json!({"start":{"lat":47.5,"lon":8.5},"distance_m":5000});
+    let (status, v) = generate(Some(graph()), body).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(err(&v).contains("no trail"));
+}
+
+#[tokio::test]
+async fn generate_rejects_bad_distance_and_count() {
+    for body in [
+        json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":100}),
+        json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":90000}),
+        json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":5000,"count":0}),
+    ] {
+        let (status, _) = generate(Some(graph()), body).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+}
+
+#[tokio::test]
+async fn generate_without_graph_is_503() {
+    let body = json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":5000});
+    let (status, _) = generate(None, body).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
 }

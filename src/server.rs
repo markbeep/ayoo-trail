@@ -5,7 +5,7 @@
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{header, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
@@ -16,8 +16,9 @@ use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 use crate::cost::{term_minima, traversable, Profile, ProfileError};
+use crate::generate::{generate, GenerateError, GenerateRequest};
 use crate::graph::{Graph, LatLon};
-use crate::route::{route_geometry, route_stats, route_via, RouteStats};
+use crate::route::{route_geometry, route_stats, route_via, Route, RouteStats};
 use crate::snap::SNAP_LIMIT_M;
 
 /// Runtime configuration for [`app`].
@@ -89,24 +90,30 @@ fn permits() -> &'static tokio::sync::Semaphore {
     })
 }
 
-fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
-    let RouteRequest { waypoints, profile } = req;
-    if !(2..=20).contains(&waypoints.len()) {
-        return Err(unprocessable("need 2-20 waypoints"));
-    }
+fn valid_point(p: &LatLon) -> bool {
     // Also keeps NaN out of the snap R-tree.
-    if waypoints.iter().any(|p| {
-        !(p.lat.is_finite() && p.lon.is_finite() && p.lat.abs() <= 90.0 && p.lon.abs() <= 180.0)
-    }) {
-        return Err(unprocessable("invalid coordinates"));
-    }
+    p.lat.is_finite() && p.lon.is_finite() && p.lat.abs() <= 90.0 && p.lon.abs() <= 180.0
+}
+
+fn check_profile(profile: &Profile) -> Result<(), ApiError> {
     profile.validate().map_err(|e| {
         unprocessable(match e {
             ProfileError::WeightOutOfRange => "weight out of range",
             ProfileError::MaxSacOutOfRange => "max_sac out of range",
             ProfileError::BadExclusion => "bad exclusion",
         })
-    })?;
+    })
+}
+
+fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
+    let RouteRequest { waypoints, profile } = req;
+    if !(2..=20).contains(&waypoints.len()) {
+        return Err(unprocessable("need 2-20 waypoints"));
+    }
+    if !waypoints.iter().all(valid_point) {
+        return Err(unprocessable("invalid coordinates"));
+    }
+    check_profile(&profile)?;
 
     let mut snaps = Vec::with_capacity(waypoints.len());
     for (i, &p) in waypoints.iter().enumerate() {
@@ -126,14 +133,25 @@ fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
     if r.distance_m < 1.0 {
         return Err(unprocessable("waypoints are too close together"));
     }
-    let stats = route_stats(g, &r, &profile);
+    Ok(route_json(g, &r, &waypoints, &profile, "manual", true))
+}
+
+fn route_json(
+    g: &Graph,
+    r: &Route,
+    waypoints: &[LatLon],
+    profile: &Profile,
+    id: &str,
+    distance_met: bool,
+) -> Value {
+    let stats = route_stats(g, r, profile);
     let r6 = |x: f64| (x * 1e6).round() / 1e6;
-    let coordinates: Vec<_> = route_geometry(g, &r)
+    let coordinates: Vec<_> = route_geometry(g, r)
         .into_iter()
         .map(|(la, lo, z)| json!([r6(lo), r6(la), (f64::from(z) * 10.0).round() / 10.0]))
         .collect();
-    Ok(json!({
-        "id": "manual",
+    json!({
+        "id": id,
         "geometry": { "type": "LineString", "coordinates": coordinates },
         "waypoints": waypoints,
         "distance_m": r.distance_m,
@@ -141,11 +159,80 @@ fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
         "descent_m": r.descent_m,
         "score": stats.score,
         "official_share": stats.official_share,
-        "breakdown": breakdown(&stats, &profile),
-        "distance_met": true,
+        "breakdown": breakdown(&stats, profile),
+        "distance_met": distance_met,
         "graph_date": utc_date(g.osm_date()),
         "stats": stats,
-    }))
+    })
+}
+
+#[derive(Deserialize)]
+struct GenerateBody {
+    start: LatLon,
+    distance_m: f64,
+    climb_m: Option<f64>,
+    #[serde(default)]
+    profile: Profile,
+    #[serde(default = "default_count")]
+    count: usize,
+}
+
+fn default_count() -> usize {
+    6
+}
+
+async fn generate_loops(
+    State(g): State<Shared>,
+    body: Result<Json<GenerateBody>, JsonRejection>,
+) -> Result<([(header::HeaderName, &'static str); 1], Json<Value>), ApiError> {
+    let g = g.ok_or_else(|| api_err(StatusCode::SERVICE_UNAVAILABLE, "no graph loaded"))?;
+    let Json(req) = body.map_err(|_| unprocessable("invalid request body"))?;
+    let _permit = permits().acquire().await.expect("semaphore never closed");
+    let v = tokio::task::spawn_blocking(move || compute_loops(&g, req))
+        .await
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "generation failed"))??;
+    Ok(([(header::CACHE_CONTROL, "no-store")], Json(v)))
+}
+
+fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
+    if !valid_point(&b.start) {
+        return Err(unprocessable("invalid coordinates"));
+    }
+    if !(500.0..=80_000.0).contains(&b.distance_m) {
+        return Err(unprocessable("distance_m must be 500-80000"));
+    }
+    if !(1..=12).contains(&b.count) {
+        return Err(unprocessable("count must be 1-12"));
+    }
+    if b.climb_m.is_some_and(|c| !(0.0..=20_000.0).contains(&c)) {
+        return Err(unprocessable("climb_m out of range"));
+    }
+    check_profile(&b.profile)?;
+    let req = GenerateRequest {
+        start: b.start,
+        distance_m: b.distance_m,
+        climb_m: b.climb_m,
+        profile: b.profile,
+        count: b.count,
+    };
+    let routes = generate(g, &req).map_err(|e| {
+        unprocessable(match e {
+            GenerateError::StartOffNetwork => "no trail near the start",
+            GenerateError::StartBlocked => "start is blocked",
+        })
+    })?;
+    if routes.is_empty() {
+        return Err(unprocessable("no loop found from this start"));
+    }
+    let routes: Vec<_> = routes
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let id = format!("loop-{i}");
+            route_json(g, &r.route, &r.waypoints, &req.profile, &id, r.distance_met)
+        })
+        .collect();
+    Ok(json!({ "routes": routes }))
 }
 
 /// Per-term score items: 1 means the route hit the best factor the weights allow.
@@ -188,6 +275,7 @@ pub fn app(config: ServerConfig) -> Router {
     let api = Router::new()
         .route("/health", get(health))
         .route("/route", post(route))
+        .route("/generate", post(generate_loops))
         .fallback(api_not_found)
         .with_state(config.graph);
 
