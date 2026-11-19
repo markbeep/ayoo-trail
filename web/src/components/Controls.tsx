@@ -98,13 +98,17 @@ export function ClimbPresets() {
 
 /** How hard the generator chases the climb (D52). */
 export function StrictnessSlider() {
+  const max = () => climbTargetM() === null;
+  const question = () => (max() ? "How hard should loops push for climb?" : `How closely should loops match ${climbTargetM()} m of climb?`);
   return (
-    <div class="hill-row">
-      <span class="hill-label">Stick to it</span>
+    <div class="strictness">
+      <p class="control-q">{question()}</p>
       <Slider
-        label="How closely to match the climb" value={strictness()} min={0}
-        text={(s) => (s < 0.15 ? "Loosely" : s < 0.6 ? "Fairly closely" : s < 0.9 ? "Closely" : "As closely as possible")}
-        ends={["Loosely", "Closely"]}
+        label={question()} value={strictness()} min={0}
+        text={(s) => max()
+          ? (s < 0.15 ? "A little" : s < 0.6 ? "Somewhat" : s < 0.9 ? "Hard" : "As hard as possible")
+          : (s < 0.15 ? "Roughly" : s < 0.6 ? "Fairly closely" : s < 0.9 ? "Closely" : "As exactly as possible")}
+        ends={max() ? ["A little", "As hard as possible"] : ["Roughly", "Exactly"]}
         onCommit={(s) => setStrictness(Math.round(s * 100) / 100)}
       />
     </div>

@@ -1,16 +1,10 @@
 import { For, Show } from "solid-js";
-import { MapPin, Crosshair, Search, LoaderCircle } from "@lucide/solid";
+import { MapPin, Search, LoaderCircle } from "@lucide/solid";
 import {
-  DISTANCE_PRESETS_KM, climbLabel, distanceKm, findRoutes, pickingStart, queryOpen,
-  setDistanceKm, setPickingStart, setQueryOpen, start, status, DEFAULT_START, errorMsg,
+  DISTANCE_PRESETS_KM, climbLabel, distanceKm, findRoutes, queryOpen, setDistanceKm, setQueryOpen, status, errorMsg,
 } from "../state";
 import { ClimbControl } from "./Controls";
-import { coord } from "../routes/format";
-
-function startLabel() {
-  const s = start();
-  return s.lat === DEFAULT_START.lat && s.lon === DEFAULT_START.lon ? "Wattwil" : coord(s);
-}
+import { StartSearch, startLabel } from "./StartSearch";
 
 export function QueryCard() {
   return (
@@ -24,15 +18,7 @@ export function QueryCard() {
         </div>
       }>
         <h2 class="q-title">Where do you start?</h2>
-        <button
-          class={["field start-field", { active: pickingStart() }]}
-          onClick={() => setPickingStart(!pickingStart())}
-          aria-pressed={`${pickingStart()}`}
-        >
-          <MapPin size={18} />
-          <span class="grow">{pickingStart() ? "Tap the map to set your start" : startLabel()}</span>
-          <Crosshair size={18} class="muted-icon" />
-        </button>
+        <StartSearch />
 
         <h2 class="q-title">How far?</h2>
         <div class="seg" role="radiogroup" aria-label="Distance">

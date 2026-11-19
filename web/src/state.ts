@@ -50,7 +50,7 @@ export const climbMaxM = () => Math.max(1500, Math.ceil((150 * distanceKm()) / 1
 export const DEFAULT_START: LatLon = { lat: 47.2985, lon: 9.095 };
 
 const STORE_KEY = "navilau:v1";
-interface Stored { start?: LatLon; baseMap?: BaseMapId; overlays?: string[] }
+interface Stored { start?: LatLon; startName?: string | null; baseMap?: BaseMapId; overlays?: string[] }
 function load(): Stored {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Stored; } catch { return {}; }
 }
@@ -60,6 +60,8 @@ function save(patch: Stored) {
 const stored = load();
 
 export const [start, setStartRaw] = createSignal<LatLon>(stored.start ?? DEFAULT_START);
+/** Name of a searched start (D57); null when it was picked on the map. */
+export const [startName, setStartName] = createSignal<string | null>(stored.start ? (stored.startName ?? null) : "Wattwil");
 export const [distanceKm, setDistanceKm] = createSignal(15);
 export const [climb, setClimbRaw] = createSignal<Climb>({ preset: "hilly" });
 export const [strictness, setStrictnessRaw] = createSignal(0.5);
@@ -82,9 +84,10 @@ export const [hoverIndex, setHoverIndex] = createSignal<number | null>(null);
 
 export const selected = createRoot(() => createMemo(() => routes().find((r) => r.id === selectedId()) ?? null));
 
-export function setStart(p: LatLon) {
+export function setStart(p: LatLon, name: string | null = null) {
   setStartRaw(p);
-  save({ start: p });
+  setStartName(name);
+  save({ start: p, startName: name });
   if (routes().length) setStale(true);
 }
 export function setBaseMap(id: BaseMapId) {

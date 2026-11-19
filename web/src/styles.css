@@ -72,7 +72,8 @@ button { cursor: pointer; border: 0; background: none; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
 * { scrollbar-width: thin; scrollbar-color: #cfc8bd transparent; }
 
-.app { position: relative; height: 100%; }
+/* dvh follows Safari's collapsing toolbars, so the sheet's bottom edge stays visible above them. */
+.app { position: relative; height: 100%; height: 100dvh; }
 .map { position: absolute; inset: 0; background: var(--ground-deep); }
 .map.picking .maplibregl-canvas { cursor: crosshair; }
 
@@ -355,7 +356,7 @@ button.layer:hover .swatch { box-shadow: inset 0 0 0 1px rgb(38 34 43 / .1), 0 0
 
 /* ---------- phone: bottom sheet ---------- */
 @media (max-width: 760px) {
-  :root { --edge: 12px; }
+  :root { --edge: 12px; --tab-h: 34px; }
   .brand-float { position: absolute; z-index: 2; left: var(--edge); top: calc(var(--edge) + env(safe-area-inset-top)); }
   .brand { font-size: 16px; }
   .map-tools { top: calc(var(--edge) + env(safe-area-inset-top)); }
@@ -371,12 +372,17 @@ button.layer:hover .swatch { box-shadow: inset 0 0 0 1px rgb(38 34 43 / .1), 0 0
     transition: height .38s cubic-bezier(.2, .8, .2, 1);
     padding-bottom: env(safe-area-inset-bottom);
   }
+  /* Closed: only the pull tab, above the home indicator (D58). */
+  .panel[data-snap="closed"] { height: calc(var(--tab-h) + env(safe-area-inset-bottom)); }
+  .panel[data-snap="closed"] .panel-scroll { visibility: hidden; }
   .panel[data-snap="half"] { height: 52dvh; }
   .panel[data-snap="full"] { height: calc(100dvh - 72px); }
   .panel.dragging { transition: none; }
   .sheet-handle {
     display: flex; justify-content: center; align-items: center;
     flex: none; height: 26px; cursor: grab; touch-action: none;
+  }
+  .panel[data-snap="closed"] .sheet-handle { height: var(--tab-h);
   }
   .sheet-handle span { width: 42px; height: 5px; border-radius: 3px; background: #c9c2b7; }
   .sheet-handle:active { cursor: grabbing; }
@@ -444,3 +450,35 @@ button.layer:hover .swatch { box-shadow: inset 0 0 0 1px rgb(38 34 43 / .1), 0 0
 .cost-ramp i:nth-child(5) { background: var(--cost-5); }
 .cost-scale { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
 .cost-legend strong { font-weight: 900; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ---------- start search (D57) ---------- */
+.start-field { padding-right: 4px; cursor: text; }
+.start-input {
+  min-width: 0; height: 46px; border: 0; background: transparent; font: inherit; font-weight: 700; color: inherit;
+  -webkit-appearance: none; appearance: none;
+}
+.start-input::placeholder { color: var(--muted); font-weight: 600; }
+.start-field.active .start-input::placeholder { color: var(--accent-deep); }
+.start-input:focus { outline: none; }
+.start-input::-webkit-search-cancel-button { display: none; }
+.start-field:focus-within { background: var(--accent-wash); box-shadow: inset 0 0 0 2px var(--accent); }
+.field-btn {
+  flex: none; width: 40px; height: 40px; border-radius: 11px;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--muted);
+  transition: background-color .18s, color .18s;
+}
+.field-btn:hover { background: var(--ground-deep); color: var(--ink); }
+.field-btn[aria-pressed="true"] { color: var(--accent); }
+.field-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.start-results { list-style: none; margin-top: 6px; display: grid; gap: 2px; }
+.start-results { grid-template-columns: minmax(0, 1fr); }
+.start-results li[role="option"] {
+  display: grid; gap: 1px; min-width: 0; min-height: 44px; padding: 8px 12px; border-radius: 12px;
+  cursor: pointer; font-weight: 700;
+}
+.start-results li.on { background: var(--ground); }
+.start-name, .start-kind { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.start-kind { font-size: 13px; color: var(--muted); font-weight: 600; }
+.start-empty { padding: 10px 12px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.strictness { margin-top: 12px; }
+.control-q { font-size: 13px; font-weight: 800; }

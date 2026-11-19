@@ -7,7 +7,7 @@ import { QueryCard } from "./components/QueryCard";
 import { RouteCard } from "./components/RouteCard";
 import { RouteTiles } from "./components/RouteTiles";
 import { LayersCard } from "./components/LayersCard";
-import { attachSheetDrag, setSnap, snap, snapHeight } from "./components/Sheet";
+import { attachSheetDrag, setSnap, snap, snapHeight, SNAPS } from "./components/Sheet";
 import { narrow } from "./layout";
 import { pickingStart, routes, selected, selectedId, status } from "./state";
 import { loopName } from "./routes/format";
@@ -88,8 +88,12 @@ export function App() {
 
       <aside class="panel" ref={panel} aria-label="Plan a loop" data-snap={snap()}>
         <div class="sheet-handle" ref={handle} role="button" tabindex="0"
-          aria-label={snap() === "peek" ? "Expand panel" : "Collapse panel"}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSnap(snap() === "peek" ? "half" : snap() === "half" ? "full" : "peek"); } }}>
+          aria-label={snap() === "closed" || snap() === "peek" ? "Expand panel" : "Collapse panel"}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSnap(SNAPS[(SNAPS.indexOf(snap()) + 1) % SNAPS.length]!); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); setSnap(SNAPS[Math.min(SNAPS.indexOf(snap()) + 1, SNAPS.length - 1)]!); }
+            else if (e.key === "ArrowDown") { e.preventDefault(); setSnap(SNAPS[Math.max(SNAPS.indexOf(snap()) - 1, 0)]!); }
+          }}>
           <span />
         </div>
         <div class="panel-scroll" ref={scroller}>
