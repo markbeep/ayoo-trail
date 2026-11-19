@@ -264,6 +264,13 @@ fn stats_sum_to_distance() {
     assert!((s.surface_inferred_m - 400.0).abs() < 1.0);
     assert_eq!(s.score, score(s.mean_factor_default));
     assert!(s.breakdown.surface > 1.0 && s.breakdown.surface < 2.0);
+
+    // Bars measure the route, not how much the user cares (D73): heavier weights, same breakdown.
+    let mut heavy = p.clone();
+    heavy.weights.urban = 4.0;
+    heavy.weights.surface = 3.0;
+    heavy.weights.climb_pressure = 0.5;
+    assert_eq!(route_stats(&g, &r, &heavy).breakdown, s.breakdown);
 }
 
 #[test]

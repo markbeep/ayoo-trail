@@ -49,6 +49,18 @@ pub struct Weights {
     pub climb_pressure: f32,
 }
 
+impl Weights {
+    /// Every exponent at 1 and no climb pressure, keeping the uphill/downhill choice: the
+    /// scale score bars use, so they show the route rather than how much a term matters (D73).
+    pub fn unit(&self) -> Weights {
+        Weights {
+            uphill: self.uphill,
+            downhill: self.downhill,
+            ..Weights::default()
+        }
+    }
+}
+
 impl Default for Weights {
     fn default() -> Self {
         Weights {

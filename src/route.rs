@@ -478,7 +478,7 @@ pub struct RouteStats {
     pub urban_m: [f64; 3],
     pub missing_tags_m: f64,
     pub surface_inferred_m: f64,
-    /// Length-weighted mean of edge_factors under the given profile weights.
+    /// Length-weighted mean of edge_factors under `weights.unit()` (D73).
     pub breakdown: Breakdown,
     /// Σ len * edge_factors(.., &Weights::default()).product() / distance.
     pub mean_factor_default: f64,
@@ -488,7 +488,7 @@ pub struct RouteStats {
 
 pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
     let (t, t_default) = (
-        FactorTable::new(&p.weights),
+        FactorTable::new(&p.weights.unit()),
         FactorTable::new(&Weights::default()),
     );
     let mut st = RouteStats {

@@ -95,11 +95,11 @@ export function RouteCard(props: { route: Route; name: string }) {
             <li class={{ open: isOpen() }}>
               <button class="bar" aria-expanded={`${isOpen()}`} onClick={() => setOpen(isOpen() ? null : b.key)}>
                 <span class="bar-label">{f.label}</span>
-                {/* Track length is the term's weight at its slider position, so a gap that grows with the weight reads as "costs more because you care". */}
-                <span class="lane" aria-hidden="true"><span class="track" style={{ width: `${Math.max(weightPos(b.key) * 100, 4)}%` }}><span class="fill" style={{
+                {/* The track is as long as the term's slider; the fill is the route's own value on the full lane, so it only grows when the loop does (D73). */}
+                <span class="lane" aria-hidden="true"><span class="track" style={{ width: `${Math.max(weightPos(b.key) * 100, 4)}%` }} /><span class="fill" style={{
                   width: `${Math.round(b.value * 100)}%`,
                   background: termsHere() && b.key !== "climb" ? `var(--cost-${termBucket(termsHere()![b.key]) + 1})` : undefined,
-                }} /></span></span>
+                }} /></span>
                 <span class="bar-value"><span class="sr-only">, </span>{Math.round(b.value * 100)}<span class="sr-only"> out of 100. </span></span>
                 <span class="link-btn">{isOpen() ? "Close" : "Adjust"}</span>
               </button>

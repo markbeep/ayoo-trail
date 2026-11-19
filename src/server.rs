@@ -305,9 +305,9 @@ fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
     Ok(json!({ "routes": routes }))
 }
 
-/// Per-term score items: 1 means the route hit the best factor the weights allow.
+/// Per-term score items: 1 means the route hit the best factor, on the unit-weight scale (D73).
 fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value {
-    let (best, mean) = (term_minima(&p.weights), s.breakdown);
+    let (best, mean) = (term_minima(&p.weights.unit()), s.breakdown);
     let value = |b: f32, m: f32| if m <= b { 1.0 } else { (b / m).clamp(0.0, 1.0) };
     let km = |m: f64| format!("{:.1} km", m / 1000.0);
     let surface = &s.surface_m;
