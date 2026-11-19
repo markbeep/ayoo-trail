@@ -57,7 +57,6 @@ export function RouteCard(props: { route: Route; name: string }) {
           );
         }}</For>
       </ul>
-      <Show when={r().synthetic}><p class="synthetic">Sample route for previewing the design. It doesn't follow real trails yet.</p></Show>
     </section>
   );
 }

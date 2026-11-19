@@ -3,13 +3,13 @@ import { MapPin, Crosshair, Search, LoaderCircle } from "@lucide/solid";
 import {
   DISTANCE_PRESETS_KM, HILLINESS, distanceKm, findRoutes, hilliness, pickingStart, queryOpen,
   setDistanceKm, setHilliness, setPickingStart, setQueryOpen, start, status, type Hilliness,
+  DEFAULT_START, errorMsg,
 } from "../state";
 import { coord } from "../routes/format";
-import { DEFAULT_START } from "../routes/mock";
 
 function startLabel() {
   const s = start();
-  return s.lat === DEFAULT_START.lat && s.lon === DEFAULT_START.lon ? "Uetliberg, Zürich" : coord(s);
+  return s.lat === DEFAULT_START.lat && s.lon === DEFAULT_START.lon ? "Wattwil" : coord(s);
 }
 
 export function QueryCard() {
@@ -62,6 +62,7 @@ export function QueryCard() {
             <LoaderCircle size={18} class="spin" />Finding loops…
           </Show>
         </button>
+        <Show when={errorMsg()}>{(m) => <p class="query-error" role="alert">{m()}</p>}</Show>
       </Show>
     </section>
   );

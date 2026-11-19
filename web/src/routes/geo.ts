@@ -11,31 +11,6 @@ export function haversine(a: readonly number[], b: readonly number[]): number {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-export function lineLength(coords: readonly (readonly number[])[]): number {
-  let d = 0;
-  for (let i = 1; i < coords.length; i++) d += haversine(coords[i - 1]!, coords[i]!);
-  return d;
-}
-
-/** Gain and loss in meters with a vertical deadband, like the importer (design §7). */
-export function climbAndDescent(coords: readonly (readonly number[])[], deadband = 2): [number, number] {
-  let gain = 0;
-  let loss = 0;
-  let ref = coords[0]?.[2] ?? 0;
-  for (const c of coords) {
-    const z = c[2] ?? ref;
-    const dz = z - ref;
-    if (dz >= deadband) {
-      gain += dz;
-      ref = z;
-    } else if (dz <= -deadband) {
-      loss -= dz;
-      ref = z;
-    }
-  }
-  return [gain, loss];
-}
-
 /** Bounding box [[west, south], [east, north]] of a coordinate list. */
 export function bounds(coords: readonly (readonly number[])[]): [[number, number], [number, number]] {
   let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;

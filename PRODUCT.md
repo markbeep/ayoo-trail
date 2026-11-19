@@ -55,9 +55,9 @@ official-trail share honestly instead of hiding weak data.
 - v1: Switzerland only; loops only; no accounts, billing or database.
 - Quick path is minimal (start, distance, hilliness, one button); power controls
   (weight sliders, max SAC grade, exclusion markers) exist but stay collapsed.
-- Current scaffold stage: map navigation, base-layer switching, and route line
-  rendering from mock data. No routing backend yet. Manual click-to-draw is not
-  in scope (D13).
+- Current stage: real loops from `/api/generate` on the demo region
+  (Wattwil–Ziegelbrücke, D34); drag editing and GPX come next. Manual
+  click-to-draw is not in scope (D13).
 - Attribution required: ©swisstopo on the map, © OpenStreetMap contributors.
 - Undecided: tiering/paywalls for layers (later).
 
@@ -68,8 +68,8 @@ exist yet.
 
 ## Evidence on Hand
 
-No screenshots, testimonials, users or benchmarks exist. Route data in the
-scaffold is synthetic and must be labelled as such.
+No screenshots, testimonials, users or benchmarks exist. Weak route data
+(unofficial trails, missing tags) must be labelled as such.
 
 ## Product Principles
 

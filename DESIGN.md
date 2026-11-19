@@ -149,7 +149,7 @@ The map is the work surface. Cards float over it in a single left column on a la
 - One accent, course purple, reserved for the active route, pressable controls and the headline score
 - Rounded humanist sans (Nunito Sans) in heavy weights, with tabular numerals throughout
 - Soft, lifted cards on a warm stone ground; controls sit as stone wells inside the cards
-- Plain-language, sentence-case labels; synthetic data is labelled as synthetic
+- Plain-language, sentence-case labels; weak data is labelled as weak
 
 ## Colors
 
@@ -192,7 +192,7 @@ Warm neutrals with a single overprint accent: stone and ink carry the interface,
 - **Title** (800 to 900, 17px): query questions, the brand pill and the primary button label.
 - **Body** (400 base, 15px, line-height 1.45): base text. Running text is set at 600 to 700 in practice.
 - **Label** (800, 14px): chips, segmented options, link buttons and score-bar values. Bar labels and layer rows use 700.
-- **Caption** (600 to 800, 12 to 13px): hints, the "Why it scores N" heading, profile axis values, tile meta and the synthetic-data note, all in slate muted.
+- **Caption** (600 to 800, 12 to 13px): hints, the "Why it scores N" heading, profile axis values, tile meta, all in slate muted.
 
 ### Named Rules
 **The Sentence Case Rule.** Every label is a plain sentence-case phrase. There are no uppercase tracking labels and no kicker lines above headings.
@@ -259,7 +259,7 @@ Tactile and confident, with one clear primary action per card.
 There is no navigation bar. The brand pill (white, full pill, 17px/900, with the mark) floats at the top left as identity only. The map layers card at the top right is the only other persistent chrome: swatch rows (40 by 30px, 9px radius) with a white-then-purple double ring on the selected base map, and future layers listed in muted text with a "Later" pill. On phones it opens from a round button.
 
 ### Route card (signature)
-The selected loop explains its own score. The header holds the 23px route name and the 32px purple score. Below it come a muted meta line (distance, climb, descent), an elevation profile (64px, stone area with a 2px ink line, muted min and max captions), and "Why it scores N" bars. Each bar is a full-width button with a label, an ink-on-stone track, a heavy value and an "Adjust" link. Opening one drops in a purple-wash panel (.28s, rising 4px into place) that states the reason and offers a segmented choice. The card ends with a muted note when the data is synthetic.
+The selected loop explains its own score. The header holds the 23px route name and the 32px purple score. Below it come a muted meta line (distance, climb, descent), an elevation profile (64px, stone area with a 2px ink line, muted min and max captions), and "Why it scores N" bars. Each bar is a full-width button with a label, an ink-on-stone track, a heavy value and an "Adjust" link. Opening one drops in a purple-wash panel (.28s, rising 4px into place) that states the reason and offers a segmented choice.
 
 ### Route tiles
 Small white tiles (18px radius, card shadow) give each sibling loop's name, score and a muted distance and climb line. The selected tile gets an inset purple ring and a purple score. Hover lifts the tile 1px.
@@ -277,7 +277,7 @@ The active loop is drawn as a purple line (4 to 6.5px by zoom) over a white casi
 - **Do** step radius down as elements nest (22 / 18 / 16 / 14 / 13 / 10px), and use full pills for chips and tags.
 - **Do** use slate muted (#625b6b) for secondary text, not lighter tones, so text stays legible outdoors.
 - **Do** keep the phone layout as a bottom sheet with peek, half and full snaps at 760px and below, with attribution moved to the top.
-- **Do** label synthetic or weak data plainly, in muted caption text or the amber warn badge.
+- **Do** label weak data plainly, in muted caption text or the amber warn badge.
 - **Do** use lucide line icons at 14 to 20px, inline with text.
 
 ### Don't:

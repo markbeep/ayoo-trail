@@ -4,7 +4,7 @@ import { createMemo, createRoot, createSignal } from "solid-js";
 import type { BaseMapId } from "./map/basemaps";
 import { DEFAULT_BASE_MAP } from "./map/basemaps";
 import type { BreakdownKey, LatLon, Route, Weights } from "./routes/types";
-import { DEFAULT_START, mockRoutes } from "./routes/mock";
+import { ApiError, generate } from "./api";
 
 export type Hilliness = "gentle" | "hilly" | "mountain";
 export const HILLINESS: Record<Hilliness, { label: string; mPerKm: number }> = {
@@ -56,6 +56,9 @@ export const FACTORS: Record<BreakdownKey, {
   },
 };
 
+/** Wattwil: inside the demo graph (D34). */
+export const DEFAULT_START: LatLon = { lat: 47.2985, lon: 9.095 };
+
 const STORE_KEY = "trail-route:v1";
 interface Stored { start?: LatLon; baseMap?: BaseMapId }
 function load(): Stored {
@@ -74,6 +77,7 @@ export const [baseMap, setBaseMapRaw] = createSignal<BaseMapId>(stored.baseMap ?
 export const [routes, setRoutes] = createSignal<Route[]>([]);
 export const [selectedId, setSelectedId] = createSignal<string | null>(null);
 export const [status, setStatus] = createSignal<"idle" | "loading" | "error">("idle");
+export const [errorMsg, setErrorMsg] = createSignal<string | null>(null);
 export const [queryOpen, setQueryOpen] = createSignal(true);
 export const [pickingStart, setPickingStart] = createSignal(false);
 /** Settings changed since the routes were generated. */
@@ -95,15 +99,20 @@ export function setWeight(k: keyof Weights, v: number) {
   if (routes().length) setStale(true);
 }
 
-/** Generate loops. Uses synthetic routes until `/api/generate` exists. */
+/** Generate loops with `POST /api/generate`. */
 export async function findRoutes() {
   setStatus("loading");
+  setErrorMsg(null);
   setPickingStart(false);
-  await new Promise((r) => setTimeout(r, 450));
-  const rs = mockRoutes(start(), distanceKm() * 1000, HILLINESS[hilliness()].mPerKm * distanceKm());
-  setRoutes(rs);
-  setSelectedId(rs[0]?.id ?? null);
-  setStale(false);
-  setStatus("idle");
-  setQueryOpen(false);
+  try {
+    const rs = await generate(start(), distanceKm() * 1000, HILLINESS[hilliness()].mPerKm * distanceKm(), weights());
+    setRoutes(rs);
+    setSelectedId(rs[0]?.id ?? null);
+    setStale(false);
+    setStatus("idle");
+    setQueryOpen(false);
+  } catch (e) {
+    setErrorMsg(e instanceof ApiError ? e.message : "Couldn't reach the route server.");
+    setStatus("error");
+  }
 }

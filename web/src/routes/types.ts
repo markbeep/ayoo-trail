@@ -46,6 +46,4 @@ export interface Route {
   breakdown: BreakdownItem[];
   distance_met: boolean;
   graph_date: string | null;
-  /** True for client-side demo data; never set by the server. */
-  synthetic?: boolean;
 }

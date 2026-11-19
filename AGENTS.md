@@ -13,8 +13,8 @@ are in progress; no response cache (generation takes tens of ms, D39).
 ## Layout
 
 - `src/` — Rust crate (`trail_route`), `src/bin/server.rs` is `trail-server`.
-- `web/` — Vite + Solid + MapLibre client. Synthetic routes live in
-  `web/src/routes/mock.ts`; the layer registry in `web/src/map/basemaps.ts`.
+- `web/` — Vite + Solid + MapLibre client. Routes come from `/api/generate`
+  (`web/src/state.ts`); the layer registry is in `web/src/map/basemaps.ts`.
 - `PRODUCT.md`, `.impeccable/` — impeccable design context. The surface brief
   `.impeccable/surfaces/web-src-app-tsx.md` is the visual direction contract.
 - `just dev` (server + Vite), `just web`, `just check`.

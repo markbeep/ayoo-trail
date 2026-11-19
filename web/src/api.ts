@@ -23,3 +23,10 @@ export const routeVia = (waypoints: LatLon[], weights: Weights) =>
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ waypoints, profile: { weights } }),
   });
+
+export const generate = (start: LatLon, distance_m: number, climb_m: number, weights: Weights) =>
+  call<{ routes: Route[] }>("/api/generate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ start, distance_m, climb_m, profile: { weights } }),
+  }).then((r) => r.routes);
