@@ -21,6 +21,8 @@ export interface RouteColors {
 }
 
 export interface MapColors extends RouteColors {
+  /** The user's-location dot. */
+  here: string;
   palette: MapPalette;
   /** Hillshade shadow and the forest overlay tint. */
   shade: string;
@@ -33,6 +35,13 @@ const SWITZERLAND: [[number, number], [number, number]] = [[5.9, 45.8], [10.5, 4
 const ROUTES = "routes";
 const START = "start";
 const WAYPOINTS = "waypoints";
+const HOVER = "hover";
+const HERE = "here";
+const EMPTY = { type: "FeatureCollection" as const, features: [] };
+const point = (p: LatLon | null) => ({
+  type: "FeatureCollection" as const,
+  features: p ? [{ type: "Feature" as const, properties: {}, geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] } }] : [],
+});
 
 /** Hillshade strength per base: swisstopo topo already carries relief, imagery has real shadows. */
 const RELIEF_STRENGTH: Record<string, number> = { outdoor: 0.45, topo: 0.2, satellite: 0.15 };
@@ -82,6 +91,8 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
 export interface MapHandlers {
   onRouteClick?: (id: string) => void;
   onMapClick?: (p: LatLon) => void;
+  /** Pointer over the selected route (null when it leaves). */
+  onRouteHover?: (p: LatLon | null) => void;
 }
 
 export class MapController {
@@ -121,6 +132,15 @@ export class MapController {
       if (typeof id === "string") handlers.onRouteClick?.(id);
       else handlers.onMapClick?.({ lat: e.lngLat.lat, lon: e.lngLat.lng });
     });
+    let overSelected = false;
+    this.map.on("mousemove", (e) => {
+      if (!this.selected || !this.map.getLayer("route-hit")) return;
+      const hit = this.map.queryRenderedFeatures(e.point, { layers: ["route-hit"] })
+        .some((f) => f.properties?.id === this.selected);
+      if (hit) handlers.onRouteHover?.({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+      else if (overSelected) handlers.onRouteHover?.(null);
+      overSelected = hit;
+    });
     this.map.on("mouseenter", "route-hit", () => (this.map.getCanvas().style.cursor = "pointer"));
     this.map.on("mouseleave", "route-hit", () => (this.map.getCanvas().style.cursor = ""));
   }
@@ -130,6 +150,8 @@ export class MapController {
     this.map.addSource(ROUTES, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     this.map.addSource(START, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     this.map.addSource(WAYPOINTS, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    this.map.addSource(HOVER, { type: "geojson", data: EMPTY });
+    this.map.addSource(HERE, { type: "geojson", data: EMPTY });
     const isSel: FilterSpecification = ["==", ["get", "selected"], true];
     const notSel: FilterSpecification = ["!=", ["get", "selected"], true];
     const join = { "line-join": "round", "line-cap": "round" } as const;
@@ -171,6 +193,14 @@ export class MapController {
     this.map.addLayer({
       id: "waypoints", type: "circle", source: WAYPOINTS,
       paint: { "circle-radius": 6, "circle-color": c.selected, "circle-stroke-color": c.casing, "circle-stroke-width": 2.5 },
+    });
+    this.map.addLayer({
+      id: "here", type: "circle", source: HERE,
+      paint: { "circle-radius": 7, "circle-color": c.here, "circle-stroke-color": c.casing, "circle-stroke-width": 3 },
+    });
+    this.map.addLayer({
+      id: "hover", type: "circle", source: HOVER,
+      paint: { "circle-radius": 6.5, "circle-color": c.casing, "circle-stroke-color": c.selected, "circle-stroke-width": 3.5 },
     });
   }
 
@@ -233,6 +263,18 @@ export class MapController {
 
   flyTo(p: LatLon, zoom = 13) {
     this.map.flyTo({ center: [p.lon, p.lat] as LngLatLike, zoom, duration: 800 });
+  }
+
+  /** Marker on the selected route where the elevation chart is hovered. */
+  async setHover(p: LatLon | null) {
+    await this.ready;
+    (this.map.getSource(HOVER) as GeoJSONSource).setData(point(p));
+  }
+
+  /** The user's location dot. */
+  async setHere(p: LatLon | null) {
+    await this.ready;
+    (this.map.getSource(HERE) as GeoJSONSource).setData(point(p));
   }
 
   zoomIn() { this.map.zoomIn(); }

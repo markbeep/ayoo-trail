@@ -84,6 +84,9 @@ export const [pickingStart, setPickingStart] = createSignal(false);
 /** Settings changed since the routes were generated. */
 export const [stale, setStale] = createSignal(false);
 
+/** Index into the selected route's coordinates under the pointer (chart or map), or null. */
+export const [hoverIndex, setHoverIndex] = createSignal<number | null>(null);
+
 export const selected = createRoot(() => createMemo(() => routes().find((r) => r.id === selectedId()) ?? null));
 
 export function setStart(p: LatLon) {

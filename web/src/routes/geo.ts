@@ -20,3 +20,21 @@ export function bounds(coords: readonly (readonly number[])[]): [[number, number
   }
   return [[w, s], [e, n]];
 }
+
+/** Distance in meters from the first position to each position. */
+export function cumulative(coords: readonly (readonly number[])[]): number[] {
+  const out = [0];
+  for (let i = 1; i < coords.length; i++) out.push(out[i - 1]! + haversine(coords[i - 1]!, coords[i]!));
+  return out;
+}
+
+/** Index of the position nearest [lon, lat] (planar, fine at route scale). */
+export function nearestIndex(coords: readonly (readonly number[])[], lon: number, lat: number): number {
+  const k = Math.cos((lat * Math.PI) / 180);
+  let best = 0, bestD = Infinity;
+  coords.forEach(([x = 0, y = 0], i) => {
+    const d = ((x - lon) * k) ** 2 + (y - lat) ** 2;
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  return best;
+}

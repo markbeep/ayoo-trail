@@ -1,8 +1,9 @@
 import { createEffect, onSettled, untrack } from "solid-js";
 import { DEV_ROUTE, addWaypoint, devHealth, devWaypoints } from "../dev/routeDebug";
 import { MapController } from "../map/controller";
+import { nearestIndex } from "../routes/geo";
 import {
-  baseMap, overlays, pickingStart, routes, selectedId, setPickingStart, setSelectedId, setStart, start,
+  hoverIndex, selected, setHoverIndex, baseMap, overlays, pickingStart, routes, selectedId, setPickingStart, setSelectedId, setStart, start,
 } from "../state";
 
 /** Reads a CSS custom property so map paint colours follow the design tokens. */
@@ -24,6 +25,7 @@ export function MapView(props: { padding: () => { left: number; right: number; t
       candidate: token("--route-candidate"),
       casing: token("--route-casing"),
       start: token("--ink"),
+      here: token("--here"),
       shade: token("--map-shade"),
       forest: token("--map-forest"),
       palette: {
@@ -39,6 +41,10 @@ export function MapView(props: { padding: () => { left: number; right: number; t
           setStart(p);
           setPickingStart(false);
         } else if (DEV_ROUTE) addWaypoint(p);
+      },
+      onRouteHover: (p) => {
+        const r = untrack(selected);
+        setHoverIndex(p && r ? nearestIndex(r.geometry.coordinates, p.lon, p.lat) : null);
       },
     });
     ctl = mapController = c;
@@ -67,6 +73,11 @@ export function MapView(props: { padding: () => { left: number; right: number; t
     void ctl?.select(id);
     if (id && !DEV_ROUTE) ctl?.fitRoute(id, untrack(props.padding));
   }, { defer: true });
+  createEffect(() => {
+    const i = hoverIndex(), c = selected()?.geometry.coordinates[i ?? -1];
+    return c ? { lon: c[0], lat: c[1] } : null;
+  }, (p) => void ctl?.setHover(p), { defer: true });
+  createEffect(selectedId, () => { setHoverIndex(null); }, { defer: true });
   createEffect(pickingStart, (p) => { el.classList.toggle("picking", p); }, { defer: true });
 
   return <div ref={el} class="map" role="region" aria-label="Map" />;
