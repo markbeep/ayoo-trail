@@ -284,24 +284,22 @@ fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
     if routes.is_empty() {
         return Err(unprocessable("no loop found from this start"));
     }
+    let target = req.climb.and_then(|c| c.target_m).filter(|m| *m > 0.0);
     let routes: Vec<_> = routes
         .iter()
-        .enumerate()
-        .map(|(i, r)| {
-            let id = format!("loop-{i}");
-            let target = req.climb.and_then(|c| c.target_m).filter(|m| *m > 0.0);
-            route_json(
-                g,
-                &r.route,
-                &r.waypoints,
-                &r.profile,
-                target,
-                &id,
-                r.distance_met,
-            )
-        })
+        .map(|r| route_json(g, &r.route, &r.waypoints, &r.profile, target, "", r.distance_met))
         .collect();
-    Ok(json!({ "routes": routes }))
+    Ok(json!({ "routes": best_first(routes) }))
+}
+
+/// Loops ordered by score, best first, then named `loop-0`, `loop-1`… in that order (D79).
+fn best_first(mut routes: Vec<Value>) -> Vec<Value> {
+    let score = |r: &Value| r["score"].as_f64().unwrap_or(0.0);
+    routes.sort_by(|a, b| score(b).total_cmp(&score(a)));
+    for (i, r) in routes.iter_mut().enumerate() {
+        r["id"] = json!(format!("loop-{i}"));
+    }
+    routes
 }
 
 /// Per-term score items: 1 means the route hit the best factor, on the unit-weight scale (D73).
@@ -386,4 +384,17 @@ pub fn app(config: ServerConfig) -> Router {
         .nest("/api", api)
         .fallback_service(client)
         .layer(TraceLayer::new_for_http())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn best_first_sorts_by_score_and_renames() {
+        let r = |s: f64| json!({"id": "", "score": s});
+        let out = best_first(vec![r(70.0), r(88.0), r(80.0)]);
+        let got: Vec<_> = out.iter().map(|v| (v["id"].as_str().unwrap().to_string(), v["score"].as_f64().unwrap())).collect();
+        assert_eq!(got, [("loop-0".into(), 88.0), ("loop-1".into(), 80.0), ("loop-2".into(), 70.0)]);
+    }
 }

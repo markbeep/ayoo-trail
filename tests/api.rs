@@ -240,6 +240,11 @@ async fn generate_returns_loops_with_waypoints() {
         assert!((0.0..=0.6 + 1e-6).contains(&cp), "{cp}");
         assert!(r["geometry"]["coordinates"].as_array().unwrap().len() >= 2);
     }
+    // Best score first, ids in that order (D79).
+    for (i, w) in routes.windows(2).enumerate() {
+        assert!(w[0]["score"].as_f64() >= w[1]["score"].as_f64(), "{} before {}", w[0]["score"], w[1]["score"]);
+        assert_eq!(w[0]["id"], format!("loop-{i}"));
+    }
 }
 
 #[tokio::test]
