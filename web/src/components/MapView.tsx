@@ -1,4 +1,5 @@
-import { createEffect, onSettled, untrack } from "solid-js";
+import { createEffect, createSignal, onSettled, Show, untrack } from "solid-js";
+import { MapMenu, type MenuState } from "./MapMenu";
 import { DEV_ROUTE, addWaypoint, devHealth, devWaypoints } from "../dev/routeDebug";
 import { MapController } from "../map/controller";
 import { nearestIndex } from "../routes/geo";
@@ -16,6 +17,7 @@ export let mapController: MapController | undefined;
 export function MapView(props: { padding: () => { left: number; right: number; top: number; bottom: number } }) {
   let el!: HTMLDivElement;
   let ctl: MapController | undefined;
+  const [menu, setMenu] = createSignal<MenuState | null>(null);
 
   // 2.0 forbids creating effects inside onSettled, so they live here, deferred, and
   // onSettled applies their initial values once the controller exists.
@@ -42,6 +44,8 @@ export function MapView(props: { padding: () => { left: number; right: number; t
           setPickingStart(false);
         } else if (DEV_ROUTE) addWaypoint(p);
       },
+      onContextMenu: (p, at) => setMenu({ p, x: at.x, y: at.y }),
+      onMoveStart: () => setMenu(null),
       onRouteHover: (p) => {
         const r = untrack(selected);
         setHoverIndex(p && r ? nearestIndex(r.geometry.coordinates, p.lon, p.lat) : null);
@@ -80,5 +84,10 @@ export function MapView(props: { padding: () => { left: number; right: number; t
   createEffect(selectedId, () => { setHoverIndex(null); }, { defer: true });
   createEffect(pickingStart, (p) => { el.classList.toggle("picking", p); }, { defer: true });
 
-  return <div ref={el} class="map" role="region" aria-label="Map" />;
+  return (
+    <>
+      <div ref={el} class="map" role="region" aria-label="Map" />
+      <Show when={menu()}>{(m) => <MapMenu menu={m()} onClose={() => setMenu(null)} />}</Show>
+    </>
+  );
 }

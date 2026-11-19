@@ -5,8 +5,19 @@ use serde::{Deserialize, Serialize};
 use crate::geodesy::{closest_on_segment, haversine_m, LocalProjection};
 use crate::graph::{flags, Direction, Graph, LatLon, GRADE_BANDS};
 
-/// Raw slope factor per grade band, steepest descent first.
-pub const SLOPE_BAND_FACTORS: [f32; 9] = [2.5, 1.8, 1.8, 1.2, 1.0, 0.95, 0.95, 1.0, 1.0];
+/// Slope factors for the four descent bands, steepest first (<=-25, -25..-20, -20..-15,
+/// -15..-8 %), per preference (D45). Starting points to tune (Q17).
+const DESCENT_FACTORS: [[f32; 4]; 3] = [
+    [2.5, 1.8, 1.8, 1.2],  // gentle
+    [1.0, 1.0, 1.0, 1.0],  // any
+    [0.9, 0.9, 0.95, 1.0], // steep
+];
+/// The four ascent bands, shallowest first (8..15, 15..20, 20..25, >=25 %).
+const ASCENT_FACTORS: [[f32; 4]; 3] = [
+    [1.0, 1.2, 1.5, 1.8],   // gentle
+    [1.0, 1.0, 1.0, 1.0],   // any
+    [0.95, 0.9, 0.9, 0.95], // steep
+];
 /// Cost per metre of a flat official forest trail; scores 100 (D32).
 pub const SCORE_REFERENCE: f64 = 0.63;
 pub const EXCLUSION_PENALTY: f64 = 5.0;
@@ -18,10 +29,22 @@ const OFFICIAL_FACTORS: [f32; 2] = [0.7, 1.0];
 const FOREST_FACTORS: [f32; 2] = [0.9, 1.0];
 const URBAN_FACTORS: [f32; 3] = [1.0, 1.3, 2.0];
 
+/// How a runner wants climbs or descents (D45).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Hill {
+    Gentle = 0,
+    Any = 1,
+    Steep = 2,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Weights {
+    /// Strength of the slope term; `uphill`/`downhill` pick its direction preferences.
     pub slope: f32,
+    pub uphill: Hill,
+    pub downhill: Hill,
     pub surface: f32,
     pub tech: f32,
     pub official: f32,
@@ -33,6 +56,8 @@ impl Default for Weights {
     fn default() -> Self {
         Weights {
             slope: 1.0,
+            uphill: Hill::Any,
+            downhill: Hill::Gentle,
             surface: 1.0,
             tech: 1.0,
             official: 1.0,
@@ -133,10 +158,19 @@ impl Profile {
     }
 }
 
+/// Raw slope factor per grade band (steepest descent first) for the direction preferences.
+pub fn slope_table(w: &Weights) -> [f32; GRADE_BANDS] {
+    let (d, a) = (
+        DESCENT_FACTORS[w.downhill as usize],
+        ASCENT_FACTORS[w.uphill as usize],
+    );
+    [d[0], d[1], d[2], d[3], 1.0, a[0], a[1], a[2], a[3]]
+}
+
 /// Smallest weighted factor each term can take under `w`.
 pub fn term_minima(w: &Weights) -> Breakdown {
     Breakdown {
-        slope: min_weighted(&SLOPE_BAND_FACTORS, w.slope) as f32,
+        slope: min_weighted(&slope_table(w), w.slope) as f32,
         surface: min_weighted(&SURFACE_FACTORS, w.surface) as f32,
         tech: min_weighted(&TECH_FACTORS, w.tech) as f32,
         official: min_weighted(&OFFICIAL_FACTORS, w.official) as f32,
@@ -188,7 +222,7 @@ pub fn edge_factors(g: &Graph, e: u32, dir: Direction, w: &Weights) -> Breakdown
         weighted(1.0, w.slope)
     } else {
         let mut s = 0.0f32;
-        for (i, &raw) in SLOPE_BAND_FACTORS.iter().enumerate() {
+        for (i, &raw) in slope_table(w).iter().enumerate() {
             let share = match dir {
                 Direction::Forward => a.grade[i],
                 Direction::Backward => a.grade[GRADE_BANDS - 1 - i],
@@ -314,7 +348,7 @@ mod tests {
         let m = term_minima(&Weights::default());
         assert_eq!(
             (m.slope, m.surface, m.official, m.forest),
-            (0.95, 0.95, 0.7, 0.9)
+            (1.0, 0.95, 0.7, 0.9)
         );
         assert_eq!((m.tech, m.urban), (1.0, 1.0));
         let off = term_minima(&Weights {

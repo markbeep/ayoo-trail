@@ -3,8 +3,10 @@
 import { createMemo, createRoot, createSignal } from "solid-js";
 import type { BaseMapId } from "./map/basemaps";
 import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
-import type { BreakdownKey, LatLon, Route, Weights } from "./routes/types";
+import type { BreakdownKey, Hill, LatLon, Route, Weights } from "./routes/types";
 import { ApiError, generate } from "./api";
+
+type NumericWeight = Exclude<keyof Weights, "uphill" | "downhill">;
 
 export type Hilliness = "gentle" | "hilly" | "mountain";
 export const HILLINESS: Record<Hilliness, { label: string; mPerKm: number }> = {
@@ -14,13 +16,13 @@ export const HILLINESS: Record<Hilliness, { label: string; mPerKm: number }> = {
 };
 export const DISTANCE_PRESETS_KM = [10, 15, 21] as const;
 
-export const DEFAULT_WEIGHTS: Weights = { slope: 1, surface: 1, tech: 1, official: 1, forest: 1, urban: 1 };
+export const DEFAULT_WEIGHTS: Weights = { slope: 1, uphill: "any", downhill: "gentle", surface: 1, tech: 1, official: 1, forest: 1, urban: 1 };
 
 /** How each score term maps to a weight, and how it's asked in plain language. */
 export const FACTORS: Record<BreakdownKey, {
   label: string;
   question: string;
-  weight: keyof Weights;
+  weight: NumericWeight;
   choices: { label: string; value: number }[];
 }> = {
   official: {
@@ -33,10 +35,11 @@ export const FACTORS: Record<BreakdownKey, {
     question: "How much should asphalt and paved paths be avoided?",
     choices: [{ label: "Fine", value: 0.5 }, { label: "Avoid", value: 1 }, { label: "Strongly avoid", value: 2 }],
   },
+  // The Hills panel shows HILL_CHOICES for uphills and downhills instead of these (D45).
   slope: {
-    label: "Gentle descents", weight: "slope",
-    question: "How much should steep downhills count against a loop?",
-    choices: [{ label: "Fine", value: 0.5 }, { label: "Avoid", value: 1 }, { label: "Strongly avoid", value: 2 }],
+    label: "Hills", weight: "slope",
+    question: "What kind of climbs and descents do you like?",
+    choices: [],
   },
   // Wording is a placeholder under open question Q23.
   tech: {
@@ -103,7 +106,14 @@ export function toggleOverlay(id: string) {
   setOverlaysRaw(next);
   save({ overlays: next });
 }
-export function setWeight(k: keyof Weights, v: number) {
+export const HILL_CHOICES: { label: string; value: Hill }[] = [
+  { label: "Gentle", value: "gentle" }, { label: "Any", value: "any" }, { label: "Steep", value: "steep" },
+];
+export function setHill(k: "uphill" | "downhill", v: Hill) {
+  setWeights((w) => ({ ...w, [k]: v }));
+  if (routes().length) setStale(true);
+}
+export function setWeight(k: NumericWeight, v: number) {
   setWeights((w) => ({ ...w, [k]: v }));
   if (routes().length) setStale(true);
 }

@@ -91,6 +91,10 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
 export interface MapHandlers {
   onRouteClick?: (id: string) => void;
   onMapClick?: (p: LatLon) => void;
+  /** Right-click or touch long-press: map position and screen point inside the container. */
+  onContextMenu?: (p: LatLon, at: { x: number; y: number }) => void;
+  /** The map started moving (closes transient UI such as the context menu). */
+  onMoveStart?: () => void;
   /** Pointer over the selected route (null when it leaves). */
   onRouteHover?: (p: LatLon | null) => void;
 }
@@ -132,6 +136,9 @@ export class MapController {
       if (typeof id === "string") handlers.onRouteClick?.(id);
       else handlers.onMapClick?.({ lat: e.lngLat.lat, lon: e.lngLat.lng });
     });
+    // Listening also makes MapLibre suppress the browser menu on the canvas.
+    this.map.on("contextmenu", (e) => handlers.onContextMenu?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point));
+    this.map.on("movestart", () => handlers.onMoveStart?.());
     let overSelected = false;
     this.map.on("mousemove", (e) => {
       if (!this.selected || !this.map.getLayer("route-hit")) return;

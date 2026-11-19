@@ -181,7 +181,17 @@ button { cursor: pointer; border: 0; background: none; }
 
 
 /* ---------- route card ---------- */
-.rc-head { display: flex; justify-content: space-between; align-items: baseline; }
+.rc-head { display: flex; align-items: center; gap: 10px; }
+.rc-head h2 { margin-right: auto; }
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 50%; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ground); color: var(--ink);
+  transition: background-color .18s, color .18s;
+}
+.icon-btn:hover { background: var(--accent-wash); color: var(--accent-deep); }
+.hill-row { display: grid; grid-template-columns: 82px 1fr; align-items: center; gap: 10px; margin-top: 8px; }
+.hill-label { font-size: 13px; font-weight: 800; }
 .rc-head h2 { font-size: 23px; font-weight: 900; letter-spacing: -0.015em; }
 .score { font-size: 32px; font-weight: 900; color: var(--accent); line-height: 1; }
 .meta { display: flex; gap: 14px; font-weight: 700; color: var(--muted); margin-top: 3px; }
@@ -241,6 +251,18 @@ button { cursor: pointer; border: 0; background: none; }
 .tile-head { display: flex; justify-content: space-between; }
 .tile.on .tile-score { color: var(--accent); }
 .tile small { display: block; color: var(--muted); font-size: 12px; font-weight: 700; }
+
+/* ---------- map context menu ---------- */
+.map-menu {
+  position: absolute; z-index: 3; width: 236px; margin: 6px;
+  background: var(--card); border-radius: 14px; padding: 6px; box-shadow: var(--shadow-float);
+}
+.map-menu button {
+  width: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  min-height: 44px; padding: 0 12px; border-radius: 10px; font-weight: 800; font-size: 14px; text-align: left;
+}
+.map-menu button:hover, .map-menu button:focus-visible { background: var(--ground); outline: none; }
+.map-menu small { flex-basis: 100%; margin: -10px 0 6px 26px; font-weight: 600; font-size: 12px; color: var(--muted); }
 
 /* ---------- map tools ---------- */
 .map-tools {

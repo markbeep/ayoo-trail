@@ -12,9 +12,13 @@ export interface RouteGeometry {
   coordinates: [number, number, number][];
 }
 
-/** Design §8 cost weights; each 0–3, 1 is neutral. */
+export type Hill = "gentle" | "any" | "steep";
+
+/** Design §8 cost weights; each 0–3, 1 is neutral. `uphill`/`downhill` pick the slope direction preference (D45). */
 export interface Weights {
   slope: number;
+  uphill: Hill;
+  downhill: Hill;
   surface: number;
   tech: number;
   official: number;

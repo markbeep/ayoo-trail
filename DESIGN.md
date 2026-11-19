@@ -261,6 +261,17 @@ There is no navigation bar. The brand pill (white, full pill, 17px/900, with the
 ### Route card (signature)
 The selected loop explains its own score. The header holds the 23px route name and the 32px indigo score. Below it come a muted meta line (distance, climb, descent), an elevation profile (64px, stone area with a 2px ink line, muted min and max captions), and "Why it scores N" bars. Each bar is a full-width button with a label, an ink-on-stone track, a heavy value and an "Adjust" link. Opening one drops in an indigo-wash panel (.28s, rising 4px into place) that states the reason and offers a segmented choice.
 
+### Route card additions
+- **GPX icon button:** a 40px stone circle with an ink download icon, between the loop name and the score (D47). Hover turns indigo wash with deep-indigo icon. It downloads the loop as one GPX track.
+- **Elevation profile:** 88px. Every current loop shares one vertical scale, the largest range among them (at least 150 m), so profiles compare honestly and never clip. Hovering or scrubbing draws a 1.5px indigo cursor and dot. The caption swaps its range for "**961 m** at 7.2 km", with the elevation in heavy indigo. Hovering the selected route on the map drives the same cursor, and the map shows a white dot with an indigo ring at the chart position.
+- **Hills panel:** the slope bar's Adjust panel has two labelled segmented rows, Uphills and Downhills, each Gentle / Any / Steep (D45).
+
+### Map context menu
+Right-click, or long-press on phones, opens a 236px white menu with a 14px radius and the float shadow at the pointer. It flips left and up near the edges. Rows are 44px with a 16px icon and a heavy label; "Copy coordinates" shows the coordinates as a muted second line and confirms with "Copied". Escape, an outside press or a map move closes it (D46).
+
+### Locate button
+A round map button above zoom (also on phones) flies to the device location and marks it with a platform-blue dot (`--here`), kept separate from the indigo route. Failures show as a dark ink pill to its left for 4 s.
+
 ### Route tiles
 Small white tiles (18px radius, card shadow) give each sibling loop's name, score and a muted distance and climb line. The selected tile gets an inset indigo ring and an indigo score. Hover lifts the tile 1px.
 

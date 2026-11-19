@@ -56,6 +56,79 @@ fn mixed_histogram_averages_band_factors() {
 }
 
 #[test]
+fn slope_preference_is_per_direction() {
+    // 100 % of the edge in the steepest descent band forward (so steepest ascent backward).
+    let mut a = gravel();
+    a.grade = [255, 0, 0, 0, 0, 0, 0, 0, 0];
+    let g = one_edge(1000.0, a);
+    let with = |up: Hill, down: Hill| Weights {
+        uphill: up,
+        downhill: down,
+        ..Weights::default()
+    };
+
+    let w = with(Hill::Any, Hill::Any);
+    assert!((edge_factors(&g, 0, F, &w).slope - 1.0).abs() < 1e-5);
+    assert!((edge_factors(&g, 0, B, &w).slope - 1.0).abs() < 1e-5);
+
+    let w = with(Hill::Steep, Hill::Steep);
+    assert!(
+        edge_factors(&g, 0, F, &w).slope < 1.0,
+        "steep descent rewarded"
+    );
+    assert!(
+        edge_factors(&g, 0, B, &w).slope < 1.0,
+        "steep climb rewarded"
+    );
+
+    let w = with(Hill::Gentle, Hill::Gentle);
+    assert!(
+        edge_factors(&g, 0, F, &w).slope > 2.0,
+        "steep descent penalised"
+    );
+    assert!(
+        edge_factors(&g, 0, B, &w).slope > 1.5,
+        "steep climb penalised"
+    );
+
+    // Default is any up, gentle down (D45).
+    assert_eq!(
+        (Weights::default().uphill, Weights::default().downhill),
+        (Hill::Any, Hill::Gentle)
+    );
+    let w: Weights = serde_json::from_str(r#"{"uphill":"steep","downhill":"any"}"#).unwrap();
+    assert_eq!((w.uphill, w.downhill), (Hill::Steep, Hill::Any));
+}
+
+#[test]
+fn min_cost_per_m_stays_admissible_for_every_slope_preference() {
+    for up in [Hill::Gentle, Hill::Any, Hill::Steep] {
+        for down in [Hill::Gentle, Hill::Any, Hill::Steep] {
+            let p = Profile {
+                weights: Weights {
+                    uphill: up,
+                    downhill: down,
+                    ..Weights::default()
+                },
+                ..Profile::default()
+            };
+            let mut a = gravel();
+            for band in 0..9 {
+                a.grade = [0; 9];
+                a.grade[band] = 255;
+                a.official_category = 1;
+                a.forest_pct = 100;
+                let g = one_edge(1000.0, a);
+                for dir in [F, B] {
+                    let c = edge_cost(&g, 0, dir, &p).unwrap();
+                    assert!(c.per_m >= p.min_cost_per_m(), "{up:?}/{down:?} band {band}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn asphalt_costs_more_than_gravel() {
     let mut a = gravel();
     a.surface = Surface::Asphalt;
@@ -159,6 +232,7 @@ fn extreme_weight_cannot_make_cost_non_positive() {
         official: 3.0,
         forest: 3.0,
         urban: 3.0,
+        ..Weights::default()
     };
     let c = edge_cost(&g, 0, F, &p).unwrap();
     assert!(c.cost > 0.0);
@@ -232,6 +306,7 @@ fn min_cost_per_m_is_a_lower_bound() {
         official: v,
         forest: v,
         urban: v,
+        ..Weights::default()
     };
     for weights in [Weights::default(), all(3.0), all(0.0)] {
         let p = Profile {
