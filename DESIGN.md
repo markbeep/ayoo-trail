@@ -1,5 +1,5 @@
 ---
-name: trail-route
+name: navilau
 description: A warm, friendly trail-loop planner on a full-bleed outdoor map with relief, in stone and night indigo.
 colors:
   stone-ground: "#ece8e1"
@@ -130,7 +130,7 @@ components:
     padding: "5px 10px"
 ---
 
-# Design System: trail-route
+# Design System: navilau
 
 This file covers the visual system only. The architecture spec (server, graph format, cost model, API) is in `docs/design.md`, which is a separate document.
 
@@ -138,7 +138,7 @@ This file covers the visual system only. The architecture spec (server, graph fo
 
 **Creative North Star: "The Course Card"**
 
-trail-route works like an orienteering map: a calm outdoor map with relief (or swisstopo topo or satellite) fills the screen, and the planner sits on it as a few soft white cards on warm stone. The one colour that matters is night indigo, an overprint colour chosen because no base map uses it: swisstopo roads are red and yellow, marked trails yellow, red and blue-white, water light blue, forest green (D43). It marks the loop you have selected, the things you can press, and the score of the selected loop. Everything else stays ink, muted slate or stone, so the indigo line on the map is always the loudest thing on screen.
+navilau works like an orienteering map: a calm outdoor map with relief (or swisstopo topo or satellite) fills the screen, and the planner sits on it as a few soft white cards on warm stone. The one colour that matters is night indigo, an overprint colour chosen because no base map uses it: swisstopo roads are red and yellow, marked trails yellow, red and blue-white, water light blue, forest green (D43). It marks the loop you have selected, the things you can press, and the score of the selected loop. Everything else stays ink, muted slate or stone, so the indigo line on the map is always the loudest thing on screen.
 
 The tone is friendly and plain. Labels are short sentence-case phrases ("Why it scores 88", "Find loops", "Adjust"). Rounded humanist type in heavy weights makes the numbers easy to read. The depth controls live next to the thing they change: each score bar opens its own setting inline, so the planner never needs a settings drawer. Density stays moderate. Cards are generous, but one column of 410px is enough to hold the whole quick path.
 

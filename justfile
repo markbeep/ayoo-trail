@@ -1,4 +1,4 @@
-# trail-route tasks. Run `just` to list.
+# navilau tasks. Run `just` to list.
 
 default:
     @just --list

@@ -1,4 +1,4 @@
-# Design — trail-route
+# Design — navilau
 
 Status: **approved; engine and importer in implementation** (D29), 2026-11-18.
 Generation, the generate API and the cache are not started.

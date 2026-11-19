@@ -1,6 +1,6 @@
-# trail-route
+# navilau
 
-Generates trail-running loops in Switzerland from a start point, a distance and
+Navi + Lauf: generates trail-running loops in Switzerland from a start point, a distance and
 a few preferences. Rust (axum) server plus a SolidJS + MapLibre client. See
 `docs/brief.md` and `docs/design.md` for the background.
 

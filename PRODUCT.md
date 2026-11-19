@@ -63,7 +63,7 @@ official-trail share honestly instead of hiding weak data.
 
 ## Brand Commitments
 
-Product name "trail-route" is a working name. No logo, voice or visual assets
+Product name is "navilau" (Navi + Lauf), always written lowercase (D48). No logo, voice or visual assets
 exist yet.
 
 ## Evidence on Hand

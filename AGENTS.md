@@ -1,4 +1,4 @@
-# trail-route
+# navilau
 
 Read this first, then `docs/brief.md`.
 
