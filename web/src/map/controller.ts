@@ -2,11 +2,14 @@
 // map instance, base-map switching, overlays and route drawing.
 
 import * as maplibregl from "maplibre-gl";
-import type { StyleSpecification, GeoJSONSource, LngLatLike, FilterSpecification } from "maplibre-gl";
+import type { StyleSpecification, GeoJSONSource, LngLatLike, FilterSpecification, LayerSpecification } from "maplibre-gl";
 // MapLibre 6 resolves its worker relative to its own module, which breaks once
 // Vite bundles it; point it at the worker file explicitly.
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
-import { BASE_MAPS, OVERLAYS, type BaseMapId } from "./basemaps";
+import {
+  BASE_MAPS, GLYPHS, OPENMAPTILES, OPENMAPTILES_ATTRIBUTION, OVERLAYS, TERRAIN, TRAILS_SOURCE, type BaseMapId,
+} from "./basemaps";
+import { OMT, outdoorFills, outdoorLabels, outdoorLines, type MapPalette } from "./outdoorStyle";
 import type { LatLon, Route } from "../routes/types";
 import { bounds } from "../routes/geo";
 
@@ -17,6 +20,13 @@ export interface RouteColors {
   start: string;
 }
 
+export interface MapColors extends RouteColors {
+  palette: MapPalette;
+  /** Hillshade shadow and the forest overlay tint. */
+  shade: string;
+  forest: string;
+}
+
 maplibregl.setWorkerUrl(workerUrl);
 
 const SWITZERLAND: [[number, number], [number, number]] = [[5.9, 45.8], [10.5, 47.85]];
@@ -24,36 +34,49 @@ const ROUTES = "routes";
 const START = "start";
 const WAYPOINTS = "waypoints";
 
-function buildStyle(base: BaseMapId): StyleSpecification {
-  const sources: StyleSpecification["sources"] = {};
-  const layers: StyleSpecification["layers"] = [];
-  for (const def of [...BASE_MAPS, ...OVERLAYS]) {
-    sources[def.id] = {
-      type: "raster",
-      tiles: def.tiles,
-      tileSize: def.tileSize,
-      maxzoom: def.maxzoom,
-      attribution: def.attribution,
-    };
-  }
-  for (const def of BASE_MAPS) {
-    layers.push({
-      id: `base-${def.id}`,
-      type: "raster",
-      source: def.id,
-      layout: { visibility: def.id === base ? "visible" : "none" },
-    });
-  }
-  for (const def of OVERLAYS) {
-    layers.push({
-      id: `overlay-${def.id}`,
-      type: "raster",
-      source: def.id,
-      paint: { "raster-opacity": def.opacity },
-      layout: { visibility: "none" },
-    });
-  }
-  return { version: 8, sources, layers };
+/** Hillshade strength per base: swisstopo topo already carries relief, imagery has real shadows. */
+const RELIEF_STRENGTH: Record<string, number> = { outdoor: 0.45, topo: 0.2, satellite: 0.15 };
+const OUTDOOR_PREFIX = "o-";
+
+function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors): StyleSpecification {
+  const on = (v: boolean) => (v ? "visible" : "none") as "visible" | "none";
+  const outdoor = base === "outdoor";
+  const sources: StyleSpecification["sources"] = {
+    [OMT]: { type: "vector", url: OPENMAPTILES, attribution: OPENMAPTILES_ATTRIBUTION },
+    terrain: { type: "raster-dem", url: TERRAIN, tileSize: 512, encoding: "terrarium" },
+    trails: { type: "raster", ...TRAILS_SOURCE },
+  };
+  for (const def of BASE_MAPS) if (def.raster) sources[def.id] = { type: "raster", ...def.raster };
+  const withVis = (ls: LayerSpecification[], v: boolean) => ls.map((l) => ({ ...l, layout: { ...l.layout, visibility: on(v) } }) as LayerSpecification);
+  const overlay = (id: string) => on(overlays.includes(id));
+
+  // Order: outdoor fills, swisstopo rasters, relief, forest, outdoor lines, trails, labels; routes go on top at load.
+  const layers: LayerSpecification[] = [
+    ...withVis(outdoorFills(c.palette), outdoor),
+    ...BASE_MAPS.filter((d) => d.raster).map((d) => ({
+      id: `base-${d.id}`, type: "raster", source: d.id, layout: { visibility: on(d.id === base) },
+    }) as LayerSpecification),
+    {
+      id: "overlay-relief", type: "hillshade", source: "terrain", layout: { visibility: overlay("relief") },
+      paint: {
+        "hillshade-exaggeration": RELIEF_STRENGTH[base] ?? 0.3,
+        "hillshade-shadow-color": c.shade,
+        "hillshade-highlight-color": "#ffffff",
+        "hillshade-accent-color": c.shade,
+      },
+    },
+    {
+      id: "overlay-forest", type: "fill", source: OMT, "source-layer": "landcover",
+      filter: ["==", ["get", "class"], "wood"], layout: { visibility: overlay("forest") },
+      paint: { "fill-color": c.forest, "fill-opacity": 0.45 },
+    },
+    ...withVis(outdoorLines(c.palette), outdoor),
+    { id: "overlay-trails", type: "raster", source: "trails", layout: { visibility: overlay("trails") } },
+    ...withVis(outdoorLabels(c.palette), outdoor),
+  ];
+  // Every overlay in the registry must own exactly one layer here.
+  console.assert(OVERLAYS.every((o) => layers.some((l) => l.id === `overlay-${o.id}`)), "overlay without a layer");
+  return { version: 8, glyphs: GLYPHS, sources, layers };
 }
 
 export interface MapHandlers {
@@ -67,10 +90,12 @@ export class MapController {
   private routes: Route[] = [];
   private selected: string | null = null;
 
-  constructor(container: HTMLElement, base: BaseMapId, private colors: RouteColors, handlers: MapHandlers = {}) {
+  constructor(
+    container: HTMLElement, base: BaseMapId, overlays: readonly string[], private colors: MapColors, handlers: MapHandlers = {},
+  ) {
     this.map = new maplibregl.Map({
       container,
-      style: buildStyle(base),
+      style: buildStyle(base, overlays, colors),
       bounds: SWITZERLAND,
       maxBounds: [[4.5, 45.3], [11.9, 48.3]],
       attributionControl: false,
@@ -150,13 +175,19 @@ export class MapController {
   }
 
   setBaseMap(id: BaseMapId) {
-    const apply = () => {
+    void this.ready.then(() => {
       for (const def of BASE_MAPS) {
-        this.map.setLayoutProperty(`base-${def.id}`, "visibility", def.id === id ? "visible" : "none");
+        if (def.raster) this.map.setLayoutProperty(`base-${def.id}`, "visibility", def.id === id ? "visible" : "none");
       }
-    };
-    if (this.map.isStyleLoaded()) apply();
-    else void this.ready.then(apply);
+      for (const l of this.map.getStyle().layers) {
+        if (l.id.startsWith(OUTDOOR_PREFIX)) this.map.setLayoutProperty(l.id, "visibility", id === "outdoor" ? "visible" : "none");
+      }
+      this.map.setPaintProperty("overlay-relief", "hillshade-exaggeration", RELIEF_STRENGTH[id] ?? 0.3);
+    });
+  }
+
+  setOverlay(id: string, on: boolean) {
+    void this.ready.then(() => this.map.setLayoutProperty(`overlay-${id}`, "visibility", on ? "visible" : "none"));
   }
 
   async setRoutes(routes: Route[], selected: string | null) {

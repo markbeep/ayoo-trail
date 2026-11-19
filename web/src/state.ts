@@ -2,7 +2,7 @@
 
 import { createMemo, createRoot, createSignal } from "solid-js";
 import type { BaseMapId } from "./map/basemaps";
-import { DEFAULT_BASE_MAP } from "./map/basemaps";
+import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
 import type { BreakdownKey, LatLon, Route, Weights } from "./routes/types";
 import { ApiError, generate } from "./api";
 
@@ -60,7 +60,7 @@ export const FACTORS: Record<BreakdownKey, {
 export const DEFAULT_START: LatLon = { lat: 47.2985, lon: 9.095 };
 
 const STORE_KEY = "trail-route:v1";
-interface Stored { start?: LatLon; baseMap?: BaseMapId }
+interface Stored { start?: LatLon; baseMap?: BaseMapId; overlays?: string[] }
 function load(): Stored {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Stored; } catch { return {}; }
 }
@@ -74,6 +74,7 @@ export const [distanceKm, setDistanceKm] = createSignal(15);
 export const [hilliness, setHilliness] = createSignal<Hilliness>("hilly");
 export const [weights, setWeights] = createSignal<Weights>({ ...DEFAULT_WEIGHTS });
 export const [baseMap, setBaseMapRaw] = createSignal<BaseMapId>(stored.baseMap ?? DEFAULT_BASE_MAP);
+export const [overlays, setOverlaysRaw] = createSignal<readonly string[]>(stored.overlays ?? DEFAULT_OVERLAYS);
 export const [routes, setRoutes] = createSignal<Route[]>([]);
 export const [selectedId, setSelectedId] = createSignal<string | null>(null);
 export const [status, setStatus] = createSignal<"idle" | "loading" | "error">("idle");
@@ -93,6 +94,11 @@ export function setStart(p: LatLon) {
 export function setBaseMap(id: BaseMapId) {
   setBaseMapRaw(id);
   save({ baseMap: id });
+}
+export function toggleOverlay(id: string) {
+  const next = overlays().includes(id) ? overlays().filter((o) => o !== id) : [...overlays(), id];
+  setOverlaysRaw(next);
+  save({ overlays: next });
 }
 export function setWeight(k: keyof Weights, v: number) {
   setWeights((w) => ({ ...w, [k]: v }));

@@ -2,7 +2,7 @@ import { createEffect, onSettled, untrack } from "solid-js";
 import { DEV_ROUTE, addWaypoint, devHealth, devWaypoints } from "../dev/routeDebug";
 import { MapController } from "../map/controller";
 import {
-  baseMap, pickingStart, routes, selectedId, setPickingStart, setSelectedId, setStart, start,
+  baseMap, overlays, pickingStart, routes, selectedId, setPickingStart, setSelectedId, setStart, start,
 } from "../state";
 
 /** Reads a CSS custom property so map paint colours follow the design tokens. */
@@ -19,11 +19,19 @@ export function MapView(props: { padding: () => { left: number; right: number; t
   // 2.0 forbids creating effects inside onSettled, so they live here, deferred, and
   // onSettled applies their initial values once the controller exists.
   onSettled(() => {
-    const c = new MapController(el, untrack(baseMap), {
+    const c = new MapController(el, untrack(baseMap), untrack(overlays), {
       selected: token("--route-active"),
       candidate: token("--route-candidate"),
       casing: token("--route-casing"),
       start: token("--ink"),
+      shade: token("--map-shade"),
+      forest: token("--map-forest"),
+      palette: {
+        land: token("--map-land"), wood: token("--map-wood"), grass: token("--map-grass"),
+        rock: token("--map-rock"), ice: token("--map-ice"), water: token("--map-water"),
+        road: token("--map-road"), roadCasing: token("--map-road-casing"), path: token("--map-path"),
+        label: token("--map-label"), halo: token("--map-halo"),
+      },
     }, {
       onRouteClick: (id) => setSelectedId(id),
       onMapClick: (p) => {
@@ -46,6 +54,9 @@ export function MapView(props: { padding: () => { left: number; right: number; t
 
   if (DEV_ROUTE) createEffect(devWaypoints, (w) => void ctl?.setWaypoints(w), { defer: true });
   createEffect(baseMap, (id) => ctl?.setBaseMap(id), { defer: true });
+  createEffect(overlays, (on, prev) => {
+    for (const id of new Set([...on, ...(prev ?? [])])) ctl?.setOverlay(id, on.includes(id));
+  }, { defer: true });
   createEffect(start, (p) => void ctl?.setStart(p), { defer: true });
   createEffect(routes, (rs) => {
     const id = untrack(selectedId);

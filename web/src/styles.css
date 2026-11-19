@@ -18,6 +18,21 @@
   --route-candidate: #6f6878;
   --route-casing: #ffffff;
 
+  /* Outdoor base map (map/outdoorStyle.ts) and overlays: quiet, warm, under the route. */
+  --map-land: #f2efe9;
+  --map-wood: #dde4cf;
+  --map-grass: #e9ecdc;
+  --map-rock: #e6e1d8;
+  --map-ice: #f5f8fa;
+  --map-water: #bfd4df;
+  --map-road: #ffffff;
+  --map-road-casing: #d9d1c4;
+  --map-path: #8c7158;
+  --map-label: #4d4652;
+  --map-halo: #f2efe9;
+  --map-shade: #3b342f;
+  --map-forest: #5f8a4c;
+
   --radius-card: 22px;
   --radius-ctl: 13px;
   --shadow-card: 0 1px 1px rgb(38 34 43 / 0.06), 0 10px 28px -14px rgb(38 34 43 / 0.35);
@@ -246,11 +261,26 @@ button { cursor: pointer; border: 0; background: none; }
 button.layer:hover .swatch { box-shadow: inset 0 0 0 1px rgb(38 34 43 / .1), 0 0 0 3px var(--ground-deep); }
 .layer.on .swatch { box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--purple); }
 .layer.on { font-weight: 900; }
-.layer.later { color: var(--muted); cursor: default; }
-.layer.later .swatch { opacity: .7; }
-.layer small {
-  margin-left: auto; font-size: 11px; font-weight: 800; color: var(--muted);
-  background: var(--ground); padding: 2px 8px; border-radius: 999px;
+.overlays-title { margin-top: 12px; }
+.swatch.small { width: 30px; height: 24px; border-radius: 7px; }
+.layer.overlay { gap: 10px; }
+.switch {
+  margin-left: auto; flex: none; position: relative;
+  width: 38px; height: 22px; border-radius: 999px; background: var(--ground-deep);
+  transition: background-color .18s;
+}
+.switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--card); box-shadow: 0 1px 2px rgb(38 34 43 / .3);
+  transition: transform .18s cubic-bezier(.2,.8,.2,1);
+}
+.layer.active .switch { background: var(--purple); }
+.layer.active .switch::after { transform: translateX(16px); }
+.later-title { margin-top: 10px; font-size: 12px; font-weight: 800; color: var(--muted); }
+.later-list { list-style: none; display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 0 4px; }
+.later-list li {
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  background: var(--ground); padding: 3px 9px; border-radius: 999px;
 }
 
 /* ---------- MapLibre chrome ---------- */
