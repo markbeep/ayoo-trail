@@ -1,5 +1,5 @@
 ---
-name: navilau
+name: ayoo
 description: A warm, friendly trail-loop planner on a full-bleed outdoor map with relief, in stone and night indigo.
 colors:
   stone-ground: "#ece8e1"
@@ -130,10 +130,10 @@ components:
     padding: "5px 10px"
 ---
 
-# Design System: navilau
+# Design System: ayoo
 
 <!-- impeccable:design-map -->
-Name: navilau
+Name: ayoo
 Colors: stone-ground #ece8e1, stone-deep #e2ddd4, card-white #ffffff, trail-ink #26222b, slate-muted #625b6b, hairline #e7e2da, night-indigo #3d45c4, night-indigo-deep #2f36a0, indigo-wash #eef0fc, amber-warn #a4570d, amber-wash #fbf0e2 (+3 more in the frontmatter)
 Fonts: Nunito Sans Variable (display, headline, title, body, label, caption)
 Spacing: tight 8px, gap 12px, edge 16px, edge-phone 12px, card-y 18px, card-x 20px, panel-width 410px

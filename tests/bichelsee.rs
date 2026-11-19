@@ -4,11 +4,11 @@
 
 use std::path::Path;
 
-use navilau::cost::Profile;
-use navilau::generate::{generate, ClimbGoal, GenerateRequest};
-use navilau::geodesy::haversine_m;
-use navilau::graph::{Graph, LatLon};
-use navilau::route::{route_stats, route_via};
+use trail_calc::cost::Profile;
+use trail_calc::generate::{generate, ClimbGoal, GenerateRequest};
+use trail_calc::geodesy::haversine_m;
+use trail_calc::graph::{Graph, LatLon};
+use trail_calc::route::{route_stats, route_via};
 
 const START: LatLon = LatLon {
     lat: 47.448142,

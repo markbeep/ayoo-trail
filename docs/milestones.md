@@ -1,10 +1,10 @@
-# navilau Implementation Plan
+# ayoo Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a personal web app that generates trail-running loop routes in Switzerland from a start point, a distance target and a soft hilliness preference, with drag editing and GPX export.
 
-**Architecture:** One Rust crate with two binaries. `navilau-import` turns OSM + DEM + official-trail data into one mmap'd graph file; `navilau-server` serves an axum API and the static SolidJS + MapLibre client from that graph. Routing is A* over the graph with a request-time cost function; loop generation is anchor seeding plus local refinement.
+**Architecture:** One Rust crate with two binaries. `trail-calc-import` turns OSM + DEM + official-trail data into one mmap'd graph file; `trail-calc-server` serves an axum API and the static SolidJS + MapLibre client from that graph. Routing is A* over the graph with a request-time cost function; loop generation is anchor seeding plus local refinement.
 
 **Tech Stack:** Rust (axum, tokio, osmpbf, rstar, memmap2, rayon, serde, clap), SolidJS + TypeScript + MapLibre GL + Vite, GDAL/ogr2ogr for data prep only, Docker.
 
@@ -65,7 +65,7 @@ The five failure modes most likely to bite a user, each pinned by a test in the 
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `navilau::graph::{LatLon, Surface, Flags, EdgeAttrs, GraphWriter, Graph, GraphError}`. `GraphWriter::new(osm_date: i64)`, `add_node(LatLon, f32) -> u32`, `add_edge(u32, u32, EdgeAttrs, geometry: &[(f64, f64, f32)]) -> u32`, `node_mut(u32) -> &mut Node`, `edge_mut(u32) -> &mut Edge`, `add_anchor(LatLon, AnchorKind, f32)`, `write_to(&Path) -> Result<(), GraphError>`, `finish() -> Vec<u8>`. `Graph::from_bytes(Vec<u8>) -> Result<Graph, GraphError>`.
+- Produces: `trail_calc::graph::{LatLon, Surface, Flags, EdgeAttrs, GraphWriter, Graph, GraphError}`. `GraphWriter::new(osm_date: i64)`, `add_node(LatLon, f32) -> u32`, `add_edge(u32, u32, EdgeAttrs, geometry: &[(f64, f64, f32)]) -> u32`, `node_mut(u32) -> &mut Node`, `edge_mut(u32) -> &mut Edge`, `add_anchor(LatLon, AnchorKind, f32)`, `write_to(&Path) -> Result<(), GraphError>`, `finish() -> Vec<u8>`. `Graph::from_bytes(Vec<u8>) -> Result<Graph, GraphError>`.
 
 - [ ] **Step 1: Create the crate and the failing round-trip test**
 
@@ -73,20 +73,20 @@ The five failure modes most likely to bite a user, each pinned by a test in the 
 
 ```toml
 [package]
-name = "navilau"
+name = "trail-calc"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "navilau"
+name = "trail-calc"
 path = "src/lib.rs"
 
 [[bin]]
-name = "navilau-import"
+name = "trail-calc-import"
 path = "src/bin/import.rs"
 
 [[bin]]
-name = "navilau-server"
+name = "trail-calc-server"
 path = "src/bin/server.rs"
 
 [dependencies]
@@ -126,7 +126,7 @@ node = "26.13.1"
 `tests/graph.rs`:
 
 ```rust
-use navilau::graph::{EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
+use trail_calc::graph::{EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
 
 #[test]
 fn writer_open_round_trip() {
@@ -160,7 +160,7 @@ fn writer_open_round_trip() {
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `cargo test --test graph`
-Expected: compile error, `unresolved import navilau::graph`.
+Expected: compile error, `unresolved import trail_calc::graph`.
 
 - [ ] **Step 3: Implement the file format**
 
@@ -210,7 +210,7 @@ jj bookmark set main -r @-
 ```rust
 #[test]
 fn open_from_disk_reads_every_section() {
-    let dir = std::env::temp_dir().join("navilau_graph_test");
+    let dir = std::env::temp_dir().join("trail_calc_graph_test");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("g.bin");
     let mut w = GraphWriter::new(42);
@@ -606,7 +606,7 @@ Pass 1 also collects land cover and peaks from the same PBF, so no extra downloa
 
 Also add `just data`: download the Geofabrik CH PBF to `data/raw/ch-latest.osm.pbf`; download the swisstopo DEM and convert it to `data/raw/dhm25.asc` keeping the native Swiss grid — `gdal_translate -of AAIGrid` without `-t_srs`. Verify the current product URL at implementation: DHM25 is legacy and sometimes ships as GeoTIFF or tiles; swissALTI3D 2 m is the fallback. Download the Wanderwege GPKG, then `ogr2ogr -f FlatGeobuf -t_srs EPSG:4326 data/raw/official.fgb <gpkg>`. GDAL is a dev tool only, never a runtime dependency.
 
-Wire `src/bin/import.rs` in this task: clap args `--osm <path> --out <path>`, env `REGION=demo|ch` selecting defaults under `data/raw/`, and a body that calls `import_osm` then `write_to`. Bare `navilau-import` with no args derives every path from `REGION` and `DATA_DIR` (output `$DATA_DIR/graph.bin`) and exits 0 immediately when that output already exists — before reading the PBF or DEM — so the compose import service is safely re-runnable. Tasks 7 and 8 add `--dem` and `--official` and extend this same body, which stays the single orchestration point.
+Wire `src/bin/import.rs` in this task: clap args `--osm <path> --out <path>`, env `REGION=demo|ch` selecting defaults under `data/raw/`, and a body that calls `import_osm` then `write_to`. Bare `trail-calc-import` with no args derives every path from `REGION` and `DATA_DIR` (output `$DATA_DIR/graph.bin`) and exits 0 immediately when that output already exists — before reading the PBF or DEM — so the compose import service is safely re-runnable. Tasks 7 and 8 add `--dem` and `--official` and extend this same body, which stays the single orchestration point.
 
 - [ ] **Step 4: Run the test**
 
@@ -1147,15 +1147,15 @@ jj commit -m "feat: drag-to-edit with live route rescoring"
 
 **Interfaces:**
 - Consumes: both binaries and `web/dist`.
-- Produces: an image running `navilau-server` on 8080 as non-root, and a compose stack that imports a demo graph if absent and then serves.
+- Produces: an image running `trail-calc-server` on 8080 as non-root, and a compose stack that imports a demo graph if absent and then serves.
 
 - [ ] **Step 1: Write the Dockerfile**
 
-Three stages: `node:26-alpine` builds `web/dist`; `rust:1.100` builds `--release` with the musl target; final `gcr.io/distroless/static-debian12:nonroot` copies `/app/navilau-server`, `/app/navilau-import`, `/app/web`, and sets `ENTRYPOINT ["/app/navilau-server"]`, `EXPOSE 8080`, `VOLUME ["/data"]`. Copy `tests/fixtures/` into the image so `REGION=demo` can import without a download. `osmpbf` pulls `flate2` with the pure-Rust `miniz_oxide` backend and `prost`, so the musl build needs no libz-sys or C toolchain; do not enable C-linked compression features. `flatgeobuf`, `geo`, `rstar` and `blake3` are pure Rust.
+Three stages: `node:26-alpine` builds `web/dist`; `rust:1.100` builds `--release` with the musl target; final `gcr.io/distroless/static-debian12:nonroot` copies `/app/trail-calc-server`, `/app/trail-calc-import`, `/app/web`, and sets `ENTRYPOINT ["/app/trail-calc-server"]`, `EXPOSE 8080`, `VOLUME ["/data"]`. Copy `tests/fixtures/` into the image so `REGION=demo` can import without a download. `osmpbf` pulls `flate2` with the pure-Rust `miniz_oxide` backend and `prost`, so the musl build needs no libz-sys or C toolchain; do not enable C-linked compression features. `flatgeobuf`, `geo`, `rstar` and `blake3` are pure Rust.
 
 - [ ] **Step 2: Write the compose file**
 
-`import` service: same image, `entrypoint: ["/app/navilau-import"]`, mounts `./data:/data`, env `REGION=${REGION:-demo}` and `DATA_DIR=/data`, and exits 0 immediately when `/data/graph.bin` exists. Bare import derives `--osm/--dem/--official/--out` from those env vars, so no args are needed. `REGION=demo` builds from the committed `tests/fixtures/tiny.osm` and `tiny.asc` so `docker compose up` needs no download; `REGION=ch` expects `just data` to have run and reads `data/raw/`. `server` service: `depends_on: import: condition: service_completed_successfully`, port `8080:8080`, same volume.
+`import` service: same image, `entrypoint: ["/app/trail-calc-import"]`, mounts `./data:/data`, env `REGION=${REGION:-demo}` and `DATA_DIR=/data`, and exits 0 immediately when `/data/graph.bin` exists. Bare import derives `--osm/--dem/--official/--out` from those env vars, so no args are needed. `REGION=demo` builds from the committed `tests/fixtures/tiny.osm` and `tiny.asc` so `docker compose up` needs no download; `REGION=ch` expects `just data` to have run and reads `data/raw/`. `server` service: `depends_on: import: condition: service_completed_successfully`, port `8080:8080`, same volume.
 
 - [ ] **Step 3: Build and smoke-test**
 
@@ -1187,7 +1187,7 @@ jj commit -m "build: lightweight image and compose stack"
 
 - [ ] **Step 1: Write the smoke script**
 
-`scripts/smoke.sh`: build the demo graph into `data/graph.bin` if missing, start `navilau-server` on port 18080 with `DATA_DIR="$PWD/data"`, poll `/api/health`, assert `POST /api/generate` returns at least one route and `POST /api/route` returns a geometry, then kill the server. The file name must match what `navilau-server` opens (`$DATA_DIR/graph.bin`), and `docker compose` uses the same path at `/data/graph.bin`. Use `jq -e` for assertions and `set -euo pipefail`.
+`scripts/smoke.sh`: build the demo graph into `data/graph.bin` if missing, start `trail-calc-server` on port 18080 with `DATA_DIR="$PWD/data"`, poll `/api/health`, assert `POST /api/generate` returns at least one route and `POST /api/route` returns a geometry, then kill the server. The file name must match what `trail-calc-server` opens (`$DATA_DIR/graph.bin`), and `docker compose` uses the same path at `/data/graph.bin`. Use `jq -e` for assertions and `set -euo pipefail`.
 
 - [ ] **Step 2: Run it**
 

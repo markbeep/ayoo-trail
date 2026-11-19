@@ -51,7 +51,7 @@ export const climbMaxM = () => Math.max(1500, Math.ceil((150 * distanceKm()) / 1
 /** Wattwil: inside the demo graph (D34). */
 export const DEFAULT_START: LatLon = { lat: 47.2985, lon: 9.095 };
 
-const STORE_KEY = "navilau:v1";
+const STORE_KEY = "trail-calc:v1";
 interface Stored { start?: LatLon; startName?: string | null; baseMap?: BaseMapId; overlays?: string[] }
 function load(): Stored {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Stored; } catch { return {}; }

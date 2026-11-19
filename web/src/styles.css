@@ -1,4 +1,4 @@
-/* navilau — Warm Consumer App, Stone & Night Indigo (D43).
+/* ayoo — Warm Consumer App, Stone & Night Indigo (D43).
    Indigo is reserved for the active route and for things you can press. */
 
 :root {
@@ -56,6 +56,8 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
+/* No page pinch/double-tap zoom: iOS leaves the zoomed layout offset behind, which slides the sheet up over a blank gap. The map pinch-zooms itself. */
+html { touch-action: pan-x pan-y; }
 body {
   font-family: var(--font);
   font-size: 15px;
@@ -149,6 +151,8 @@ button { cursor: pointer; border: 0; background: none; }
   width: 100%; height: 100%; border: 0; background: transparent; text-align: center;
   font-weight: 800; font-size: 14px; border-radius: 10px; -moz-appearance: textfield;
 }
+/* iOS zooms the page into any focused field under 16px. */
+@media (pointer: coarse) { .seg-input input, input.start-input { font-size: 16px; } }
 .seg-input input::placeholder { color: var(--muted); }
 .seg-input input::-webkit-inner-spin-button { display: none; }
 .seg-input.on { background: var(--accent); }

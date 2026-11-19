@@ -1,4 +1,4 @@
-# Design — navilau
+# Design — ayoo
 
 Status: **approved; engine and importer in implementation** (D29), 2026-11-18.
 Generation, the generate API and the cache are not started.
@@ -78,12 +78,12 @@ drag one point to adjust it, export the GPX.
 
 ```mermaid
 flowchart LR
-  OSM[OSM PBF] --> IMP[navilau-import]
+  OSM[OSM PBF] --> IMP[trail-calc-import]
   DEM[swisstopo DEM] --> IMP
   OFF[swissTLM3D Wanderwege] --> IMP
   LC[land cover] --> IMP
   IMP --> GRAPH[(graph.bin)]
-  GRAPH --> SRV[navilau-server]
+  GRAPH --> SRV[trail-calc-server]
   SRV --> WEB[Solid + MapLibre]
 ```
 
@@ -92,9 +92,9 @@ lands; v1 has no tile endpoint.
 
 ### 6.1 Components
 
-- `navilau-import` (binary): builds `graph.bin` from raw sources. Offline,
+- `trail-calc-import` (binary): builds `graph.bin` from raw sources. Offline,
   idempotent, versioned by OSM date.
-- `navilau-server` (binary, axum): mmaps `graph.bin`, serves the API and the
+- `trail-calc-server` (binary, axum): mmaps `graph.bin`, serves the API and the
   static client.
 - `web/`: Solid + MapLibre client, built to static assets and served by the
   server in production; Vite dev server proxies the API in development.
@@ -342,7 +342,7 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
   so MapLibre overzooms instead of requesting 404 tiles. The server does not
   proxy these tiles.
 - Overlay tiles (official trails, forest, viewshed, ...) are ours: produced by
-  the importer as PMTiles and served by `navilau-server` when those layers land.
+  the importer as PMTiles and served by `trail-calc-server` when those layers land.
 - Map: MapLibre. Candidate routes drawn from the list; selected route
   emphasized.
 - Results: scrollable cards with distance, climb, score, official share.
@@ -377,8 +377,8 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 - `Dockerfile` (D64): multi-stage. `node:26.13.1-slim` builds the client
   (glibc, because the Solid compiler ships per-libc native binaries),
   `rust:1.100.0-alpine` builds static musl binaries, and the final stage is
-  `distroless/static-debian12:nonroot` with `navilau-server`,
-  `navilau-import`, the client at `/app/web` and `/data` as a volume. The graph
+  `distroless/static-debian12:nonroot` with `trail-calc-server`,
+  `trail-calc-import`, the client at `/app/web` and `/data` as a volume. The graph
   is mounted, not baked in. Port 8080, non-root, ~14 MB. The server stops
   gracefully on SIGTERM.
 - No Kubernetes manifests.

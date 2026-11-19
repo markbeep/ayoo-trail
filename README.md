@@ -1,4 +1,4 @@
-# navilau
+# ayoo
 
 Navi + Lauf: generates trail-running loops in Switzerland from a start point, a distance and
 a few preferences. Rust (axum) server plus a SolidJS + MapLibre client. See

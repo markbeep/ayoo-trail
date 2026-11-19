@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use geo::GeodesicArea;
-use navilau::graph::{flags, Bbox, Graph, GraphWriter, Highway, Surface};
-use navilau::import::osm::import_osm;
+use trail_calc::graph::{flags, Bbox, Graph, GraphWriter, Highway, Surface};
+use trail_calc::import::osm::import_osm;
 
 fn fixture(name: &str) -> std::path::PathBuf {
     Path::new("tests/fixtures").join(name)

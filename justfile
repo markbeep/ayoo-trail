@@ -1,4 +1,4 @@
-# navilau tasks. Run `just` to list.
+# ayoo tasks. Run `just` to list.
 
 default:
     @just --list
@@ -8,22 +8,22 @@ dev:
     #!/usr/bin/env bash
     set -euo pipefail
     trap 'kill 0' EXIT
-    cargo run --bin navilau-server &
-    (cd web && npm run dev) &
+    cargo run --bin trail-calc-server &
+    (cd web && npm run dev -- --host) &
     wait
 
 # Vite dev server only (no API needed for the current mock routes).
 web:
-    cd web && npm run dev
+    cd web && npm run dev -- --host
 
 # Rust server only.
 server:
-    cargo run --bin navilau-server
+    cargo run --bin trail-calc-server
 
 # Build the client, then the release server that serves it.
 build:
     cd web && npm ci && npm run build
-    cargo build --release --bin navilau-server
+    cargo build --release --bin trail-calc-server
 
 # fmt, clippy, tests, client typecheck.
 check:
@@ -32,9 +32,9 @@ check:
     cargo test
     cd web && npm run typecheck
 
-# Build data/graph.bin from data/raw (`just import ch`; default demo).
-import REGION="demo":
-    cargo run --release --bin navilau-import -- --region {{REGION}}
+# Build data/graph.bin from data/raw (`just import ch --force` to replace an existing graph; default demo).
+import REGION="demo" *ARGS:
+    cargo run --release --bin trail-calc-import -- --region {{REGION}} {{ARGS}}
 
 # Fetch OSM, swissALTI3D 2 m tiles and Wanderwege into data/raw (`just data REGION=demo|ch`).
 data REGION="demo":

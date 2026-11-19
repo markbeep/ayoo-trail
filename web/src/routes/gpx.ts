@@ -8,7 +8,7 @@ export function toGpx(route: Route, name: string): string {
     .map(([lon, lat, z]) => `      <trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}"><ele>${z.toFixed(1)}</ele></trkpt>`)
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="navilau" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="ayoo" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata><name>${esc(name)}</name></metadata>
   <trk>
     <name>${esc(name)}</name>
@@ -21,10 +21,10 @@ ${pts}
 `;
 }
 
-/** "Loop A" + 15 300 m → "navilau-loop-a-15km.gpx". */
+/** "Loop A" + 15 300 m → "ayoo-loop-a-15km.gpx". */
 export function gpxFileName(loopName: string, distance_m: number): string {
   const slug = loopName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return `navilau-${slug}-${Math.round(distance_m / 1000)}km.gpx`;
+  return `ayoo-${slug}-${Math.round(distance_m / 1000)}km.gpx`;
 }
 
 export function downloadGpx(route: Route, loopName: string, title: string) {

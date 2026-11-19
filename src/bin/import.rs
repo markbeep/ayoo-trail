@@ -1,4 +1,4 @@
-//! `navilau-import`: OSM → DEM → official trails → land cover → anchors → `graph.bin`.
+//! `trail-calc-import`: OSM → DEM → official trails → land cover → anchors → `graph.bin`.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -6,14 +6,14 @@ use std::process::ExitCode;
 use std::time::{Instant, UNIX_EPOCH};
 
 use clap::{Parser, ValueEnum};
-use navilau::graph::{flags, AnchorKind, Graph, Surface, GRADE_BANDS};
-use navilau::import::alti3d::Alti3dTiles;
-use navilau::import::ch1903::wgs84_to_lv95;
-use navilau::import::dem::{apply_dem, AscGrid, DemStats};
-use navilau::import::landcover::{apply_landcover, collect_anchors};
-use navilau::import::official::{apply_official, read_official_gpkg, OFFICIAL_TOLERANCE_M};
-use navilau::import::osm::import_osm;
-use navilau::import::region;
+use trail_calc::graph::{flags, AnchorKind, Graph, Surface, GRADE_BANDS};
+use trail_calc::import::alti3d::Alti3dTiles;
+use trail_calc::import::ch1903::wgs84_to_lv95;
+use trail_calc::import::dem::{apply_dem, AscGrid, DemStats};
+use trail_calc::import::landcover::{apply_landcover, collect_anchors};
+use trail_calc::import::official::{apply_official, read_official_gpkg, OFFICIAL_TOLERANCE_M};
+use trail_calc::import::osm::import_osm;
+use trail_calc::import::region;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -56,7 +56,7 @@ fn main() -> ExitCode {
     match run(Args::parse()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("navilau-import: {e}");
+            eprintln!("trail-calc-import: {e}");
             ExitCode::FAILURE
         }
     }

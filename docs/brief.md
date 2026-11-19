@@ -1,4 +1,4 @@
-# Brief — navilau
+# Brief — ayoo
 
 Status: **brainstorming**, 2026-11-16. This file is the live source of truth
 until the design is approved; then `docs/design.md` takes over.

@@ -1,7 +1,7 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use navilau::server::{app, ServerConfig};
+use trail_calc::server::{app, ServerConfig};
 use std::path::PathBuf;
 use tower::ServiceExt;
 
@@ -13,11 +13,11 @@ fn config(static_dir: PathBuf) -> ServerConfig {
 }
 
 fn fixture_dist() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("navilau-dist-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("trail-calc-dist-{}", std::process::id()));
     std::fs::create_dir_all(dir.join("assets")).unwrap();
     std::fs::write(
         dir.join("index.html"),
-        "<!doctype html><title>navilau</title>",
+        "<!doctype html><title>ayoo</title>",
     )
     .unwrap();
     std::fs::write(dir.join("assets/app.js"), "console.log(1)").unwrap();
@@ -60,5 +60,5 @@ async fn serves_static_assets() {
 async fn unknown_client_path_falls_back_to_index() {
     let (status, body) = get(app(config(fixture_dist())), "/some/deep/link").await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains("<title>navilau</title>"));
+    assert!(body.contains("<title>ayoo</title>"));
 }

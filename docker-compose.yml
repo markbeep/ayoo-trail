@@ -3,8 +3,8 @@
 services:
   import:
     build: .
-    image: navilau
-    entrypoint: ["/app/navilau-import"]
+    image: trail-calc
+    entrypoint: ["/app/trail-calc-import"]
     environment:
       REGION: ${REGION:-demo}
       DATA_DIR: /data
@@ -14,7 +14,7 @@ services:
       - ./data:/data
 
   server:
-    image: navilau
+    image: trail-calc
     depends_on:
       import:
         condition: service_completed_successfully

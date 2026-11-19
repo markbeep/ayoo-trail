@@ -1,8 +1,8 @@
-use navilau::cost::{score, Profile};
-use navilau::geodesy::haversine_m;
-use navilau::graph::{flags, Direction, EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
-use navilau::route::*;
-use navilau::snap::Snap;
+use trail_calc::cost::{score, Profile};
+use trail_calc::geodesy::haversine_m;
+use trail_calc::graph::{flags, Direction, EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
+use trail_calc::route::*;
+use trail_calc::snap::Snap;
 
 const LAT: f64 = 46.0;
 const LON: f64 = 7.0;
@@ -315,7 +315,7 @@ fn partial_step_reports_the_last_partial_swing() {
 
 #[test]
 fn route_cost_matches_plain_dijkstra() {
-    use navilau::cost::edge_cost;
+    use trail_calc::cost::edge_cost;
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
 

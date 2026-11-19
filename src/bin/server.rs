@@ -1,7 +1,7 @@
-//! `navilau-server`: serves the API and the static client.
+//! `trail-calc-server`: serves the API and the static client.
 
-use navilau::graph::Graph;
-use navilau::server::{app, ServerConfig};
+use trail_calc::graph::Graph;
+use trail_calc::server::{app, ServerConfig};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -46,7 +46,7 @@ async fn main() -> std::io::Result<()> {
     };
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!(%addr, static_dir = %static_dir.display(), "navilau-server listening");
+    tracing::info!(%addr, static_dir = %static_dir.display(), "trail-calc-server listening");
     axum::serve(listener, app(ServerConfig { static_dir, graph }))
         .with_graceful_shutdown(async {
             // Ctrl-C locally; SIGTERM is how Docker and Kubernetes stop the container.

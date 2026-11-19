@@ -1,4 +1,4 @@
-# navilau
+# ayoo
 
 Read this first, then `docs/brief.md`.
 
@@ -14,7 +14,7 @@ color-by-cost (D54) are built.
 
 ## Layout
 
-- `src/` — Rust crate (`navilau`), `src/bin/server.rs` is `navilau-server`.
+- `src/` — Rust crate (`trail-calc`, lib `trail_calc`), `src/bin/server.rs` is `trail-calc-server`.
 - `web/` — Vite + Solid + MapLibre client. Routes come from `/api/generate`
   (`web/src/state.ts`); the layer registry is in `web/src/map/basemaps.ts`.
 - `PRODUCT.md`, `.impeccable/` — impeccable design context. The surface brief

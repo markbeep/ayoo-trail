@@ -1,5 +1,5 @@
-use navilau::geodesy::haversine_m;
-use navilau::graph::{EdgeAttrs, Graph, GraphWriter, LatLon};
+use trail_calc::geodesy::haversine_m;
+use trail_calc::graph::{EdgeAttrs, Graph, GraphWriter, LatLon};
 
 fn ll(lat: f64, lon: f64) -> LatLon {
     LatLon { lat, lon }
@@ -122,7 +122,7 @@ fn grid_snap_matches_brute_force() {
         .collect();
     let refs: Vec<&[(f64, f64)]> = edges.iter().map(|e| e.as_slice()).collect();
     let g = graph(&refs);
-    let proj = navilau::geodesy::LocalProjection::new(46.015);
+    let proj = trail_calc::geodesy::LocalProjection::new(46.015);
     for i in 0..40 {
         for j in 0..40 {
             let p = ll(45.995 + i as f64 * 0.001, 6.995 + j as f64 * 0.0013);
@@ -136,7 +136,7 @@ fn grid_snap_matches_brute_force() {
                         .collect();
                     pts.windows(2)
                         .map(|w| {
-                            let (c, _) = navilau::geodesy::closest_on_segment(q, w[0], w[1]);
+                            let (c, _) = trail_calc::geodesy::closest_on_segment(q, w[0], w[1]);
                             haversine_m(p, proj.unproject(c))
                         })
                         .collect::<Vec<_>>()

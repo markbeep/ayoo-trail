@@ -1,14 +1,14 @@
 use std::path::Path;
 
 use geo::{LineString, Polygon};
-use navilau::graph::{AnchorKind, EdgeAttrs, Graph, GraphWriter, LatLon};
-use navilau::import::ch1903::{lv95_to_wgs84, wgs84_to_lv95};
-use navilau::import::landcover::{apply_landcover, collect_anchors};
-use navilau::import::official::{
+use trail_calc::graph::{AnchorKind, EdgeAttrs, Graph, GraphWriter, LatLon};
+use trail_calc::import::ch1903::{lv95_to_wgs84, wgs84_to_lv95};
+use trail_calc::import::landcover::{apply_landcover, collect_anchors};
+use trail_calc::import::official::{
     apply_official, read_official_gpkg, OfficialLine, OFFICIAL_TOLERANCE_M,
 };
-use navilau::import::osm::OsmExtras;
-use navilau::import::region;
+use trail_calc::import::osm::OsmExtras;
+use trail_calc::import::region;
 
 /// One edge through the given (lat, lon) vertices.
 fn one_edge(pts: &[(f64, f64)]) -> GraphWriter {
@@ -218,7 +218,7 @@ fn import_binary_skips_existing_output() {
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("graph.bin");
     std::fs::write(&out, b"keep me").unwrap();
-    let status = std::process::Command::new(env!("CARGO_BIN_EXE_navilau-import"))
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_trail-calc-import"))
         .args([
             "--region",
             "demo",

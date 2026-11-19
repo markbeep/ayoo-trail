@@ -1,4 +1,4 @@
-//! navilau: trail-running loop generation for Switzerland.
+//! trail_calc: trail-running loop generation for Switzerland.
 //!
 //! Modules: `graph` (the `graph.bin` format), `geodesy`, `snap` (edge
 //! snapping), `cost` (profile and scoring), `route` (forward A* and route

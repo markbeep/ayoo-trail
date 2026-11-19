@@ -1,8 +1,8 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use navilau::graph::{EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
-use navilau::server::{app, ServerConfig};
+use trail_calc::graph::{EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
+use trail_calc::server::{app, ServerConfig};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tower::ServiceExt;

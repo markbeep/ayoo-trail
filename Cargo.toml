@@ -1,20 +1,20 @@
 [package]
-name = "navilau"
+name = "trail-calc"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.100"
 publish = false
 
 [lib]
-name = "navilau"
+name = "trail_calc"
 path = "src/lib.rs"
 
 [[bin]]
-name = "navilau-server"
+name = "trail-calc-server"
 path = "src/bin/server.rs"
 
 [[bin]]
-name = "navilau-import"
+name = "trail-calc-import"
 path = "src/bin/import.rs"
 
 [dependencies]

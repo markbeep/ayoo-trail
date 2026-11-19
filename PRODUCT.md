@@ -63,7 +63,7 @@ official-trail share honestly instead of hiding weak data.
 
 ## Brand Commitments
 
-Product name is "navilau" (Navi + Lauf), always written lowercase (D48). No logo, voice or visual assets
+Product name is "ayoo", always written lowercase (D65). The code and binaries use the stable internal name `trail-calc`. No logo, voice or visual assets
 exist yet.
 
 ## Evidence on Hand

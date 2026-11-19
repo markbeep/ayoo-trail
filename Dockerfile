@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# navilau: one small image with both binaries and the built client (D11, D17).
+# ayoo: one small image with both binaries and the built client (D11, D17).
 # The graph is not baked in: mount it at /data (graph.bin), so it can be rebuilt independently.
 
 # glibc, matching the lockfile: the Solid compiler ships native binaries per libc.
@@ -19,13 +19,13 @@ COPY src ./src
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release --locked --bins \
-    && cp target/release/navilau-server target/release/navilau-import /
+    && cp target/release/trail-calc-server target/release/trail-calc-import /
 
 # Static musl binaries, no shell, runs as uid 65532.
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=rust /navilau-server /navilau-import /app/
+COPY --from=rust /trail-calc-server /trail-calc-import /app/
 COPY --from=web /web/dist /app/web
 ENV STATIC_DIR=/app/web DATA_DIR=/data BIND=0.0.0.0:8080 RUST_LOG=info
 EXPOSE 8080
 VOLUME ["/data"]
-ENTRYPOINT ["/app/navilau-server"]
+ENTRYPOINT ["/app/trail-calc-server"]
