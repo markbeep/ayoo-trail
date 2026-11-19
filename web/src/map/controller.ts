@@ -33,6 +33,9 @@ export interface MapColors extends RouteColors {
 
 /** Upper cost/m bound of each cost colour but the last; 0.63 is a flat official forest trail (D32). */
 export const COST_STOPS = [0.8, 1.1, 1.6, 2.4];
+/** One term at one stretch relative to its best (1 = ideal): upper bound of each colour but the last. */
+export const TERM_STOPS = [1.05, 1.2, 1.5, 2.2];
+export const termBucket = (ratio: number) => { const i = TERM_STOPS.findIndex((s) => ratio <= s); return i < 0 ? TERM_STOPS.length : i; };
 /** Index into the cost ramp for a cost per metre. */
 export const costBucket = (c: number) => { const i = COST_STOPS.findIndex((s) => c <= s); return i < 0 ? COST_STOPS.length : i; };
 

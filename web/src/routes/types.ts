@@ -54,5 +54,7 @@ export interface Route {
   climb_pressure: number;
   /** Cost per metre at each coordinate (the step leaving it). */
   cost_per_m: number[];
+  /** From coordinate `i` on, each term relative to its best possible value (1 = ideal), D61. */
+  terms: ({ i: number } & Record<BreakdownKey, number>)[];
   graph_date: string | null;
 }

@@ -18,7 +18,9 @@ use tower_http::trace::TraceLayer;
 use crate::cost::{term_minima, traversable, Profile, ProfileError};
 use crate::generate::{generate, ClimbGoal, GenerateError, GenerateRequest};
 use crate::graph::{Graph, LatLon};
-use crate::route::{route_cost_per_m, route_geometry, route_stats, route_via, Route, RouteStats};
+use crate::route::{
+    route_cost_per_m, route_geometry, route_stats, route_term_steps, route_via, Route, RouteStats,
+};
 use crate::snap::SNAP_LIMIT_M;
 
 /// Runtime configuration for [`app`].
@@ -162,6 +164,10 @@ fn route_json(
         "breakdown": breakdown(&stats, profile),
         "distance_met": distance_met,
         "climb_pressure": profile.weights.climb_pressure,
+        "terms": route_term_steps(g, r, profile).iter().map(|(i, b)| json!({
+            "i": i, "official": b.official, "surface": b.surface, "slope": b.slope,
+            "tech": b.tech, "forest": b.forest, "urban": b.urban,
+        })).collect::<Vec<_>>(),
         "cost_per_m": route_cost_per_m(g, r, profile).iter().map(|c| (c * 1e3).round() / 1e3).collect::<Vec<_>>(),
         "graph_date": utc_date(g.osm_date()),
         "stats": stats,

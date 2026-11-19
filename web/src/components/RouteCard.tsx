@@ -4,7 +4,7 @@ import type { BreakdownKey, Route } from "../routes/types";
 import {
   FACTORS, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, stale, undoEdit,
 } from "../state";
-import { costBucket } from "../map/controller";
+import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
 import { HillsPanel, WeightSlider } from "./Controls";
 import { downloadGpx } from "../routes/gpx";
@@ -21,6 +21,14 @@ export function RouteCard(props: { route: Route; name: string }) {
   const hoverAt = () => {
     const i = hoverIndex(), c = i === null ? undefined : r().cost_per_m?.[i];
     return c === undefined || !(c > 0) ? null : { cost: c, ratio: c / best() };
+  };
+  /** Each term at the hovered point (D61), or null when nothing is hovered. */
+  const termsHere = () => {
+    const i = hoverIndex(), ts = r().terms;
+    if (i === null || !ts?.length) return null;
+    let lo = 0, hi = ts.length - 1; // last stretch starting at or before i
+    while (lo < hi) { const m = (lo + hi + 1) >> 1; if (ts[m]!.i <= i) lo = m; else hi = m - 1; }
+    return ts[lo]!;
   };
   return (
     <section class="card route-card" aria-label={`${props.name}, score ${score(r().score)}`}>
@@ -75,7 +83,7 @@ export function RouteCard(props: { route: Route; name: string }) {
         </div>
       </Show>
 
-      <h3 class="why">Why it scores {score(r().score)}<Show when={refreshing()}><span class="updating"><LoaderCircle size={13} class="spin" />Updating</span></Show></h3>
+      <h3 class="why">Why it scores {score(r().score)}<Show when={termsHere()}><span class="why-here"> · colours show the point you're on</span></Show><Show when={refreshing()}><span class="updating"><LoaderCircle size={13} class="spin" />Updating</span></Show></h3>
       <ul class="bars">
         <For each={r().breakdown}>{(b) => {
           const f = FACTORS[b.key];
@@ -84,7 +92,10 @@ export function RouteCard(props: { route: Route; name: string }) {
             <li class={{ open: isOpen() }}>
               <button class="bar" aria-expanded={`${isOpen()}`} onClick={() => setOpen(isOpen() ? null : b.key)}>
                 <span class="bar-label">{f.label}</span>
-                <span class="track" aria-hidden="true"><span class="fill" style={{ width: `${Math.round(b.value * 100)}%` }} /></span>
+                <span class="track" aria-hidden="true"><span class="fill" style={{
+                  width: `${Math.round(b.value * 100)}%`,
+                  background: termsHere() ? `var(--cost-${termBucket(termsHere()![b.key]) + 1})` : undefined,
+                }} /></span>
                 <span class="bar-value"><span class="sr-only">, </span>{Math.round(b.value * 100)}<span class="sr-only"> out of 100. </span></span>
                 <span class="link-btn">{isOpen() ? "Close" : "Adjust"}</span>
               </button>

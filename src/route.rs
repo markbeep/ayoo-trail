@@ -6,7 +6,7 @@ use std::collections::BinaryHeap;
 
 use serde::Serialize;
 
-use crate::cost::{edge_cost, edge_factors, score, Breakdown, Profile, Weights};
+use crate::cost::{edge_cost, edge_factors, score, term_minima, Breakdown, Profile, Weights};
 use crate::geodesy::{gain_loss, haversine_m, polyline_length_m};
 use crate::graph::{flags, Direction, Graph, LatLon, FLAT_BAND, GRADE_BANDS};
 use crate::snap::Snap;
@@ -388,6 +388,38 @@ pub fn route_cost_per_m(g: &Graph, r: &Route, p: &Profile) -> Vec<f64> {
         } else {
             out.extend(std::iter::repeat_n(c, n));
         }
+    }
+    out
+}
+
+/// Per step: the `route_geometry` vertex it starts at, and each term's factor relative to the
+/// best that term can be under `p` (1 = ideal). Consecutive equal steps are merged.
+/// Shows which term makes a stretch expensive (D61).
+pub fn route_term_steps(g: &Graph, r: &Route, p: &Profile) -> Vec<(usize, Breakdown)> {
+    let best = term_minima(&p.weights);
+    let rel = |f: f32, b: f32| {
+        if b > 0.0 {
+            (f / b * 100.0).round() / 100.0
+        } else {
+            1.0
+        }
+    };
+    let mut out: Vec<(usize, Breakdown)> = Vec::new();
+    let mut at = 0usize;
+    for s in &r.steps {
+        let f = edge_factors(g, s.edge, s.direction(), &p.weights);
+        let b = Breakdown {
+            slope: rel(f.slope, best.slope),
+            surface: rel(f.surface, best.surface),
+            tech: rel(f.tech, best.tech),
+            official: rel(f.official, best.official),
+            forest: rel(f.forest, best.forest),
+            urban: rel(f.urban, best.urban),
+        };
+        if out.last().is_none_or(|(_, prev)| *prev != b) {
+            out.push((at, b));
+        }
+        at += slice(g, s).len().saturating_sub(1);
     }
     out
 }

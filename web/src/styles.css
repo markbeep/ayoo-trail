@@ -482,3 +482,5 @@ button.layer:hover .swatch { box-shadow: inset 0 0 0 1px rgb(38 34 43 / .1), 0 0
 .start-empty { padding: 10px 12px; font-size: 14px; font-weight: 600; color: var(--muted); }
 .strictness { margin-top: 12px; }
 .control-q { font-size: 13px; font-weight: 800; }
+.why-here { font-weight: 700; }
+.fill { transition: width .5s cubic-bezier(.2,.8,.2,1), background-color .15s; }

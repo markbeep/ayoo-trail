@@ -304,3 +304,26 @@ async fn route_carries_cost_per_metre_per_vertex() {
         cost[0]
     );
 }
+
+#[tokio::test]
+async fn route_carries_per_stretch_term_ratios() {
+    let (status, v) = post(Some(graph()), two((LAT, 7.4), (LAT, 7.402))).await;
+    assert_eq!(status, StatusCode::OK, "{v}");
+    let n = v["geometry"]["coordinates"].as_array().unwrap().len() as u64;
+    let terms = v["terms"].as_array().unwrap();
+    assert!(!terms.is_empty());
+    assert_eq!(terms[0]["i"], 0);
+    let mut prev = None;
+    for t in terms {
+        let i = t["i"].as_u64().unwrap();
+        assert!(
+            i < n && prev.is_none_or(|p| i > p),
+            "starts must increase: {terms:?}"
+        );
+        prev = Some(i);
+        for k in ["official", "surface", "slope", "tech", "forest", "urban"] {
+            // Each term relative to the best factor the weights allow: 1 is ideal, never below.
+            assert!(t[k].as_f64().unwrap() >= 0.999, "{k} in {t}");
+        }
+    }
+}
