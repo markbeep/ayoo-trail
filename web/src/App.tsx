@@ -15,7 +15,7 @@ import { loopName } from "./routes/format";
 function Brand() {
   return (
     <header class="brand">
-      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor" /><path d="M7 22c3-7 6-11 9-11s4 5 9 3" fill="none" stroke="#b98be0" stroke-width="3" stroke-linecap="round" /><circle cx="7" cy="22" r="3" fill="#fff" /></svg>
+      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor" /><path d="M7 22c3-7 6-11 9-11s4 5 9 3" fill="none" stroke="#a7adf0" stroke-width="3" stroke-linecap="round" /><circle cx="7" cy="22" r="3" fill="#fff" /></svg>
       <span>trail-route</span>
     </header>
   );

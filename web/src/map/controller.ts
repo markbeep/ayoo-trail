@@ -133,7 +133,7 @@ export class MapController {
     const isSel: FilterSpecification = ["==", ["get", "selected"], true];
     const notSel: FilterSpecification = ["!=", ["get", "selected"], true];
     const join = { "line-join": "round", "line-cap": "round" } as const;
-    // Line form carries state: candidates thin and muted, selected heavy and purple.
+    // Line form carries state: candidates thin and muted, selected heavy and in the accent.
     // (No dashes: swisstopo draws railways dashed.)
     this.map.addLayer({
       id: "route-candidate-casing", type: "line", source: ROUTES, layout: join,
