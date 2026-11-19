@@ -33,7 +33,6 @@ async fn main() -> std::io::Result<()> {
         let g = Graph::open(&graph_path).map_err(|e| {
             std::io::Error::other(format!("cannot open {}: {e}", graph_path.display()))
         })?;
-        g.warm_snap_index();
         tracing::info!(
             nodes = g.node_count(),
             edges = g.edge_count(),

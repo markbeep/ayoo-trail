@@ -10,6 +10,8 @@ use std::mem::size_of;
 use std::path::Path;
 use std::sync::OnceLock;
 
+use crate::snap::{build_snap_index, SnapGrid};
+
 use bytemuck::Pod;
 
 #[cfg(target_endian = "big")]
@@ -18,7 +20,7 @@ compile_error!(
 );
 
 const MAGIC: [u8; 4] = *b"TRGR";
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 const HEADER_LEN: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -215,6 +217,10 @@ struct Counts {
     edges: usize,
     geom: usize,
     anchors: usize,
+    /// Snap grid cells, derived from the bbox (`SnapGrid::cells`).
+    cells: usize,
+    /// Snap index entries (header bytes 52..56).
+    snap: usize,
 }
 
 /// Byte offset of every section, plus the total file size.
@@ -247,6 +253,8 @@ struct Layout {
     anchor_lon: usize,
     anchor_kind: usize,
     anchor_weight: usize,
+    snap_first: usize,
+    snap_seg: usize,
     total: usize,
 }
 
@@ -287,6 +295,8 @@ fn layout(c: Counts) -> Layout {
     let anchor_lon = sec(4, a);
     let anchor_kind = sec(1, a);
     let anchor_weight = sec(4, a);
+    let snap_first = sec(4, c.cells + 1);
+    let snap_seg = sec(4, c.snap);
     let total = pos;
     Layout {
         node_lat,
@@ -316,6 +326,8 @@ fn layout(c: Counts) -> Layout {
         anchor_lon,
         anchor_kind,
         anchor_weight,
+        snap_first,
+        snap_seg,
         total,
     }
 }
@@ -449,12 +461,13 @@ impl GraphWriter {
             edges: self.edges.len(),
             geom: self.edges.iter().map(|e| e.geometry.len()).sum(),
             anchors: self.anchors.len(),
+            cells: 0,
+            snap: 0,
         }
     }
 
     fn write_sections<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
-        let counts = self.counts();
-        let l = layout(counts);
+        let mut counts = self.counts();
         let (n, m) = (counts.nodes, counts.edges);
 
         // Bbox over geometry vertices (or nodes if there are none), computed on
@@ -482,6 +495,17 @@ impl GraphWriter {
         if bbox[0] > bbox[2] {
             bbox = [0.0; 4];
         }
+        let grid = SnapGrid::new(Bbox {
+            min_lat: bbox[0] as f64,
+            min_lon: bbox[1] as f64,
+            max_lat: bbox[2] as f64,
+            max_lon: bbox[3] as f64,
+        });
+        let (snap_first, snap_seg) =
+            build_snap_index(&grid, self.edges.iter().map(|e| e.geometry.as_slice()));
+        counts.cells = grid.cells();
+        counts.snap = snap_seg.len();
+        let l = layout(counts);
 
         let mut header = [0u8; HEADER_LEN];
         header[0..4].copy_from_slice(&MAGIC);
@@ -495,6 +519,7 @@ impl GraphWriter {
             header[32 + 4 * i..36 + 4 * i].copy_from_slice(&v.to_le_bytes());
         }
         header[48] = self.dem_source;
+        header[52..56].copy_from_slice(&(counts.snap as u32).to_le_bytes());
 
         let mut out = SectionWriter { w, pos: 0 };
         out.put(0, &header)?;
@@ -579,6 +604,8 @@ impl GraphWriter {
         out.put(l.anchor_kind, &akind)?;
         let aw: Vec<f32> = self.anchors.iter().map(|a| a.weight).collect();
         out.put(l.anchor_weight, bytemuck::cast_slice(&aw))?;
+        out.put(l.snap_first, bytemuck::cast_slice(&snap_first))?;
+        out.put(l.snap_seg, bytemuck::cast_slice(&snap_seg))?;
 
         // Pad up to the layout's total so empty trailing sections still count.
         out.put(l.total, &[])
@@ -631,7 +658,7 @@ pub struct Graph {
     bbox: Bbox,
     dem_source: u8,
     anchors: OnceLock<Vec<Anchor>>,
-    pub(crate) snap_index: OnceLock<crate::snap::SnapIndex>,
+    snap_grid: SnapGrid,
 }
 
 fn le_u32(b: &[u8], at: usize) -> u32 {
@@ -677,6 +704,8 @@ impl Graph {
             edges: le_u32(b, 20) as usize,
             geom: le_u32(b, 24) as usize,
             anchors: le_u32(b, 28) as usize,
+            cells: 0,
+            snap: le_u32(b, 52) as usize,
         };
         let bbox = Bbox {
             min_lat: le_f32(b, 32) as f64,
@@ -685,6 +714,11 @@ impl Graph {
             max_lon: le_f32(b, 44) as f64,
         };
         let dem_source = b[48];
+        let snap_grid = SnapGrid::new(bbox);
+        let counts = Counts {
+            cells: snap_grid.cells(),
+            ..counts
+        };
         let layout = layout(counts);
         if b.len() < layout.total {
             return Err(GraphError::Truncated);
@@ -697,7 +731,7 @@ impl Graph {
             bbox,
             dem_source,
             anchors: OnceLock::new(),
-            snap_index: OnceLock::new(),
+            snap_grid,
         };
         g.validate()?;
         Ok(g)
@@ -727,7 +761,49 @@ impl Graph {
         {
             return Err(GraphError::Index);
         }
+        // `geom_edge` binary-searches geom_start; snap entries name a segment start.
+        if gs.first().is_some_and(|&s| s != 0) || gs.windows(2).any(|w| w[0] > w[1]) {
+            return Err(GraphError::Index);
+        }
+        let (first, segs) = self.snap_cells();
+        if first[0] != 0
+            || first[self.counts.cells] as usize != self.counts.snap
+            || first.windows(2).any(|w| w[0] > w[1])
+            || segs.iter().any(|&s| s as u64 + 1 >= g as u64)
+            || (m == 0 && !segs.is_empty())
+        {
+            return Err(GraphError::Index);
+        }
         Ok(())
+    }
+
+    pub(crate) fn snap_grid(&self) -> &SnapGrid {
+        &self.snap_grid
+    }
+
+    /// (`first[cells + 1]`, `segs`) of the snap index, see `build_snap_index`.
+    pub(crate) fn snap_cells(&self) -> (&[u32], &[u32]) {
+        let l = &self.layout;
+        (
+            self.col(l.snap_first, self.counts.cells + 1),
+            self.col(l.snap_seg, self.counts.snap),
+        )
+    }
+
+    /// Projected position of global geometry vertex `i`.
+    pub(crate) fn geom_xy(&self, i: u32) -> [f64; 2] {
+        let (l, g) = (&self.layout, self.counts.geom);
+        self.snap_grid.xy(
+            self.col::<f32>(l.geom_lat, g)[i as usize],
+            self.col::<f32>(l.geom_lon, g)[i as usize],
+        )
+    }
+
+    /// (edge, segment index within it) of the segment starting at global vertex `i`.
+    pub(crate) fn geom_edge(&self, i: u32) -> (u32, u32) {
+        let gs = self.col::<u32>(self.layout.edge_geom_start, self.counts.edges);
+        let e = gs.partition_point(|&s| s <= i) - 1;
+        (e as u32, i - gs[e])
     }
 
     /// Typed view of a section. Offsets are 8-aligned and bounds were checked

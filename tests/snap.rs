@@ -96,3 +96,67 @@ fn empty_graph_and_degenerate_segments_do_not_panic() {
     let s = g.snap(ll(46.0, 7.0001)).unwrap();
     assert_eq!(s.t, 0.0);
 }
+
+#[test]
+fn grid_snap_matches_brute_force() {
+    // A ~3 km web of zig-zag edges spanning many 250 m cells, queried at a lattice of points.
+    let mut seed = 7u64;
+    let mut rnd = || {
+        seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (seed >> 33) as f64 / (1u64 << 31) as f64
+    };
+    let edges: Vec<Vec<(f64, f64)>> = (0..60)
+        .map(|_| {
+            let (mut la, mut lo) = (46.0 + rnd() * 0.03, 7.0 + rnd() * 0.04);
+            (0..1 + (rnd() * 6.0) as usize + 1)
+                .map(|_| {
+                    let p = (la, lo);
+                    la += (rnd() - 0.5) * 0.004;
+                    lo += (rnd() - 0.5) * 0.006;
+                    p
+                })
+                .collect()
+        })
+        .collect();
+    let refs: Vec<&[(f64, f64)]> = edges.iter().map(|e| e.as_slice()).collect();
+    let g = graph(&refs);
+    let proj = navilau::geodesy::LocalProjection::new(46.015);
+    for i in 0..40 {
+        for j in 0..40 {
+            let p = ll(45.995 + i as f64 * 0.001, 6.995 + j as f64 * 0.0013);
+            let q = proj.project(p);
+            // Nearest over every segment of every edge (f32-rounded like the file).
+            let best = (0..g.edge_count() as u32)
+                .flat_map(|e| {
+                    let pts: Vec<[f64; 2]> = g
+                        .edge_geometry(e)
+                        .map(|(la, lo, _)| proj.project(ll(la, lo)))
+                        .collect();
+                    pts.windows(2)
+                        .map(|w| {
+                            let (c, _) = navilau::geodesy::closest_on_segment(q, w[0], w[1]);
+                            haversine_m(p, proj.unproject(c))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .fold(f64::INFINITY, f64::min);
+            match g.snap_within(p, 500.0) {
+                Some(s) => assert!(
+                    (s.dist_m as f64 - best).abs() < 0.5,
+                    "{p:?}: snap {} brute {best}",
+                    s.dist_m
+                ),
+                None => assert!(best > 499.0, "{p:?}: missed edge at {best} m"),
+            }
+        }
+    }
+}
+
+#[test]
+fn far_outside_the_grid_is_none() {
+    let g = graph(&[&[(46.0, 7.0), (46.0, 7.01)]]);
+    assert!(g.snap_within(ll(40.0, 1.0), 500.0).is_none());
+    assert!(g.snap_within(ll(50.0, 12.0), 500.0).is_none());
+}

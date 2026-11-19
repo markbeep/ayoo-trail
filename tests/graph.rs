@@ -182,6 +182,14 @@ fn bad_magic_and_truncation_are_errors() {
         Err(GraphError::Version(9))
     ));
 
+    // Snap index entry count (header bytes 52..56) larger than the file holds.
+    let mut snap = bytes.clone();
+    snap[52..56].copy_from_slice(&1_000_000u32.to_le_bytes());
+    assert!(matches!(
+        Graph::from_bytes(snap),
+        Err(GraphError::Truncated)
+    ));
+
     let mut short = bytes.clone();
     short.pop();
     assert!(matches!(

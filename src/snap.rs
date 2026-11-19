@@ -1,11 +1,15 @@
-//! Snapping a map point to the nearest edge via an R-tree of geometry segments.
+//! Snapping a map point to the nearest edge via a fixed grid of geometry
+//! segments, built by the importer and stored in `graph.bin` (D50).
 
-use rstar::{PointDistance, RTree, RTreeObject, AABB};
+use std::ops::Range;
 
 use crate::geodesy::{closest_on_segment, haversine_m, LocalProjection};
-use crate::graph::{Graph, LatLon};
+use crate::graph::{Bbox, Graph, LatLon};
 
 pub const SNAP_LIMIT_M: f32 = 150.0;
+
+/// Grid cell edge in projected metres. CH: ~17 M segments over ~1.3 M cells.
+const CELL_M: f64 = 250.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Snap {
@@ -16,66 +20,98 @@ pub struct Snap {
     pub dist_m: f32,
 }
 
-/// One geometry segment in projected metres.
+/// Cells of `CELL_M` over the graph bbox in the local projection at its mid
+/// latitude. Derived from the stored f32 bbox, so writer and reader agree.
 #[derive(Debug, Clone, Copy)]
-struct Seg {
-    a: [f64; 2],
-    b: [f64; 2],
-    edge: u32,
-    idx: u32,
-}
-
-impl RTreeObject for Seg {
-    type Envelope = AABB<[f64; 2]>;
-    fn envelope(&self) -> Self::Envelope {
-        AABB::from_corners(self.a, self.b)
-    }
-}
-
-impl PointDistance for Seg {
-    fn distance_2(&self, p: &[f64; 2]) -> f64 {
-        let (c, _) = closest_on_segment(*p, self.a, self.b);
-        (c[0] - p[0]).powi(2) + (c[1] - p[1]).powi(2)
-    }
-}
-
-pub struct SnapIndex {
+pub(crate) struct SnapGrid {
     proj: LocalProjection,
-    tree: RTree<Seg>,
+    origin: [f64; 2],
+    nx: usize,
+    ny: usize,
 }
 
-impl SnapIndex {
-    pub fn build(g: &Graph) -> SnapIndex {
-        let bb = g.bbox();
+impl SnapGrid {
+    pub(crate) fn new(bb: Bbox) -> SnapGrid {
         let proj = LocalProjection::new((bb.min_lat + bb.max_lat) / 2.0);
-        let mut segs = Vec::new();
-        for e in 0..g.edge_count() as u32 {
-            let pts: Vec<[f64; 2]> = g
-                .edge_geometry(e)
-                .map(|(lat, lon, _)| proj.project(LatLon { lat, lon }))
-                .collect();
-            for (i, w) in pts.windows(2).enumerate() {
-                segs.push(Seg {
-                    a: w[0],
-                    b: w[1],
-                    edge: e,
-                    idx: i as u32,
-                });
-            }
-        }
-        SnapIndex {
+        let origin = proj.project(LatLon {
+            lat: bb.min_lat,
+            lon: bb.min_lon,
+        });
+        let far = proj.project(LatLon {
+            lat: bb.max_lat,
+            lon: bb.max_lon,
+        });
+        let n = |d: f64| (d / CELL_M) as usize + 1;
+        SnapGrid {
             proj,
-            tree: RTree::bulk_load(segs),
+            origin,
+            nx: n(far[0] - origin[0]),
+            ny: n(far[1] - origin[1]),
         }
     }
+
+    pub(crate) fn cells(&self) -> usize {
+        self.nx * self.ny
+    }
+
+    /// Projects a stored (f32) vertex.
+    pub(crate) fn xy(&self, lat: f32, lon: f32) -> [f64; 2] {
+        self.proj.project(LatLon {
+            lat: lat as f64,
+            lon: lon as f64,
+        })
+    }
+
+    /// Cell ids overlapping the projected box `lo..=hi`, clipped to the grid.
+    pub(crate) fn cells_in(&self, lo: [f64; 2], hi: [f64; 2]) -> impl Iterator<Item = usize> {
+        let span = |axis: usize, n: usize| -> Range<usize> {
+            let a = ((lo[axis] - self.origin[axis]) / CELL_M).floor().max(0.0);
+            let b = ((hi[axis] - self.origin[axis]) / CELL_M)
+                .floor()
+                .min(n as f64 - 1.0);
+            if a > b {
+                0..0
+            } else {
+                a as usize..b as usize + 1
+            }
+        };
+        let (xs, nx) = (span(0, self.nx), self.nx);
+        span(1, self.ny).flat_map(move |j| xs.clone().map(move |i| j * nx + i))
+    }
+}
+
+/// CSR over cells: `segs[first[c]..first[c + 1]]` are the global geometry
+/// indices of the first vertex of each segment whose bbox touches cell `c`.
+pub(crate) fn build_snap_index<'a>(
+    grid: &SnapGrid,
+    edges: impl Iterator<Item = &'a [(f64, f64, f32)]>,
+) -> (Vec<u32>, Vec<u32>) {
+    let mut pairs: Vec<(u32, u32)> = Vec::new();
+    let mut gi = 0u32;
+    for geom in edges {
+        let pts: Vec<[f64; 2]> = geom
+            .iter()
+            .map(|v| grid.xy(v.0 as f32, v.1 as f32))
+            .collect();
+        for (k, w) in pts.windows(2).enumerate() {
+            let lo = [w[0][0].min(w[1][0]), w[0][1].min(w[1][1])];
+            let hi = [w[0][0].max(w[1][0]), w[0][1].max(w[1][1])];
+            pairs.extend(grid.cells_in(lo, hi).map(|c| (c as u32, gi + k as u32)));
+        }
+        gi += geom.len() as u32;
+    }
+    pairs.sort_unstable();
+    let mut first = vec![0u32; grid.cells() + 1];
+    for &(c, _) in &pairs {
+        first[c as usize + 1] += 1;
+    }
+    for c in 0..grid.cells() {
+        first[c + 1] += first[c];
+    }
+    (first, pairs.into_iter().map(|(_, s)| s).collect())
 }
 
 impl Graph {
-    /// Build the index now (the server calls this at startup); otherwise built on first snap.
-    pub fn warm_snap_index(&self) {
-        self.snap_index.get_or_init(|| SnapIndex::build(self));
-    }
-
     pub fn snap(&self, p: LatLon) -> Option<Snap> {
         self.snap_within(p, SNAP_LIMIT_M)
     }
@@ -91,17 +127,30 @@ impl Graph {
         max_m: f32,
         accept: impl Fn(u32) -> bool,
     ) -> Option<Snap> {
-        let index = self.snap_index.get_or_init(|| SnapIndex::build(self));
-        let q = index.proj.project(p);
-        let cutoff = (max_m as f64 * 1.05).powi(2);
-        let (seg, _) = index
-            .tree
-            .nearest_neighbor_iter_with_distance_2(&q)
-            .take_while(|(_, d2)| *d2 <= cutoff)
-            .find(|(s, _)| accept(s.edge))?;
+        let grid = self.snap_grid();
+        let (first, segs) = self.snap_cells();
+        let q = grid.proj.project(p);
+        // The projection drifts from true metres away from its reference latitude.
+        let r = max_m as f64 * 1.05;
+        let mut best: Option<(f64, u32, u32)> = None; // (dist², geometry index, edge)
+        for c in grid.cells_in([q[0] - r, q[1] - r], [q[0] + r, q[1] + r]) {
+            for &gi in &segs[first[c] as usize..first[c + 1] as usize] {
+                let (c, _) = closest_on_segment(q, self.geom_xy(gi), self.geom_xy(gi + 1));
+                let d2 = (c[0] - q[0]).powi(2) + (c[1] - q[1]).powi(2);
+                if d2 > r * r || best.is_some_and(|(b, _, _)| d2 >= b) {
+                    continue;
+                }
+                let (e, _) = self.geom_edge(gi);
+                if accept(e) {
+                    best = Some((d2, gi, e));
+                }
+            }
+        }
+        let (_, gi, edge) = best?;
+        let (_, idx) = self.geom_edge(gi);
 
-        let (c, st) = closest_on_segment(q, seg.a, seg.b);
-        let pos = index.proj.unproject(c);
+        let (c, st) = closest_on_segment(q, self.geom_xy(gi), self.geom_xy(gi + 1));
+        let pos = grid.proj.unproject(c);
         let dist = haversine_m(p, pos);
         if dist > max_m as f64 {
             return None;
@@ -110,14 +159,14 @@ impl Graph {
         // Haversine length along the geometry up to the snapped point, over the total.
         let mut prev: Option<LatLon> = None;
         let (mut before, mut total) = (0.0, 0.0);
-        for (i, (lat, lon, _)) in self.edge_geometry(seg.edge).enumerate() {
+        for (i, (lat, lon, _)) in self.edge_geometry(edge).enumerate() {
             let cur = LatLon { lat, lon };
             if let Some(pv) = prev {
                 let l = haversine_m(pv, cur);
                 // Segment `idx` joins vertices idx and idx + 1.
-                if i - 1 < seg.idx as usize {
+                if i - 1 < idx as usize {
                     before += l;
-                } else if i - 1 == seg.idx as usize {
+                } else if i - 1 == idx as usize {
                     before += l * st;
                 }
                 total += l;
@@ -130,7 +179,7 @@ impl Graph {
             0.0
         };
         Some(Snap {
-            edge: seg.edge,
+            edge,
             t: t as f32,
             pos,
             dist_m: dist as f32,

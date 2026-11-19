@@ -155,6 +155,7 @@ Sections are struct-of-arrays, each 8-byte aligned, read zero-copy.
 | Geometry | `f32 lat`, `f32 lon` pairs, referenced by edges |
 | Geometry Z | `i16 elev_m` per geometry vertex, parallel to Geometry |
 | Anchors | `f32 lat`, `f32 lon`, `u8 kind`, `f32 weight` |
+| Snap index (D50) | `u32 cell_first[cells+1]`, `u32 seg[k]` = global geometry index of a segment's first vertex |
 
 Each edge is stored once. Reverse traversal swaps gain and loss and inverts the
 slope sign; other attributes are symmetric. `official_category` is 0 for none
@@ -171,6 +172,13 @@ traversal reads the array backwards. The DEM is sampled every ~10 m and the
 grade measured over ~25 m windows. Bridges and tunnels interpolate elevation
 between their endpoints instead of sampling the ground. `highway` is the OSM
 highway class (D31).
+
+The snap index is a fixed grid of 250 m cells in the local projection at the
+bbox mid-latitude. `cells` follows from the header bbox, and `k` (header bytes
+52..56) counts entries; a segment is listed in every cell its bbox touches. A
+segment's edge is found by binary search over `geom_start`. The importer
+builds it, so the server maps it like any other section and starts without
+building a spatial index.
 
 Storing Z per geometry vertex makes elevation profiles exact without shipping a
 DEM to the runtime; it costs 2 bytes per vertex.
