@@ -1,7 +1,7 @@
 //! Land cover from the OSM polygons (forest share, urban class) and anchors
 //! (peaks, viewpoints).
 
-use geo::Polygon;
+use geo::{GeodesicArea, Polygon};
 use rayon::prelude::*;
 use rstar::primitives::{GeomWithData, Rectangle};
 use rstar::{RTree, AABB};
@@ -12,7 +12,9 @@ use super::{sample_lv95, Seg};
 use crate::graph::{AnchorKind, GraphWriter};
 
 const SAMPLE_SPACING_M: f64 = 25.0;
-const URBAN_NEAR_M: f64 = 200.0;
+const URBAN_NEAR_M: f64 = 50.0;
+/// Settlement areas smaller than this (single farmsteads) don't count as built-up (D77).
+const URBAN_MIN_AREA_M2: f64 = 10_000.0;
 
 /// Polygons in LV95: their bboxes and all their ring segments, each tagged
 /// with the polygon index. Containment is a ray cast over the segments the
@@ -80,12 +82,18 @@ impl PolyIndex {
 }
 
 /// forest_pct = share (0..=100) of edge sample points (every ~25 m, endpoints included) inside a forest
-/// polygon. urban = 2 if a sample is inside a residential polygon, else 1 if any sample is within 200 m
-/// of one, else 0 (max over samples). R-tree of polygon bboxes + geo containment; prepared geometry or
+/// polygon. urban = 2 if a sample is inside a settlement polygon of at least 1 ha, else 1 if any sample
+/// is within 50 m of one, else 0 (max over samples). R-tree of polygon bboxes + geo containment; prepared geometry or
 /// equivalent so a CH-wide run is minutes, not hours.
 pub fn apply_landcover(w: &mut GraphWriter, extras: &OsmExtras) {
     let forest = PolyIndex::new(&extras.forest);
-    let urban = PolyIndex::new(&extras.residential);
+    let towns: Vec<Polygon<f64>> = extras
+        .residential
+        .iter()
+        .filter(|p| p.geodesic_area_unsigned() >= URBAN_MIN_AREA_M2)
+        .cloned()
+        .collect();
+    let urban = PolyIndex::new(&towns);
     let writer = &*w;
     let out: Vec<(u8, u8)> = (0..writer.edge_count() as u32)
         .into_par_iter()

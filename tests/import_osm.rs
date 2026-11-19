@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use geo::GeodesicArea;
 use trail_calc::graph::{flags, Bbox, Graph, GraphWriter, Highway, Surface};
 use trail_calc::import::osm::import_osm;
 
@@ -101,12 +100,10 @@ fn forest_multipolygon_with_hole() {
 }
 
 #[test]
-fn place_node_becomes_buffered_polygon() {
+fn place_node_is_not_a_settlement() {
+    // D77: a hamlet/village/town node used to become a 300 m–2 km circle; only mapped areas count now.
     let (_w, _stats, extras) = import_osm(&fixture("forest_mp.osm"), None, 0).unwrap();
-    assert_eq!(extras.residential.len(), 1);
-    let area = extras.residential[0].geodesic_area_unsigned();
-    let want = std::f64::consts::PI * 300.0 * 300.0;
-    assert!((area - want).abs() / want < 0.05, "area {area} vs {want}");
+    assert!(extras.residential.is_empty());
 }
 
 #[test]

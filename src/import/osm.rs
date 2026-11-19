@@ -5,13 +5,12 @@
 //! relations → ways → nodes, which is the order a PBF stores them in.
 
 use std::collections::HashMap;
-use std::f64::consts::TAU;
 use std::path::Path;
 
 use geo::{BoundingRect, Intersects, LineString, Point, Polygon};
 
 use super::ImportError;
-use crate::geodesy::{polyline_length_m, LocalProjection};
+use crate::geodesy::polyline_length_m;
 use crate::graph::{flags, Bbox, EdgeAttrs, GraphWriter, Highway, LatLon, Surface};
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -27,7 +26,7 @@ pub struct ImportStats {
 pub struct OsmExtras {
     /// x = lon, y = lat; holes kept as interiors.
     pub forest: Vec<Polygon<f64>>,
-    /// Settlement polygons plus buffered place nodes.
+    /// Settlement polygons (landuse residential, commercial, industrial, retail; D77).
     pub residential: Vec<Polygon<f64>>,
     /// `natural=peak` with `ele` (1.0 when missing or unparseable).
     pub peaks: Vec<(LatLon, f32)>,
@@ -343,7 +342,7 @@ fn run(
     ids.shrink_to_fit();
     let mut pos = vec![[f32::NAN; 2]; ids.len()];
 
-    // Pass 3: node coordinates, peaks, viewpoints, place nodes.
+    // Pass 3: node coordinates, peaks, viewpoints.
     pass(&mut |e| {
         let Elem::Node { id, lat, lon, tags } = e else {
             return;
@@ -364,13 +363,6 @@ fn run(
         if tag(&tags, "tourism") == Some("viewpoint") {
             extras.viewpoints.push(p);
         }
-        let radius_m = match tag(&tags, "place") {
-            Some("hamlet" | "village") => 300.0,
-            Some("town") => 1000.0,
-            Some("city") => 2000.0,
-            _ => return,
-        };
-        extras.residential.push(circle(p, radius_m));
     })?;
 
     let resolve = |id: i64| ids.binary_search(&id).ok().filter(|&i| !pos[i][0].is_nan());
@@ -562,16 +554,3 @@ fn join_rings(mut parts: Vec<Vec<i64>>, failed: &mut u64) -> Vec<Vec<i64>> {
     rings
 }
 
-/// A 32-vertex circle of `radius_m` around `c`, as a lon/lat polygon.
-fn circle(c: LatLon, radius_m: f64) -> Polygon<f64> {
-    let proj = LocalProjection::new(c.lat);
-    let [x, y] = proj.project(c);
-    let pts: Vec<(f64, f64)> = (0..32)
-        .map(|k| {
-            let a = k as f64 * TAU / 32.0;
-            let p = proj.unproject([x + radius_m * a.cos(), y + radius_m * a.sin()]);
-            (p.lon, p.lat)
-        })
-        .collect();
-    Polygon::new(LineString::from(pts), vec![])
-}

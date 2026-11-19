@@ -179,23 +179,37 @@ fn forest_urban_and_anchors_from_polygons() {
 }
 
 #[test]
-fn urban_within_200m_is_class_1() {
+fn urban_within_50m_is_class_1() {
     let (e0, n0) = (2_600_000.0, 1_200_000.0);
     let at = |de: f64, dn: f64| lv95_to_wgs84(e0 + de, n0 + dn);
-    let mut w = one_edge(&[at(0.0, 0.0), at(500.0, 0.0)]);
-    // A residential block 100 m north of the edge, and one 1 km south.
+    // A 500 × 200 m residential block (10 ha) starting `dn` meters north of the edge.
     let block = |dn: f64| {
         let (s, wst) = at(0.0, dn);
         let (n, est) = at(500.0, dn + 200.0);
         rect(s, wst, n, est)
     };
-    let extras = OsmExtras {
-        residential: vec![block(100.0), block(-1200.0)],
-        ..Default::default()
-    };
-    apply_landcover(&mut w, &extras);
-    assert_eq!(w.edge_attrs(0).urban, 1);
-    assert_eq!(w.edge_attrs(0).forest_pct, 0);
+    for (dn, want) in [(30.0, 1), (100.0, 0)] {
+        let mut w = one_edge(&[at(0.0, 0.0), at(500.0, 0.0)]);
+        let extras = OsmExtras { residential: vec![block(dn)], ..Default::default() };
+        apply_landcover(&mut w, &extras);
+        assert_eq!(w.edge_attrs(0).urban, want, "block {dn} m away");
+        assert_eq!(w.edge_attrs(0).forest_pct, 0);
+    }
+}
+
+#[test]
+fn settlement_under_one_hectare_is_ignored() {
+    let (e0, n0) = (2_600_000.0, 1_200_000.0);
+    let at = |de: f64, dn: f64| lv95_to_wgs84(e0 + de, n0 + dn);
+    // A 60 × 60 m farmstead (0.36 ha) the edge runs through, and a 120 × 120 m (1.44 ha) one.
+    for (side, want) in [(60.0, 0), (120.0, 2)] {
+        let mut w = one_edge(&[at(0.0, 0.0), at(500.0, 0.0)]);
+        let (s, wst) = at(200.0, -side / 2.0);
+        let (n, est) = at(200.0 + side, side / 2.0);
+        let extras = OsmExtras { residential: vec![rect(s, wst, n, est)], ..Default::default() };
+        apply_landcover(&mut w, &extras);
+        assert_eq!(w.edge_attrs(0).urban, want, "{side} m square");
+    }
 }
 
 #[test]
