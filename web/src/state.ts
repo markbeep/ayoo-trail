@@ -6,7 +6,7 @@ import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
 import type { BreakdownKey, LatLon, Route, Weights } from "./routes/types";
 import { ApiError, generate, routeVia } from "./api";
 
-export type NumericWeight = Exclude<keyof Weights, "uphill" | "downhill" | "climb_pressure">;
+export type NumericWeight = Exclude<keyof Weights, "uphill" | "downhill" | "technical" | "climb_pressure">;
 
 export type Hilliness = "gentle" | "hilly" | "mountain";
 export const HILLINESS: Record<Hilliness, { label: string; mPerKm: number }> = {
@@ -16,7 +16,7 @@ export const HILLINESS: Record<Hilliness, { label: string; mPerKm: number }> = {
 };
 export const DISTANCE_PRESETS_KM = [10, 15, 21] as const;
 
-export const DEFAULT_WEIGHTS: Weights = { slope: 1, uphill: 0, downhill: -1, surface: 1, tech: 1, official: 1, forest: 1, urban: 1 };
+export const DEFAULT_WEIGHTS: Weights = { slope: 1, uphill: 0, downhill: -1, surface: 1, tech: 1, technical: -1, official: 1, forest: 1, urban: 1 };
 
 /** Slider position 0–1 ↔ weight exponent 0–4, so the default (1) sits mid-track (D51). */
 export const MAX_WEIGHT = 4;
@@ -38,7 +38,7 @@ export const FACTORS: Record<BreakdownKey, { label: string; question: string; we
   official: { label: "Marked trails", weight: "official", question: "How much should marked hiking trails count?" },
   surface: { label: "Surface", weight: "surface", question: "How much should asphalt and paved paths be avoided?" },
   slope: { label: "Gradient", weight: "slope", question: "How steep do you like your climbs and descents? This is about steepness, not how much you climb." },
-  tech: { label: "Technical terrain", weight: "tech", question: "How much should technical trails count against a loop?" },
+  tech: { label: "Technical terrain", weight: "tech", question: "How hard may trails get, and do you want technical ones?" },
   forest: { label: "Forest", weight: "forest", question: "How much do you want to run through forest?" },
   urban: { label: "Away from towns", weight: "urban", question: "How much should villages and towns be avoided?" },
 };
@@ -68,6 +68,8 @@ export const [distanceKm, setDistanceKm] = createSignal(15);
 export const [climb, setClimbRaw] = createSignal<Climb>({ preset: "hilly" });
 export const [strictness, setStrictnessRaw] = createSignal(0.8);
 export const [weights, setWeights] = createSignal<Weights>({ ...DEFAULT_WEIGHTS });
+/** Hardest SAC grade a loop may use, T1–T6 (D81). */
+export const [maxSac, setMaxSacRaw] = createSignal(3);
 export const [baseMap, setBaseMapRaw] = createSignal<BaseMapId>(stored.baseMap ?? DEFAULT_BASE_MAP);
 export const [overlays, setOverlaysRaw] = createSignal<readonly string[]>(stored.overlays ?? DEFAULT_OVERLAYS);
 export const [routes, setRoutes] = createSignal<Route[]>([]);
@@ -121,7 +123,11 @@ function settingsChanged() {
   setRefreshing(true); // fade the old numbers right away, not only once the request starts
   liveTimer = setTimeout(() => void findRoutes({ keepOpen: true }), 250);
 }
-export function setHill(k: "uphill" | "downhill", v: number) {
+export function setMaxSac(v: number) {
+  setMaxSacRaw(v);
+  settingsChanged();
+}
+export function setHill(k: "uphill" | "downhill" | "technical", v: number) {
   setWeights((w) => ({ ...w, [k]: v }));
   settingsChanged();
 }
@@ -150,7 +156,7 @@ export const MAX_WAYPOINTS = 20;
 const withinDistance = (m: number) => Math.abs(m - distanceKm() * 1000) / (distanceKm() * 1000) <= 0.1;
 /** Re-route a loop through its waypoints under the current weights and its own climb pressure. */
 async function reroute(r: Route, wps: LatLon[], id: string): Promise<Route> {
-  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, climbTargetM());
+  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, maxSac(), climbTargetM());
   return { ...next, id, climb_pressure: r.climb_pressure, distance_met: withinDistance(next.distance_m) };
 }
 const replaceRoute = (id: string, r: Route) => setRoutes((rs) => rs.map((x) => (x.id === id ? r : x)));
@@ -212,7 +218,7 @@ export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
   setErrorMsg(null);
   setPickingStart(false);
   try {
-    const rs = await generate(start(), distanceKm() * 1000, { target_m: climbTargetM(), strictness: strictness() }, weights());
+    const rs = await generate(start(), distanceKm() * 1000, { target_m: climbTargetM(), strictness: strictness() }, weights(), maxSac());
     if (mine !== seq) return; // a newer request superseded this one
     if (opts.keepOpen) {
       // Edited loops keep their points and re-route under the new settings; Reset goes to the fresh loop.

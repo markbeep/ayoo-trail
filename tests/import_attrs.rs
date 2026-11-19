@@ -190,7 +190,10 @@ fn urban_within_50m_is_class_1() {
     };
     for (dn, want) in [(30.0, 1), (100.0, 0)] {
         let mut w = one_edge(&[at(0.0, 0.0), at(500.0, 0.0)]);
-        let extras = OsmExtras { residential: vec![block(dn)], ..Default::default() };
+        let extras = OsmExtras {
+            residential: vec![block(dn)],
+            ..Default::default()
+        };
         apply_landcover(&mut w, &extras);
         assert_eq!(w.edge_attrs(0).urban, want, "block {dn} m away");
         assert_eq!(w.edge_attrs(0).forest_pct, 0);
@@ -206,7 +209,10 @@ fn settlement_under_one_hectare_is_ignored() {
         let mut w = one_edge(&[at(0.0, 0.0), at(500.0, 0.0)]);
         let (s, wst) = at(200.0, -side / 2.0);
         let (n, est) = at(200.0 + side, side / 2.0);
-        let extras = OsmExtras { residential: vec![rect(s, wst, n, est)], ..Default::default() };
+        let extras = OsmExtras {
+            residential: vec![rect(s, wst, n, est)],
+            ..Default::default()
+        };
         apply_landcover(&mut w, &extras);
         assert_eq!(w.edge_attrs(0).urban, want, "{side} m square");
     }

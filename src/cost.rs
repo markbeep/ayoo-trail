@@ -27,7 +27,12 @@ pub const MAX_WEIGHT: f32 = 4.0;
 const CLIMB_DISCOUNT: f32 = 0.8;
 
 const SURFACE_FACTORS: [f32; 8] = [2.0, 1.5, 1.1, 1.0, 0.95, 1.1, 1.2, 1.4];
-const TECH_FACTORS: [f32; 5] = [1.0, 1.05, 1.15, 1.4, 1.3];
+/// T1, T2, T3, T4+, untagged, for avoid / any / seek (D81). Untagged stays penalized either way.
+const TECH_FACTORS: [[f32; 5]; 3] = [
+    [1.0, 1.05, 1.15, 1.4, 1.3], // avoid (D31)
+    [1.0, 1.0, 1.0, 1.0, 1.3],   // any
+    [1.4, 1.15, 1.05, 1.0, 1.3], // seek
+];
 const OFFICIAL_FACTORS: [f32; 2] = [0.7, 1.0];
 const FOREST_FACTORS: [f32; 2] = [0.9, 1.0];
 const URBAN_FACTORS: [f32; 3] = [1.0, 1.3, 2.0];
@@ -42,6 +47,8 @@ pub struct Weights {
     pub downhill: f32,
     pub surface: f32,
     pub tech: f32,
+    /// -1 avoid harder grades, 0 grade doesn't matter, +1 seek them, interpolated (D81).
+    pub technical: f32,
     pub official: f32,
     pub forest: f32,
     pub urban: f32,
@@ -50,12 +57,13 @@ pub struct Weights {
 }
 
 impl Weights {
-    /// Every exponent at 1 and no climb pressure, keeping the uphill/downhill choice: the
+    /// Every exponent at 1 and no climb pressure, keeping the uphill/downhill/technical choice: the
     /// scale score bars use, so they show the route rather than how much a term matters (D73).
     pub fn unit(&self) -> Weights {
         Weights {
             uphill: self.uphill,
             downhill: self.downhill,
+            technical: self.technical,
             ..Weights::default()
         }
     }
@@ -69,6 +77,7 @@ impl Default for Weights {
             downhill: -1.0,
             surface: 1.0,
             tech: 1.0,
+            technical: -1.0,
             official: 1.0,
             forest: 1.0,
             urban: 1.0,
@@ -112,7 +121,9 @@ impl Default for Profile {
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum ProfileError {
-    #[error("weights must be finite: terms 0-4, uphill/downhill -1-1, climb_pressure 0-1")]
+    #[error(
+        "weights must be finite: terms 0-4, uphill/downhill/technical -1-1, climb_pressure 0-1"
+    )]
     WeightOutOfRange,
     #[error("max_sac must be between 1 and 6")]
     MaxSacOutOfRange,
@@ -140,6 +151,7 @@ impl Profile {
         if !ws.iter().all(|&v| ok(v, 0.0..=MAX_WEIGHT))
             || !ok(w.uphill, -1.0..=1.0)
             || !ok(w.downhill, -1.0..=1.0)
+            || !ok(w.technical, -1.0..=1.0)
             || !ok(w.climb_pressure, 0.0..=1.0)
         {
             return Err(ProfileError::WeightOutOfRange);
@@ -170,8 +182,8 @@ impl Profile {
     }
 }
 
-/// Row `any` blended toward `gentle` (h < 0) or `steep` (h > 0) by |h|.
-fn blend(rows: &[[f32; 4]; 3], h: f32) -> [f32; 4] {
+/// Row `any` blended toward the first row (h < 0) or the last (h > 0) by |h|.
+fn blend<const N: usize>(rows: &[[f32; N]; 3], h: f32) -> [f32; N] {
     let (to, t) = if h < 0.0 { (rows[0], -h) } else { (rows[2], h) };
     let t = t.min(1.0);
     std::array::from_fn(|i| rows[1][i] + (to[i] - rows[1][i]) * t)
@@ -195,12 +207,21 @@ fn weighted_slope(w: &Weights) -> [f32; GRADE_BANDS] {
     })
 }
 
+/// Smallest weighted tech factor reachable under a `max_sac` limit (T1 … the limit, D81).
+pub fn best_tech_factor(w: &Weights, max_sac: u8) -> f32 {
+    let row = blend(&TECH_FACTORS, w.technical);
+    row[..(max_sac.clamp(1, 4) as usize)]
+        .iter()
+        .map(|&f| weighted(f, w.tech))
+        .fold(f32::INFINITY, f32::min)
+}
+
 /// Smallest weighted factor each term can take under `w`.
 pub fn term_minima(w: &Weights) -> Breakdown {
     Breakdown {
         slope: weighted_slope(w).into_iter().fold(f32::INFINITY, f32::min),
         surface: min_weighted(&SURFACE_FACTORS, w.surface) as f32,
-        tech: min_weighted(&TECH_FACTORS, w.tech) as f32,
+        tech: min_weighted(&blend(&TECH_FACTORS, w.technical), w.tech) as f32,
         official: min_weighted(&OFFICIAL_FACTORS, w.official) as f32,
         forest: min_weighted(&FOREST_FACTORS, w.forest) as f32,
         urban: min_weighted(&URBAN_FACTORS, w.urban) as f32,
@@ -264,7 +285,7 @@ impl FactorTable {
         FactorTable {
             slope: weighted_slope(w),
             surface: SURFACE_FACTORS.map(|f| weighted(f, w.surface)),
-            tech: TECH_FACTORS.map(|f| weighted(f, w.tech)),
+            tech: blend(&TECH_FACTORS, w.technical).map(|f| weighted(f, w.tech)),
             official: OFFICIAL_FACTORS.map(|f| weighted(f, w.official)),
             forest: std::array::from_fn(|pct| {
                 weighted(

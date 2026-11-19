@@ -416,3 +416,49 @@ fn profile_json_defaults_and_validation() {
     .unwrap();
     assert_eq!(zero.validate(), Err(ProfileError::BadExclusion));
 }
+
+#[test]
+fn technical_preference_avoids_ignores_or_seeks_harder_grades() {
+    // D81: −1 avoid (the D31 table), 0 grade doesn't matter, +1 seek (its mirror); untagged stays 1.3.
+    let tech = |sac: u8, t: f32| {
+        let mut a = gravel();
+        a.sac = sac;
+        let w = Weights {
+            technical: t,
+            ..Weights::default()
+        };
+        edge_factors(&one_edge(1000.0, a), 0, F, &w).tech
+    };
+    let close = |a: f32, b: f32| (a - b).abs() < 1e-5;
+    assert!(close(tech(1, -1.0), 1.0) && close(tech(3, -1.0), 1.15) && close(tech(5, -1.0), 1.4));
+    assert!([1, 2, 3, 5].iter().all(|&s| close(tech(s, 0.0), 1.0)));
+    assert!(close(tech(1, 1.0), 1.4) && close(tech(3, 1.0), 1.05) && close(tech(5, 1.0), 1.0));
+    assert!(
+        tech(3, 1.0) < tech(1, 1.0),
+        "seeking makes T3 cheaper than T1"
+    );
+    assert_eq!(
+        Weights::default().technical,
+        -1.0,
+        "default loops unchanged"
+    );
+    let bad: Profile = serde_json::from_str(r#"{"weights":{"technical":1.5}}"#).unwrap();
+    assert_eq!(bad.validate(), Err(ProfileError::WeightOutOfRange));
+}
+
+#[test]
+fn best_tech_factor_respects_the_grade_limit() {
+    let seek = Weights {
+        technical: 1.0,
+        ..Weights::default()
+    };
+    assert!(
+        (best_tech_factor(&seek, 3) - 1.05).abs() < 1e-5,
+        "T3 is the best a T3 limit allows"
+    );
+    assert!((best_tech_factor(&seek, 6) - 1.0).abs() < 1e-5);
+    assert!(
+        (best_tech_factor(&Weights::default(), 3) - 1.0).abs() < 1e-5,
+        "avoiding: T1"
+    );
+}

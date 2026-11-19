@@ -6,7 +6,7 @@ import {
 } from "../state";
 import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
-import { ClimbSlider, HillsPanel, StrictnessSlider, WeightSlider } from "./Controls";
+import { ClimbSlider, HillsPanel, StrictnessSlider, TechPanel, WeightSlider } from "./Controls";
 import { downloadGpx } from "../routes/gpx";
 import { km, meters, score } from "../routes/format";
 import { ElevationProfile } from "./ElevationProfile";
@@ -106,7 +106,7 @@ export function RouteCard(props: { route: Route; name: string }) {
                 <div class="adjust">
                   <p><strong>{b.detail}.</strong> {f.question}</p>
                   <Show when={b.key === "climb"} fallback={
-                    <Show when={b.key === "slope"} fallback={<WeightSlider weight={f.weight!} />}>
+                    <Show when={b.key === "slope"} fallback={b.key === "tech" ? <TechPanel /> : <WeightSlider weight={f.weight!} />}>
                       <HillsPanel />
                     </Show>
                   }>

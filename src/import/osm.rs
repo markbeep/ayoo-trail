@@ -553,4 +553,3 @@ fn join_rings(mut parts: Vec<Vec<i64>>, failed: &mut u64) -> Vec<Vec<i64>> {
     }
     rings
 }
-

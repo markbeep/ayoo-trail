@@ -38,7 +38,7 @@ async function reroute(points: LatLon[], w: Weights) {
   }
   setDevBusy(true);
   try {
-    const route = await routeVia(points, w);
+    const route = await routeVia(points, w, 3);
     if (mine !== seq) return; // a newer request superseded this one
     setRoutes([route]);
     setSelectedId(route.id);

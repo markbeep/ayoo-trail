@@ -18,19 +18,19 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export const getHealth = () => call<Health>("/api/health");
 
 /** `climb_target_m` adds the Elevation bar and counts it in the score (D63). */
-export const routeVia = (waypoints: LatLon[], weights: Weights, climb_target_m: number | null = null) =>
+export const routeVia = (waypoints: LatLon[], weights: Weights, max_sac: number, climb_target_m: number | null = null) =>
   call<Route>("/api/route", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ waypoints, profile: { weights }, climb_target_m }),
+    body: JSON.stringify({ waypoints, profile: { weights, max_sac }, climb_target_m }),
   });
 
 /** `target_m: null` asks for as much climb as possible (D52). */
 export interface ClimbGoal { target_m: number | null; strictness: number }
 
-export const generate = (start: LatLon, distance_m: number, climb: ClimbGoal, weights: Weights) =>
+export const generate = (start: LatLon, distance_m: number, climb: ClimbGoal, weights: Weights, max_sac: number) =>
   call<{ routes: Route[] }>("/api/generate", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ start, distance_m, climb, profile: { weights } }),
+    body: JSON.stringify({ start, distance_m, climb, profile: { weights, max_sac } }),
   }).then((r) => r.routes);

@@ -440,10 +440,9 @@ button.layer:hover .swatch { box-shadow: inset 0 0 0 1px rgb(38 34 43 / .1), 0 0
 .slider-ends { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--muted); margin-top: -3px; }
 .hill-row .slider { margin-top: 2px; }
 .climb-slider { margin-top: 10px; }
-/* Climb notches (D78): each label centered under its notch; the last one (Max) right-aligned to the track end. */
+/* Notch labels (D78, D81): centered under their notch, flush with the track at either end. */
 .slider-marks { position: relative; height: 16px; margin-top: -3px; font-size: 12px; font-weight: 700; color: var(--muted); }
-.slider-marks span { position: absolute; left: var(--at); transform: translateX(-50%); white-space: nowrap; }
-.slider-marks span:last-child { transform: translateX(-100%); }
+.slider-marks span { position: absolute; left: var(--at); transform: translateX(var(--shift)); white-space: nowrap; }
 /* Numbers about to be replaced by a live refresh fade, so they don't read as the slider's effect (D75). */
 .route-card :is(.score, .bar) { transition: opacity .2s; }
 .route-card.refreshing :is(.score, .bar) { opacity: .35; }

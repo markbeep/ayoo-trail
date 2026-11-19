@@ -242,7 +242,12 @@ async fn generate_returns_loops_with_waypoints() {
     }
     // Best score first, ids in that order (D79).
     for (i, w) in routes.windows(2).enumerate() {
-        assert!(w[0]["score"].as_f64() >= w[1]["score"].as_f64(), "{} before {}", w[0]["score"], w[1]["score"]);
+        assert!(
+            w[0]["score"].as_f64() >= w[1]["score"].as_f64(),
+            "{} before {}",
+            w[0]["score"],
+            w[1]["score"]
+        );
         assert_eq!(w[0]["id"], format!("loop-{i}"));
     }
 }
@@ -375,7 +380,11 @@ fn weighted_score(v: &Value, w: &Value) -> f64 {
         num += wt * b["value"].as_f64().unwrap().max(1e-6).ln();
         den += wt;
     }
-    if den > 0.0 { 100.0 * (num / den).exp() } else { 100.0 }
+    if den > 0.0 {
+        100.0 * (num / den).exp()
+    } else {
+        100.0
+    }
 }
 
 #[tokio::test]
@@ -390,6 +399,9 @@ async fn score_follows_the_users_weights() {
         let (status, v) = post(Some(graph()), body).await;
         assert_eq!(status, StatusCode::OK, "{v}");
         let s = v["score"].as_f64().unwrap();
-        assert!((s - weighted_score(&v, &w)).abs() < 0.05, "{s} for {w}: {v}");
+        assert!(
+            (s - weighted_score(&v, &w)).abs() < 0.05,
+            "{s} for {w}: {v}"
+        );
     }
 }

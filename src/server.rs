@@ -15,7 +15,10 @@ use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use crate::cost::{climb_match, term_minima, traversable, Profile, ProfileError, Weights};
+use crate::cost::{
+    best_tech_factor, climb_match, term_minima, traversable, Breakdown, Profile, ProfileError,
+    Weights,
+};
 use crate::generate::{generate, ClimbGoal, GenerateError, GenerateRequest};
 use crate::graph::{Graph, LatLon};
 use crate::route::{
@@ -287,7 +290,17 @@ fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
     let target = req.climb.and_then(|c| c.target_m).filter(|m| *m > 0.0);
     let routes: Vec<_> = routes
         .iter()
-        .map(|r| route_json(g, &r.route, &r.waypoints, &r.profile, target, "", r.distance_met))
+        .map(|r| {
+            route_json(
+                g,
+                &r.route,
+                &r.waypoints,
+                &r.profile,
+                target,
+                "",
+                r.distance_met,
+            )
+        })
         .collect();
     Ok(json!({ "routes": best_first(routes) }))
 }
@@ -304,7 +317,12 @@ fn best_first(mut routes: Vec<Value>) -> Vec<Value> {
 
 /// Per-term score items: 1 means the route hit the best factor, on the unit-weight scale (D73).
 fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value {
-    let (best, mean) = (term_minima(&p.weights.unit()), s.breakdown);
+    let unit = p.weights.unit();
+    let best = Breakdown {
+        tech: best_tech_factor(&unit, p.max_sac),
+        ..term_minima(&unit)
+    };
+    let mean = s.breakdown;
     let value = |b: f32, m: f32| if m <= b { 1.0 } else { (b / m).clamp(0.0, 1.0) };
     let km = |m: f64| format!("{:.1} km", m / 1000.0);
     let surface = &s.surface_m;
@@ -394,7 +412,22 @@ mod tests {
     fn best_first_sorts_by_score_and_renames() {
         let r = |s: f64| json!({"id": "", "score": s});
         let out = best_first(vec![r(70.0), r(88.0), r(80.0)]);
-        let got: Vec<_> = out.iter().map(|v| (v["id"].as_str().unwrap().to_string(), v["score"].as_f64().unwrap())).collect();
-        assert_eq!(got, [("loop-0".into(), 88.0), ("loop-1".into(), 80.0), ("loop-2".into(), 70.0)]);
+        let got: Vec<_> = out
+            .iter()
+            .map(|v| {
+                (
+                    v["id"].as_str().unwrap().to_string(),
+                    v["score"].as_f64().unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("loop-0".into(), 88.0),
+                ("loop-1".into(), 80.0),
+                ("loop-2".into(), 70.0)
+            ]
+        );
     }
 }

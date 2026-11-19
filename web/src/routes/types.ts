@@ -20,6 +20,8 @@ export interface Weights {
   downhill: number;
   surface: number;
   tech: number;
+  /** −1 avoid harder grades … 0 any … +1 seek them (D81). */
+  technical: number;
   official: number;
   forest: number;
   urban: number;

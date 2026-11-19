@@ -2,7 +2,7 @@
 // runs once per gesture.
 import { createSignal, For, Show } from "solid-js";
 import {
-  CLIMB_STEP_M, FACTORS, HILLINESS, climbMaxM, climbTargetM, distanceKm, positionOf, setClimb, setHill,
+  CLIMB_STEP_M, FACTORS, HILLINESS, climbMaxM, maxSac, setMaxSac, climbTargetM, distanceKm, positionOf, setClimb, setHill,
   setStrictness, setWeight, strength, strictness, weightAt, weights, type Climb, type Hilliness, type NumericWeight,
 } from "../state";
 
@@ -33,7 +33,7 @@ export function Slider(props: {
       </div>
       <Show when={props.marks}>{(marks) => (
         <div class="slider-marks" aria-hidden="true">
-          <For each={marks()}>{(m) => <span style={{ "--at": `${m.at * 100}%` }}>{m.label}</span>}</For>
+          <For each={marks()}>{(m) => <span style={{ "--at": `${m.at * 100}%`, "--shift": m.at <= 0 ? "0" : m.at >= 1 ? "-100%" : "-50%" }}>{m.label}</span>}</For>
         </div>
       )}</Show>
       <Show when={props.ends}>{(ends) => (
@@ -82,6 +82,42 @@ export function HillsPanel() {
       <div class="hill-row">
         <span class="hill-label">Counts</span>
         <WeightSlider weight="slope" />
+      </div>
+    </>
+  );
+}
+
+const SAC_LABELS = ["T1", "T2", "T3", "T4", "T5", "T6"];
+const SAC_NAMES = ["T1 hiking", "T2 mountain hiking", "T3 demanding mountain hiking", "T4 alpine hiking", "T5 demanding alpine hiking", "T6 difficult alpine hiking"];
+const techWord = (t: number) => (t < -0.66 ? "Avoid" : t < -0.2 ? "Rather avoid" : t <= 0.2 ? "Don't mind" : t <= 0.66 ? "Rather seek" : "Seek out");
+
+/** The Technical terrain adjust panel (D81): a hard grade limit, then avoid … seek below it, then how much it counts. */
+export function TechPanel() {
+  const at = (sac: number) => (sac - 1) / 5;
+  const toSac = (p: number) => Math.round(p * 5) + 1;
+  return (
+    <>
+      <div class="hill-row">
+        <span class="hill-label">Hardest trail</span>
+        <Slider
+          label="Hardest trail" value={at(maxSac())}
+          marks={SAC_LABELS.map((label, i) => ({ at: at(i + 1), label }))}
+          text={(p) => SAC_NAMES[toSac(p) - 1]!}
+          onCommit={(p) => setMaxSac(toSac(p))}
+        />
+      </div>
+      <div class="hill-row">
+        <span class="hill-label">Technical trails</span>
+        <Slider
+          label="Technical trails" value={(weights().technical + 1) / 2} notch={0.5}
+          text={(t) => techWord(t * 2 - 1)}
+          ends={["Avoid", "Seek out"]}
+          onCommit={(t) => setHill("technical", Math.round((t * 2 - 1) * 20) / 20)}
+        />
+      </div>
+      <div class="hill-row">
+        <span class="hill-label">Counts</span>
+        <WeightSlider weight="tech" />
       </div>
     </>
   );
