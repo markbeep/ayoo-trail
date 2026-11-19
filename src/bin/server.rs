@@ -1,12 +1,12 @@
 //! `trail-calc-server`: serves the API and the static client.
 
-use trail_calc::graph::Graph;
-use trail_calc::server::{app, ServerConfig};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing_subscriber::EnvFilter;
+use trail_calc::graph::Graph;
+use trail_calc::server::{app, ServerConfig};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -33,6 +33,7 @@ async fn main() -> std::io::Result<()> {
         let g = Graph::open(&graph_path).map_err(|e| {
             std::io::Error::other(format!("cannot open {}: {e}", graph_path.display()))
         })?;
+        g.main_component(); // label components now, not on the first request
         tracing::info!(
             nodes = g.node_count(),
             edges = g.edge_count(),
@@ -50,8 +51,9 @@ async fn main() -> std::io::Result<()> {
     axum::serve(listener, app(ServerConfig { static_dir, graph }))
         .with_graceful_shutdown(async {
             // Ctrl-C locally; SIGTERM is how Docker and Kubernetes stop the container.
-            let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("install SIGTERM handler");
+            let mut term =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("install SIGTERM handler");
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {}
                 _ = term.recv() => {}

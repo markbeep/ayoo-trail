@@ -1,9 +1,9 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use trail_calc::server::{app, ServerConfig};
 use std::path::PathBuf;
 use tower::ServiceExt;
+use trail_calc::server::{app, ServerConfig};
 
 fn config(static_dir: PathBuf) -> ServerConfig {
     ServerConfig {
@@ -15,11 +15,7 @@ fn config(static_dir: PathBuf) -> ServerConfig {
 fn fixture_dist() -> PathBuf {
     let dir = std::env::temp_dir().join(format!("trail-calc-dist-{}", std::process::id()));
     std::fs::create_dir_all(dir.join("assets")).unwrap();
-    std::fs::write(
-        dir.join("index.html"),
-        "<!doctype html><title>ayoo</title>",
-    )
-    .unwrap();
+    std::fs::write(dir.join("index.html"), "<!doctype html><title>ayoo</title>").unwrap();
     std::fs::write(dir.join("assets/app.js"), "console.log(1)").unwrap();
     dir
 }

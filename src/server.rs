@@ -21,7 +21,7 @@ use crate::graph::{Graph, LatLon};
 use crate::route::{
     route_cost_per_m, route_geometry, route_stats, route_term_steps, route_via, Route, RouteStats,
 };
-use crate::snap::SNAP_LIMIT_M;
+use crate::snap::{Snap, SNAP_LIMIT_M};
 
 /// Runtime configuration for [`app`].
 #[derive(Clone)]
@@ -126,9 +126,19 @@ fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
     }
     check_profile(&profile)?;
 
-    let mut snaps = Vec::with_capacity(waypoints.len());
+    let mut snaps: Vec<Snap> = Vec::with_capacity(waypoints.len());
     for (i, &p) in waypoints.iter().enumerate() {
-        let snap = g.snap_filtered(p, SNAP_LIMIT_M, |e| traversable(g, e, &profile));
+        let ok = |e| traversable(g, e, &profile);
+        // Later waypoints prefer the first one's network; one on an island can't be reached,
+        // and A* would only find that out after exploring the whole graph.
+        let snap = match snaps.first() {
+            None => g.snap_start(p, SNAP_LIMIT_M, ok),
+            Some(s0) => {
+                let home = g.edge_component(s0.edge);
+                g.snap_filtered(p, SNAP_LIMIT_M, |e| ok(e) && g.edge_component(e) == home)
+                    .or_else(|| g.snap_filtered(p, SNAP_LIMIT_M, ok))
+            }
+        };
         snaps.push(snap.ok_or_else(|| {
             let n = i + 1;
             unprocessable(&if g.snap(p).is_some() {
@@ -139,8 +149,14 @@ fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
         })?);
     }
 
-    let r =
-        route_via(g, &profile, &snaps).ok_or_else(|| unprocessable("no path between waypoints"))?;
+    let no_path = || unprocessable("no path between waypoints");
+    if snaps
+        .iter()
+        .any(|s| g.edge_component(s.edge) != g.edge_component(snaps[0].edge))
+    {
+        return Err(no_path());
+    }
+    let r = route_via(g, &profile, &snaps).ok_or_else(no_path)?;
     if r.distance_m < 1.0 {
         return Err(unprocessable("waypoints are too close together"));
     }

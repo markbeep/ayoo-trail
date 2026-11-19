@@ -6,6 +6,8 @@ use std::process::ExitCode;
 use std::time::{Instant, UNIX_EPOCH};
 
 use clap::{Parser, ValueEnum};
+use tracing::info;
+use tracing_subscriber::EnvFilter;
 use trail_calc::graph::{flags, AnchorKind, Graph, Surface, GRADE_BANDS};
 use trail_calc::import::alti3d::Alti3dTiles;
 use trail_calc::import::ch1903::wgs84_to_lv95;
@@ -14,8 +16,6 @@ use trail_calc::import::landcover::{apply_landcover, collect_anchors};
 use trail_calc::import::official::{apply_official, read_official_gpkg, OFFICIAL_TOLERANCE_M};
 use trail_calc::import::osm::import_osm;
 use trail_calc::import::region;
-use tracing::info;
-use tracing_subscriber::EnvFilter;
 
 #[derive(Clone, Copy, ValueEnum)]
 enum DemSource {

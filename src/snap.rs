@@ -120,6 +120,14 @@ impl Graph {
         self.snap_filtered(p, max_m, |_| true)
     }
 
+    /// Like `snap_filtered`, but on the main network when it is within `max_m`, so a start
+    /// beside station stairs or a courtyard path doesn't land on an island. Else any component.
+    pub fn snap_start(&self, p: LatLon, max_m: f32, accept: impl Fn(u32) -> bool) -> Option<Snap> {
+        let main = self.main_component();
+        self.snap_filtered(p, max_m, |e| accept(e) && self.edge_component(e) == main)
+            .or_else(|| self.snap_filtered(p, max_m, accept))
+    }
+
     /// Nearest edge within max_m for which `accept(edge)` is true (e.g. traversable for a profile).
     pub fn snap_filtered(
         &self,

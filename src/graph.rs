@@ -658,6 +658,8 @@ pub struct Graph {
     bbox: Bbox,
     dem_source: u8,
     anchors: OnceLock<Vec<Anchor>>,
+    /// Connected-component id per node and the id of the largest component.
+    components: OnceLock<(Vec<u32>, u32)>,
     snap_grid: SnapGrid,
 }
 
@@ -731,6 +733,7 @@ impl Graph {
             bbox,
             dem_source,
             anchors: OnceLock::new(),
+            components: OnceLock::new(),
             snap_grid,
         };
         g.validate()?;
@@ -916,6 +919,50 @@ impl Graph {
                 Direction::Forward
             };
             (v >> 1, dir)
+        })
+    }
+
+    /// Connected component of an edge, ignoring profiles. Islands (station stairs, courtyards)
+    /// can't be reached from the main network, and A* only gives up on one after exploring
+    /// everything reachable, so snaps stay inside the start's component.
+    pub fn edge_component(&self, e: u32) -> u32 {
+        self.components().0[self.edge_from(e) as usize]
+    }
+
+    /// The largest connected component (the main network).
+    pub fn main_component(&self) -> u32 {
+        self.components().1
+    }
+
+    /// Union-find over all edges, once (~0.1 s on the CH graph).
+    fn components(&self) -> &(Vec<u32>, u32) {
+        self.components.get_or_init(|| {
+            fn find(p: &mut [u32], mut x: u32) -> u32 {
+                while p[x as usize] != x {
+                    p[x as usize] = p[p[x as usize] as usize];
+                    x = p[x as usize];
+                }
+                x
+            }
+            let n = self.node_count();
+            let mut parent: Vec<u32> = (0..n as u32).collect();
+            for e in 0..self.edge_count() as u32 {
+                let (a, b) = (
+                    find(&mut parent, self.edge_from(e)),
+                    find(&mut parent, self.edge_to(e)),
+                );
+                if a != b {
+                    parent[a as usize] = b;
+                }
+            }
+            let mut size = vec![0u32; n];
+            for v in 0..n as u32 {
+                let r = find(&mut parent, v);
+                parent[v as usize] = r;
+                size[r as usize] += 1;
+            }
+            let main = (0..n as u32).max_by_key(|&v| size[v as usize]).unwrap_or(0);
+            (parent, main)
         })
     }
 

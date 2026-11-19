@@ -20,6 +20,10 @@ fn at(x: f64, y: f64) -> LatLon {
 
 /// n×n gravel grid with `step` meter spacing, origin at (0, 0).
 fn grid(n: usize, step: f64) -> Graph {
+    Graph::from_bytes(grid_writer(n, step).finish()).unwrap()
+}
+
+fn grid_writer(n: usize, step: f64) -> GraphWriter {
     let mut w = GraphWriter::new(0);
     let ids: Vec<Vec<u32>> = (0..n)
         .map(|i| {
@@ -56,7 +60,7 @@ fn grid(n: usize, step: f64) -> Graph {
             }
         }
     }
-    Graph::from_bytes(w.finish()).unwrap()
+    w
 }
 
 fn req(start: LatLon, distance_m: f64) -> GenerateRequest {
@@ -142,4 +146,22 @@ fn off_network_start_is_an_error() {
         generate(&g, &req(at(50_000.0, 50_000.0), 5000.0)),
         Err(GenerateError::StartOffNetwork)
     ));
+}
+
+#[test]
+fn start_next_to_an_island_snaps_to_the_main_network() {
+    // A 10 m stairs island 10 m from the start, the grid row 30 m away (Zürich HB in the CH graph).
+    let mut w = grid_writer(15, 200.0);
+    let (p, q) = (at(1050.0, 1230.0), at(1060.0, 1230.0));
+    let (a, b) = (w.add_node(p, 500.0), w.add_node(q, 500.0));
+    let attrs = EdgeAttrs {
+        length_m: 10.0,
+        surface: Surface::Gravel,
+        ..Default::default()
+    };
+    w.add_edge(a, b, attrs, &[(p.lat, p.lon, 500.0), (q.lat, q.lon, 500.0)]);
+    let g = Graph::from_bytes(w.finish()).unwrap();
+
+    let loops = generate(&g, &req(at(1055.0, 1220.0), 6_000.0)).unwrap();
+    assert!(!loops.is_empty(), "start stayed on the island");
 }

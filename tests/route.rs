@@ -315,9 +315,9 @@ fn partial_step_reports_the_last_partial_swing() {
 
 #[test]
 fn route_cost_matches_plain_dijkstra() {
-    use trail_calc::cost::edge_cost;
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
+    use trail_calc::cost::edge_cost;
 
     let mut seed = 0x2545_F491_4F6C_DD1Du64;
     let mut rnd = move |n: usize| {

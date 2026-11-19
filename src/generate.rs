@@ -78,7 +78,7 @@ impl Candidate {
 pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>, GenerateError> {
     let p = &req.profile;
     let ok = |e: u32| traversable(g, e, p);
-    let start = match g.snap_filtered(req.start, SNAP_LIMIT_M, ok) {
+    let start = match g.snap_start(req.start, SNAP_LIMIT_M, ok) {
         Some(s) => s,
         None if g.snap(req.start).is_some() => return Err(GenerateError::StartBlocked),
         None => return Err(GenerateError::StartOffNetwork),
@@ -141,6 +141,7 @@ fn seed(
     bearings: &[f64],
 ) -> Option<Candidate> {
     let target = req.distance_m;
+    let home = g.edge_component(start.edge);
     let proj = LocalProjection::new(start.pos.lat);
     let o = proj.project(start.pos);
     // Perimeter of the seed polygon in units of r: two spokes plus the chords between vias.
@@ -174,7 +175,9 @@ fn seed(
                     proj.unproject([o[0] + r * b.sin(), o[1] + r * b.cos()]),
                     r / 3.0,
                 );
-                g.snap_filtered(pt, VIA_SNAP_M, |e| traversable(g, e, p))
+                g.snap_filtered(pt, VIA_SNAP_M, |e| {
+                    g.edge_component(e) == home && traversable(g, e, p)
+                })
             })
             .collect();
         let Some(vias) = vias else {
