@@ -270,3 +270,37 @@ async fn generate_without_graph_is_503() {
     let (status, _) = generate(None, body).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
 }
+
+#[tokio::test]
+async fn route_carries_cost_per_metre_per_vertex() {
+    let plain = two((LAT, 7.4), (LAT, 7.402));
+    let (status, v) = post(Some(graph()), plain.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{v}");
+    let n = v["geometry"]["coordinates"].as_array().unwrap().len();
+    let cost: Vec<f64> = v["cost_per_m"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_f64().unwrap())
+        .collect();
+    assert_eq!(cost.len(), n);
+    assert!(cost.iter().all(|&c| c > 0.0), "{cost:?}");
+
+    // A penalise marker over the whole route multiplies every vertex by the exclusion penalty.
+    let mut marked = plain;
+    marked["profile"] =
+        json!({"exclude":[{"lat":LAT,"lon":7.401,"radius_m":5000,"mode":"penalize"}]});
+    let (_, m) = post(Some(graph()), marked).await;
+    let mc: Vec<f64> = m["cost_per_m"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_f64().unwrap())
+        .collect();
+    assert!(
+        (mc[0] / cost[0] - 5.0).abs() < 1e-3,
+        "{} vs {}",
+        mc[0],
+        cost[0]
+    );
+}

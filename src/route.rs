@@ -375,6 +375,23 @@ pub fn route_geometry(g: &Graph, r: &Route) -> Vec<(f64, f64, f32)> {
     out
 }
 
+/// Cost per metre (incl. exclusion penalty) per `route_geometry` vertex: the cost of the step
+/// leaving that vertex, so the last vertex repeats the last step's. For colouring the line.
+pub fn route_cost_per_m(g: &Graph, r: &Route, p: &Profile) -> Vec<f64> {
+    let mut out: Vec<f64> = Vec::new();
+    for s in &r.steps {
+        let c = edge_cost(g, s.edge, s.direction(), p).map_or(0.0, |c| c.per_m);
+        let n = slice(g, s).len();
+        if let Some(last) = out.last_mut() {
+            *last = c;
+            out.extend(std::iter::repeat_n(c, n.saturating_sub(1)));
+        } else {
+            out.extend(std::iter::repeat_n(c, n));
+        }
+    }
+    out
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RouteStats {
     pub distance_m: f64,
