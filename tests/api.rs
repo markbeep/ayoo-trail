@@ -227,7 +227,8 @@ async fn route_without_graph_is_503() {
 
 #[tokio::test]
 async fn generate_returns_loops_with_waypoints() {
-    let body = json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":500,"profile":{},"count":3});
+    let body = json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":500,"profile":{},"count":3,
+        "climb":{"target_m":null,"strictness":0.6}});
     let (status, v) = generate(Some(graph()), body).await;
     assert_eq!(status, StatusCode::OK, "{v}");
     let routes = v["routes"].as_array().unwrap();
@@ -235,6 +236,8 @@ async fn generate_returns_loops_with_waypoints() {
     for r in routes {
         assert!(r["waypoints"].as_array().unwrap().len() >= 3);
         assert!(r["distance_met"].as_bool().is_some());
+        let cp = r["climb_pressure"].as_f64().unwrap();
+        assert!((0.0..=0.6 + 1e-6).contains(&cp), "{cp}");
         assert!(r["geometry"]["coordinates"].as_array().unwrap().len() >= 2);
     }
 }
@@ -253,6 +256,8 @@ async fn generate_rejects_bad_distance_and_count() {
         json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":100}),
         json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":90000}),
         json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":5000,"count":0}),
+        json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":5000,"climb":{"target_m":-5,"strictness":0.5}}),
+        json!({"start":{"lat":LAT,"lon":7.4005},"distance_m":5000,"climb":{"strictness":1.5}}),
     ] {
         let (status, _) = generate(Some(graph()), body).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);

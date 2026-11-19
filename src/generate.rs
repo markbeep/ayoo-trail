@@ -1,5 +1,6 @@
-//! Loop generation (D39): triangle seeds at fixed headings, pulled toward nearby anchors,
-//! radius rescaled until the length fits, then ranked and deduplicated.
+//! Loop generation (D39): triangle and 3-via seeds at fixed headings, pulled toward nearby
+//! anchors, radius rescaled until the length fits and climb pressure tuned until the climb fits
+//! (D52), then ranked and deduplicated.
 
 use std::collections::HashMap;
 
@@ -20,11 +21,24 @@ const STEM_M: f64 = 500.0;
 const TOLERANCE: f64 = 0.10;
 const MAX_OVERLAP: f64 = 0.5;
 const ATTEMPTS: usize = 8;
+const CLIMB_TOLERANCE: f64 = 0.15;
+/// Via-point bearings around the seed heading: a triangle, and a 3-via loop that can cross
+/// more hills.
+const SHAPES: [&[f64]; 2] = [&[-30.0, 30.0], &[-40.0, 0.0, 40.0]];
+
+/// How much climb the generator chases (D52).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ClimbGoal {
+    /// Metres of climb to aim for; None = as much as possible.
+    pub target_m: Option<f64>,
+    /// 0..1: how hard to chase it, both in ranking and as the ceiling of the climb pressure.
+    pub strictness: f32,
+}
 
 pub struct GenerateRequest {
     pub start: LatLon,
     pub distance_m: f64,
-    pub climb_m: Option<f64>,
+    pub climb: Option<ClimbGoal>,
     pub profile: Profile,
     pub count: usize,
 }
@@ -34,6 +48,9 @@ pub struct GeneratedRoute {
     /// Start, the via points, start: the drag handles.
     pub waypoints: Vec<LatLon>,
     pub distance_met: bool,
+    /// The profile it was routed with (the request's plus its climb pressure), so a drag
+    /// edit re-routes under the same costs.
+    pub profile: Profile,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -47,6 +64,14 @@ struct Candidate {
     waypoints: Vec<LatLon>,
     err: f64,
     rank: f64,
+    pressure: f32,
+}
+
+impl Candidate {
+    /// In tolerance first, then by rank.
+    fn better_than(&self, o: &Candidate) -> bool {
+        ((self.err > TOLERANCE), self.rank) < ((o.err > TOLERANCE), o.rank)
+    }
 }
 
 pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>, GenerateError> {
@@ -59,9 +84,12 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
     };
     let target = req.distance_m;
 
-    let mut cands: Vec<Candidate> = (0..HEADINGS)
+    let mut cands: Vec<Candidate> = (0..HEADINGS * SHAPES.len())
         .into_par_iter()
-        .filter_map(|i| seed(g, req, start, i as f64 * 360.0 / HEADINGS as f64))
+        .filter_map(|i| {
+            let heading = (i % HEADINGS) as f64 * 360.0 / HEADINGS as f64;
+            seed(g, req, start, heading, SHAPES[i / HEADINGS])
+        })
         .collect();
     cands.sort_by(|a, b| {
         (a.err > TOLERANCE)
@@ -92,20 +120,51 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
             distance_met: (c.route.distance_m - target).abs() / target <= TOLERANCE,
             route: c.route,
             waypoints: c.waypoints,
+            profile: with_pressure(p, c.pressure),
         })
         .collect())
 }
 
-/// One heading: the best triangle loop over a few radius corrections.
-fn seed(g: &Graph, req: &GenerateRequest, start: Snap, heading_deg: f64) -> Option<Candidate> {
-    let p = &req.profile;
+fn with_pressure(p: &Profile, pressure: f32) -> Profile {
+    let mut p = p.clone();
+    p.weights.climb_pressure = pressure;
+    p
+}
+
+/// One heading and shape: the best loop over a few radius and climb-pressure corrections.
+fn seed(
+    g: &Graph,
+    req: &GenerateRequest,
+    start: Snap,
+    heading_deg: f64,
+    bearings: &[f64],
+) -> Option<Candidate> {
     let target = req.distance_m;
     let proj = LocalProjection::new(start.pos.lat);
     let o = proj.project(start.pos);
-    let mut r = target / (3.0 * DETOUR);
+    // Perimeter of the seed polygon in units of r: two spokes plus the chords between vias.
+    let perimeter = 2.0
+        + bearings
+            .windows(2)
+            .map(|w| 2.0 * ((w[1] - w[0]).to_radians() / 2.0).sin())
+            .sum::<f64>();
+    let mut r = target / (perimeter * DETOUR);
+    // Climb pressure is bisected inside [lo, hi] like the radius is rescaled (D52).
+    let goal = req.climb.filter(|c| c.strictness > 0.0);
+    let (mut lo, mut hi) = (0.0f32, goal.map_or(0.0, |c| c.strictness));
+    let mut pressure = match goal {
+        Some(ClimbGoal {
+            target_m: Some(_),
+            strictness,
+        }) => strictness * 0.5,
+        Some(c) => c.strictness,
+        None => 0.0,
+    };
     let mut best: Option<Candidate> = None;
     for _ in 0..ATTEMPTS {
-        let vias: Option<Vec<Snap>> = [-30.0, 30.0]
+        let pp = with_pressure(&req.profile, pressure);
+        let p = &pp;
+        let vias: Option<Vec<Snap>> = bearings
             .iter()
             .map(|d: &f64| {
                 let b = (heading_deg + d).to_radians();
@@ -122,7 +181,10 @@ fn seed(g: &Graph, req: &GenerateRequest, start: Snap, heading_deg: f64) -> Opti
             r *= 0.7;
             continue;
         };
-        let snaps = [start, vias[0], vias[1], start];
+        let snaps: Vec<Snap> = std::iter::once(start)
+            .chain(vias.iter().copied())
+            .chain(std::iter::once(start))
+            .collect();
         let away_from_start = |e: u32| {
             haversine_m(g.node(g.edge_from(e)), start.pos) > STEM_M
                 || haversine_m(g.node(g.edge_to(e)), start.pos) > STEM_M
@@ -145,28 +207,51 @@ fn seed(g: &Graph, req: &GenerateRequest, start: Snap, heading_deg: f64) -> Opti
             continue;
         }
         let err = (route.distance_m - target).abs() / target;
-        let climb_term = req
-            .climb_m
-            .filter(|c| *c > 0.0)
-            .map_or(0.0, |c| (route.climb_m - c).abs() / c);
+        // Signed climb error for a target; for "as much as possible", climb per 100 m/km.
+        let (climb_term, climb_err) = match req.climb {
+            Some(ClimbGoal {
+                target_m: Some(c),
+                strictness,
+            }) if c > 0.0 => {
+                let e = (route.climb_m - c) / c;
+                ((0.25 + 4.0 * strictness as f64) * e.abs(), Some(e))
+            }
+            Some(ClimbGoal {
+                target_m: None,
+                strictness,
+            }) => (
+                -(0.25 + 4.0 * strictness as f64) * route.climb_m / route.distance_m / 0.1,
+                None,
+            ),
+            _ => (0.0, None),
+        };
         let score = route_stats(g, &route, p).score as f64;
-        let rank = err + 0.25 * climb_term - 0.2 * score / 100.0;
+        let rank = err + climb_term - 0.2 * score / 100.0;
         let scale = (target / route.distance_m).clamp(0.5, 2.0);
-        if best.as_ref().is_none_or(|b| err < b.err) {
-            best = Some(Candidate {
-                waypoints: vec![
-                    req.start,
-                    on_route(g, &route, vias[0].pos),
-                    on_route(g, &route, vias[1].pos),
-                    req.start,
-                ],
-                route,
-                err,
-                rank,
-            });
+        let c = Candidate {
+            waypoints: std::iter::once(req.start)
+                .chain(vias.iter().map(|v| on_route(g, &route, v.pos)))
+                .chain(std::iter::once(req.start))
+                .collect(),
+            route,
+            err,
+            rank,
+            pressure,
+        };
+        if best.as_ref().is_none_or(|b| c.better_than(b)) {
+            best = Some(c);
         }
-        if err <= TOLERANCE {
+        let climb_ok = climb_err.is_none_or(|e| e.abs() <= CLIMB_TOLERANCE);
+        if err <= TOLERANCE && climb_ok {
             break;
+        }
+        if let Some(e) = climb_err.filter(|_| goal.is_some()) {
+            if e < -CLIMB_TOLERANCE {
+                lo = pressure;
+            } else if e > CLIMB_TOLERANCE {
+                hi = pressure;
+            }
+            pressure = (lo + hi) / 2.0;
         }
         r *= scale;
     }

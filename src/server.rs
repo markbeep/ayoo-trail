@@ -16,7 +16,7 @@ use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 use crate::cost::{term_minima, traversable, Profile, ProfileError};
-use crate::generate::{generate, GenerateError, GenerateRequest};
+use crate::generate::{generate, ClimbGoal, GenerateError, GenerateRequest};
 use crate::graph::{Graph, LatLon};
 use crate::route::{route_geometry, route_stats, route_via, Route, RouteStats};
 use crate::snap::SNAP_LIMIT_M;
@@ -161,6 +161,7 @@ fn route_json(
         "official_share": stats.official_share,
         "breakdown": breakdown(&stats, profile),
         "distance_met": distance_met,
+        "climb_pressure": profile.weights.climb_pressure,
         "graph_date": utc_date(g.osm_date()),
         "stats": stats,
     })
@@ -170,11 +171,18 @@ fn route_json(
 struct GenerateBody {
     start: LatLon,
     distance_m: f64,
-    climb_m: Option<f64>,
+    climb: Option<ClimbBody>,
     #[serde(default)]
     profile: Profile,
     #[serde(default = "default_count")]
     count: usize,
+}
+
+#[derive(Deserialize)]
+struct ClimbBody {
+    /// Absent or null: as much climb as possible.
+    target_m: Option<f64>,
+    strictness: f32,
 }
 
 fn default_count() -> usize {
@@ -204,14 +212,22 @@ fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
     if !(1..=12).contains(&b.count) {
         return Err(unprocessable("count must be 1-12"));
     }
-    if b.climb_m.is_some_and(|c| !(0.0..=20_000.0).contains(&c)) {
-        return Err(unprocessable("climb_m out of range"));
+    if let Some(c) = &b.climb {
+        if c.target_m.is_some_and(|m| !(0.0..=20_000.0).contains(&m)) {
+            return Err(unprocessable("climb.target_m out of range"));
+        }
+        if !(0.0..=1.0).contains(&c.strictness) {
+            return Err(unprocessable("climb.strictness must be 0-1"));
+        }
     }
     check_profile(&b.profile)?;
     let req = GenerateRequest {
         start: b.start,
         distance_m: b.distance_m,
-        climb_m: b.climb_m,
+        climb: b.climb.map(|c| ClimbGoal {
+            target_m: c.target_m,
+            strictness: c.strictness,
+        }),
         profile: b.profile,
         count: b.count,
     };
@@ -229,7 +245,7 @@ fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
         .enumerate()
         .map(|(i, r)| {
             let id = format!("loop-{i}");
-            route_json(g, &r.route, &r.waypoints, &req.profile, &id, r.distance_met)
+            route_json(g, &r.route, &r.waypoints, &r.profile, &id, r.distance_met)
         })
         .collect();
     Ok(json!({ "routes": routes }))

@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use navilau::cost::Profile;
-use navilau::generate::{generate, GenerateRequest};
+use navilau::generate::{generate, ClimbGoal, GenerateRequest};
 use navilau::geodesy::haversine_m;
 use navilau::graph::{Graph, LatLon};
 use navilau::route::{route_stats, route_via};
@@ -63,8 +63,11 @@ fn finds_a_loop_like_the_bichelsee_run() {
     let req = GenerateRequest {
         start: START,
         distance_m: 15_000.0,
-        climb_m: Some(900.0),
-        profile: p,
+        climb: Some(ClimbGoal {
+            target_m: Some(900.0),
+            strictness: 0.5,
+        }),
+        profile: p.clone(),
         count: 6,
     };
     let loops = generate(&g, &req).unwrap();
@@ -83,4 +86,32 @@ fn finds_a_loop_like_the_bichelsee_run() {
                 && (l.route.climb_m - 900.0).abs() <= 135.0),
         "no loop within ±10 % distance and ±15 % climb"
     );
+
+    // More strictness, or "as much as possible", never finds less climb.
+    let best = |climb: Option<ClimbGoal>| {
+        let r = GenerateRequest {
+            climb,
+            ..GenerateRequest {
+                start: START,
+                distance_m: 15_000.0,
+                climb: None,
+                profile: p.clone(),
+                count: 6,
+            }
+        };
+        generate(&g, &r)
+            .unwrap()
+            .iter()
+            .map(|l| l.route.climb_m)
+            .fold(0.0, f64::max)
+    };
+    let max = |strictness| {
+        best(Some(ClimbGoal {
+            target_m: None,
+            strictness,
+        }))
+    };
+    let (none, low, high) = (best(None), max(0.3), max(1.0));
+    println!("max climb: none {none:.0}, max@0.3 {low:.0}, max@1 {high:.0}");
+    assert!(none <= low && low <= high);
 }

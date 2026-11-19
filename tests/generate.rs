@@ -63,7 +63,7 @@ fn req(start: LatLon, distance_m: f64) -> GenerateRequest {
     GenerateRequest {
         start,
         distance_m,
-        climb_m: None,
+        climb: None,
         profile: Profile::default(),
         count: 6,
     }
