@@ -61,17 +61,17 @@ fn slope_preference_is_per_direction() {
     let mut a = gravel();
     a.grade = [255, 0, 0, 0, 0, 0, 0, 0, 0];
     let g = one_edge(1000.0, a);
-    let with = |up: Hill, down: Hill| Weights {
+    let with = |up: f32, down: f32| Weights {
         uphill: up,
         downhill: down,
         ..Weights::default()
     };
 
-    let w = with(Hill::Any, Hill::Any);
+    let w = with(0.0, 0.0);
     assert!((edge_factors(&g, 0, F, &w).slope - 1.0).abs() < 1e-5);
     assert!((edge_factors(&g, 0, B, &w).slope - 1.0).abs() < 1e-5);
 
-    let w = with(Hill::Steep, Hill::Steep);
+    let w = with(1.0, 1.0);
     assert!(
         edge_factors(&g, 0, F, &w).slope < 1.0,
         "steep descent rewarded"
@@ -81,7 +81,7 @@ fn slope_preference_is_per_direction() {
         "steep climb rewarded"
     );
 
-    let w = with(Hill::Gentle, Hill::Gentle);
+    let w = with(-1.0, -1.0);
     assert!(
         edge_factors(&g, 0, F, &w).slope > 2.0,
         "steep descent penalised"
@@ -94,34 +94,47 @@ fn slope_preference_is_per_direction() {
     // Default is any up, gentle down (D45).
     assert_eq!(
         (Weights::default().uphill, Weights::default().downhill),
-        (Hill::Any, Hill::Gentle)
+        (0.0, -1.0)
     );
-    let w: Weights = serde_json::from_str(r#"{"uphill":"steep","downhill":"any"}"#).unwrap();
-    assert_eq!((w.uphill, w.downhill), (Hill::Steep, Hill::Any));
+    let w: Weights = serde_json::from_str(r#"{"uphill":1,"downhill":0}"#).unwrap();
+    assert_eq!((w.uphill, w.downhill), (1.0, 0.0));
+    // Halfway between any and steep is halfway between their factors (D53).
+    let half = edge_factors(&g, 0, B, &with(0.5, 0.0)).slope;
+    let steep = edge_factors(&g, 0, B, &with(1.0, 0.0)).slope;
+    assert!(
+        (half - (1.0 + steep) / 2.0).abs() < 1e-5,
+        "{half} vs {steep}"
+    );
 }
 
 #[test]
 fn min_cost_per_m_stays_admissible_for_every_slope_preference() {
-    for up in [Hill::Gentle, Hill::Any, Hill::Steep] {
-        for down in [Hill::Gentle, Hill::Any, Hill::Steep] {
-            let p = Profile {
-                weights: Weights {
-                    uphill: up,
-                    downhill: down,
-                    ..Weights::default()
-                },
-                ..Profile::default()
-            };
-            let mut a = gravel();
-            for band in 0..9 {
-                a.grade = [0; 9];
-                a.grade[band] = 255;
-                a.official_category = 1;
-                a.forest_pct = 100;
-                let g = one_edge(1000.0, a);
-                for dir in [F, B] {
-                    let c = edge_cost(&g, 0, dir, &p).unwrap();
-                    assert!(c.per_m >= p.min_cost_per_m(), "{up:?}/{down:?} band {band}");
+    for up in [-1.0, -0.4, 0.0, 0.7, 1.0] {
+        for down in [-1.0, -0.4, 0.0, 0.7, 1.0] {
+            for climb_pressure in [0.0, 0.5, 1.0] {
+                let p = Profile {
+                    weights: Weights {
+                        uphill: up,
+                        downhill: down,
+                        climb_pressure,
+                        ..Weights::default()
+                    },
+                    ..Profile::default()
+                };
+                let mut a = gravel();
+                for band in 0..9 {
+                    a.grade = [0; 9];
+                    a.grade[band] = 255;
+                    a.official_category = 1;
+                    a.forest_pct = 100;
+                    let g = one_edge(1000.0, a);
+                    for dir in [F, B] {
+                        let c = edge_cost(&g, 0, dir, &p).unwrap();
+                        assert!(
+                            c.per_m >= p.min_cost_per_m(),
+                            "{up:?}/{down:?}/{climb_pressure} band {band}"
+                        );
+                    }
                 }
             }
         }
@@ -147,6 +160,38 @@ fn weights_scale_around_neutral() {
     assert!((edge_factors(&g, 0, F, &w).official - 0.7).abs() < 1e-5);
     w.official = 0.0;
     assert!((edge_factors(&g, 0, F, &w).official - 1.0).abs() < 1e-6);
+    // Weights are exponents (D51): 2 squares the factor, 4 lets one term dominate.
+    w.official = 2.0;
+    assert!((edge_factors(&g, 0, F, &w).official - 0.49).abs() < 1e-5);
+    w.official = 4.0;
+    assert!((edge_factors(&g, 0, F, &w).official - 0.2401).abs() < 1e-5);
+}
+
+#[test]
+fn climb_pressure_makes_steep_edges_cheaper_than_flat_ones() {
+    let mut steep = gravel();
+    steep.grade = [0, 0, 0, 0, 0, 0, 0, 255, 0];
+    let (gs, gf) = (one_edge(1000.0, steep), one_edge(1000.0, gravel()));
+    let mut w = Weights::default();
+    let base = edge_factors(&gs, 0, F, &w).slope;
+    w.climb_pressure = 1.0;
+    // Both directions: a loop descends what it climbs.
+    for d in [F, B] {
+        assert!(edge_factors(&gs, 0, d, &w).slope < 0.5 * edge_factors(&gf, 0, d, &w).slope);
+    }
+    assert!((edge_factors(&gs, 0, F, &w).slope - base * 0.2).abs() < 1e-5);
+    // Flat edges are untouched, and slope weight 0 does not switch pressure off.
+    assert!((edge_factors(&gf, 0, F, &w).slope - 1.0).abs() < 1e-6);
+    w.slope = 0.0;
+    assert!((edge_factors(&gs, 0, F, &w).slope - 0.2).abs() < 1e-5);
+    let bad = Profile {
+        weights: Weights {
+            climb_pressure: 1.5,
+            ..Weights::default()
+        },
+        ..Profile::default()
+    };
+    assert_eq!(bad.validate(), Err(ProfileError::WeightOutOfRange));
 }
 
 #[test]
@@ -223,20 +268,21 @@ fn extreme_weight_cannot_make_cost_non_positive() {
     a.forest_pct = 100;
     let g = one_edge(1000.0, a);
     let mut p = Profile::default();
-    p.weights.official = 3.0;
+    p.weights.official = 4.0;
     assert!(edge_cost(&g, 0, F, &p).unwrap().cost > 0.0);
     p.weights = Weights {
-        slope: 3.0,
-        surface: 3.0,
-        tech: 3.0,
-        official: 3.0,
-        forest: 3.0,
-        urban: 3.0,
+        slope: 4.0,
+        surface: 4.0,
+        tech: 4.0,
+        official: 4.0,
+        forest: 4.0,
+        urban: 4.0,
+        climb_pressure: 1.0,
         ..Weights::default()
     };
     let c = edge_cost(&g, 0, F, &p).unwrap();
     assert!(c.cost > 0.0);
-    assert!(c.breakdown.official >= WEIGHT_FLOOR);
+    assert!(c.breakdown.official > 0.0);
 }
 
 #[test]
@@ -308,7 +354,15 @@ fn min_cost_per_m_is_a_lower_bound() {
         urban: v,
         ..Weights::default()
     };
-    for weights in [Weights::default(), all(3.0), all(0.0)] {
+    for weights in [
+        Weights::default(),
+        all(4.0),
+        all(0.0),
+        Weights {
+            climb_pressure: 1.0,
+            ..all(2.5)
+        },
+    ] {
         let p = Profile {
             weights,
             max_sac: 6,
@@ -336,7 +390,7 @@ fn profile_json_defaults_and_validation() {
     assert_eq!(p.max_sac, 3);
     assert!(p.validate().is_ok());
 
-    let bad: Profile = serde_json::from_str(r#"{"weights":{"official":3.5}}"#).unwrap();
+    let bad: Profile = serde_json::from_str(r#"{"weights":{"official":4.5}}"#).unwrap();
     assert_eq!(bad.validate(), Err(ProfileError::WeightOutOfRange));
     let nan = Profile {
         weights: Weights {

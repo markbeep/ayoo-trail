@@ -10,7 +10,10 @@ use navilau::geodesy::haversine_m;
 use navilau::graph::{Graph, LatLon};
 use navilau::route::{route_stats, route_via};
 
-const START: LatLon = LatLon { lat: 47.448142, lon: 8.922039 };
+const START: LatLon = LatLon {
+    lat: 47.448142,
+    lon: 8.922039,
+};
 
 fn gpx_points() -> Vec<LatLon> {
     let t = std::fs::read_to_string("tests/fixtures/bichelsee.gpx").unwrap();
@@ -21,7 +24,10 @@ fn gpx_points() -> Vec<LatLon> {
                 let i = s.find(k).unwrap() + k.len();
                 s[i..i + s[i..].find('"').unwrap()].parse().unwrap()
             };
-            LatLon { lat: attr("lat=\""), lon: attr("lon=\"") }
+            LatLon {
+                lat: attr("lat=\""),
+                lon: attr("lon=\""),
+            }
         })
         .collect()
 }
@@ -40,7 +46,10 @@ fn finds_a_loop_like_the_bichelsee_run() {
         }
     }
     pts.push(START);
-    let snaps: Vec<_> = pts.iter().map(|&q| g.snap(q).expect("gpx point off the graph")).collect();
+    let snaps: Vec<_> = pts
+        .iter()
+        .map(|&q| g.snap(q).expect("gpx point off the graph"))
+        .collect();
     let run = route_via(&g, &p, &snaps).expect("gpx not routable");
     let s = route_stats(&g, &run, &p);
     println!(
@@ -68,8 +77,10 @@ fn finds_a_loop_like_the_bichelsee_run() {
         );
     }
     assert!(
-        loops.iter().any(|l| (l.route.distance_m - 15_000.0).abs() <= 1_500.0
-            && (l.route.climb_m - 900.0).abs() <= 135.0),
+        loops
+            .iter()
+            .any(|l| (l.route.distance_m - 15_000.0).abs() <= 1_500.0
+                && (l.route.climb_m - 900.0).abs() <= 135.0),
         "no loop within ±10 % distance and ±15 % climb"
     );
 }

@@ -6,7 +6,7 @@ use crate::geodesy::{closest_on_segment, haversine_m, LocalProjection};
 use crate::graph::{flags, Direction, Graph, LatLon, GRADE_BANDS};
 
 /// Slope factors for the four descent bands, steepest first (<=-25, -25..-20, -20..-15,
-/// -15..-8 %), per preference (D45). Starting points to tune (Q17).
+/// -15..-8 %), for gentle / any / steep (D45, D53). Starting points to tune (Q17).
 const DESCENT_FACTORS: [[f32; 4]; 3] = [
     [2.5, 1.8, 1.8, 1.2],  // gentle
     [1.0, 1.0, 1.0, 1.0],  // any
@@ -21,7 +21,10 @@ const ASCENT_FACTORS: [[f32; 4]; 3] = [
 /// Cost per metre of a flat official forest trail; scores 100 (D32).
 pub const SCORE_REFERENCE: f64 = 0.63;
 pub const EXCLUSION_PENALTY: f64 = 5.0;
-pub const WEIGHT_FLOOR: f32 = 0.05;
+/// Largest weight exponent (D51).
+pub const MAX_WEIGHT: f32 = 4.0;
+/// At full climb pressure, edge parts steeper than 8 % cost this share of their slope factor.
+const CLIMB_DISCOUNT: f32 = 0.8;
 
 const SURFACE_FACTORS: [f32; 8] = [2.0, 1.5, 1.1, 1.0, 0.95, 1.1, 1.2, 1.4];
 const TECH_FACTORS: [f32; 5] = [1.0, 1.05, 1.15, 1.4, 1.3];
@@ -29,40 +32,35 @@ const OFFICIAL_FACTORS: [f32; 2] = [0.7, 1.0];
 const FOREST_FACTORS: [f32; 2] = [0.9, 1.0];
 const URBAN_FACTORS: [f32; 3] = [1.0, 1.3, 2.0];
 
-/// How a runner wants climbs or descents (D45).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Hill {
-    Gentle = 0,
-    Any = 1,
-    Steep = 2,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Weights {
     /// Strength of the slope term; `uphill`/`downhill` pick its direction preferences.
     pub slope: f32,
-    pub uphill: Hill,
-    pub downhill: Hill,
+    /// -1 gentle, 0 any, +1 steep, interpolated (D53).
+    pub uphill: f32,
+    pub downhill: f32,
     pub surface: f32,
     pub tech: f32,
     pub official: f32,
     pub forest: f32,
     pub urban: f32,
+    /// 0..1, set by the generator to chase climb: steep edge parts get cheaper (D52).
+    pub climb_pressure: f32,
 }
 
 impl Default for Weights {
     fn default() -> Self {
         Weights {
             slope: 1.0,
-            uphill: Hill::Any,
-            downhill: Hill::Gentle,
+            uphill: 0.0,
+            downhill: -1.0,
             surface: 1.0,
             tech: 1.0,
             official: 1.0,
             forest: 1.0,
             urban: 1.0,
+            climb_pressure: 0.0,
         }
     }
 }
@@ -102,7 +100,7 @@ impl Default for Profile {
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum ProfileError {
-    #[error("weights must be finite and between 0 and 3")]
+    #[error("weights must be finite: terms 0-4, uphill/downhill -1-1, climb_pressure 0-1")]
     WeightOutOfRange,
     #[error("max_sac must be between 1 and 6")]
     MaxSacOutOfRange,
@@ -110,9 +108,9 @@ pub enum ProfileError {
     BadExclusion,
 }
 
-/// `max(1 + (f - 1) * w, WEIGHT_FLOOR)`.
+/// `f^w` (D51): 0 ignores the term, 1 is the table value, 4 lets it dominate.
 fn weighted(f: f32, w: f32) -> f32 {
-    (1.0 + (f - 1.0) * w).max(WEIGHT_FLOOR)
+    f.powf(w)
 }
 
 fn min_weighted(table: &[f32], w: f32) -> f64 {
@@ -126,9 +124,11 @@ impl Profile {
     pub fn validate(&self) -> Result<(), ProfileError> {
         let w = &self.weights;
         let ws = [w.slope, w.surface, w.tech, w.official, w.forest, w.urban];
-        if ws
-            .iter()
-            .any(|v| !v.is_finite() || !(0.0..=3.0).contains(v))
+        let ok = |v: f32, r: std::ops::RangeInclusive<f32>| v.is_finite() && r.contains(&v);
+        if !ws.iter().all(|&v| ok(v, 0.0..=MAX_WEIGHT))
+            || !ok(w.uphill, -1.0..=1.0)
+            || !ok(w.downhill, -1.0..=1.0)
+            || !ok(w.climb_pressure, 0.0..=1.0)
         {
             return Err(ProfileError::WeightOutOfRange);
         }
@@ -158,19 +158,35 @@ impl Profile {
     }
 }
 
+/// Row `any` blended toward `gentle` (h < 0) or `steep` (h > 0) by |h|.
+fn blend(rows: &[[f32; 4]; 3], h: f32) -> [f32; 4] {
+    let (to, t) = if h < 0.0 { (rows[0], -h) } else { (rows[2], h) };
+    let t = t.min(1.0);
+    std::array::from_fn(|i| rows[1][i] + (to[i] - rows[1][i]) * t)
+}
+
 /// Raw slope factor per grade band (steepest descent first) for the direction preferences.
 pub fn slope_table(w: &Weights) -> [f32; GRADE_BANDS] {
     let (d, a) = (
-        DESCENT_FACTORS[w.downhill as usize],
-        ASCENT_FACTORS[w.uphill as usize],
+        blend(&DESCENT_FACTORS, w.downhill),
+        blend(&ASCENT_FACTORS, w.uphill),
     );
     [d[0], d[1], d[2], d[3], 1.0, a[0], a[1], a[2], a[3]]
+}
+
+/// Weighted slope factor per band, with climb pressure applied to every non-flat band.
+fn weighted_slope(w: &Weights) -> [f32; GRADE_BANDS] {
+    let discount = 1.0 - CLIMB_DISCOUNT * w.climb_pressure;
+    let raw = slope_table(w);
+    std::array::from_fn(|i| {
+        weighted(raw[i], w.slope) * if i == GRADE_BANDS / 2 { 1.0 } else { discount }
+    })
 }
 
 /// Smallest weighted factor each term can take under `w`.
 pub fn term_minima(w: &Weights) -> Breakdown {
     Breakdown {
-        slope: min_weighted(&slope_table(w), w.slope) as f32,
+        slope: weighted_slope(w).into_iter().fold(f32::INFINITY, f32::min),
         surface: min_weighted(&SURFACE_FACTORS, w.surface) as f32,
         tech: min_weighted(&TECH_FACTORS, w.tech) as f32,
         official: min_weighted(&OFFICIAL_FACTORS, w.official) as f32,
@@ -219,15 +235,15 @@ pub fn edge_factors(g: &Graph, e: u32, dir: Direction, w: &Weights) -> Breakdown
     let a = g.edge_attrs(e);
     let sum: u32 = a.grade.iter().map(|&v| v as u32).sum();
     let slope = if sum == 0 {
-        weighted(1.0, w.slope)
+        1.0
     } else {
         let mut s = 0.0f32;
-        for (i, &raw) in slope_table(w).iter().enumerate() {
+        for (i, &f) in weighted_slope(w).iter().enumerate() {
             let share = match dir {
                 Direction::Forward => a.grade[i],
                 Direction::Backward => a.grade[GRADE_BANDS - 1 - i],
             };
-            s += share as f32 / sum as f32 * weighted(raw, w.slope);
+            s += share as f32 / sum as f32 * f;
         }
         s
     };
