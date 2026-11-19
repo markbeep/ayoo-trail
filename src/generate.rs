@@ -23,6 +23,11 @@ const VIA_SNAP_M: f32 = 500.0;
 /// Edges this close to the start may be reused without penalty (the access stem).
 const STEM_M: f64 = 500.0;
 const TOLERANCE: f64 = 0.10;
+/// Local search (D86): how many of the best loops, how many rounds, and the step as a share of
+/// the seed radius.
+const POLISH: usize = 6;
+const POLISH_ROUNDS: usize = 2;
+const POLISH_STEP: f64 = 0.25;
 /// Via points may move this share of the seed radius to reach cheaper terrain (D85).
 const VIA_SEARCH: f64 = 0.5;
 /// Weight of a loop's preference (0–1) in its rank, against distance and climb error.
@@ -76,7 +81,9 @@ pub enum GenerateError {
 struct Candidate {
     route: Route,
     /// Snapped via points; moved onto the loop only for the loops that are kept.
-    vias: Vec<LatLon>,
+    vias: Vec<Snap>,
+    /// Seed radius the vias were placed at; sets the local-search step (D86).
+    radius: f64,
     err: f64,
     rank: f64,
     pressure: f32,
@@ -107,6 +114,19 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
             seed(g, &region, req, start, heading, SHAPES[i / HEADINGS])
         })
         .collect();
+    let rank_order = |a: &Candidate, b: &Candidate| {
+        (a.err > TOLERANCE)
+            .cmp(&(b.err > TOLERANCE))
+            .then(a.rank.total_cmp(&b.rank))
+    };
+    cands.sort_by(rank_order);
+    // D86: nudge the best loops' vias toward cheaper terrain before picking distinct ones.
+    let rest = cands.split_off(cands.len().min(POLISH));
+    let mut cands: Vec<Candidate> = cands
+        .into_par_iter()
+        .map(|c| polish(g, &region, req, start, c))
+        .chain(rest)
+        .collect();
     cands.sort_by(|a, b| {
         (a.err > TOLERANCE)
             .cmp(&(b.err > TOLERANCE))
@@ -135,7 +155,7 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
         .map(|(c, _)| GeneratedRoute {
             distance_met: (c.route.distance_m - target).abs() / target <= TOLERANCE,
             waypoints: std::iter::once(req.start)
-                .chain(c.vias.iter().map(|&v| on_route(g, &c.route, v)))
+                .chain(c.vias.iter().map(|v| on_route(g, &c.route, v.pos)))
                 .chain(std::iter::once(req.start))
                 .collect(),
             route: c.route,
@@ -207,59 +227,19 @@ fn seed(
             r *= 0.7;
             continue;
         };
-        let snaps: Vec<Snap> = std::iter::once(start)
-            .chain(vias.iter().copied())
-            .chain(std::iter::once(start))
-            .collect();
-        let away_from_start = |e: u32| {
-            haversine_m(g.node(g.edge_from(e)), start.pos) > STEM_M
-                || haversine_m(g.node(g.edge_to(e)), start.pos) > STEM_M
-        };
-        let mut visited = Visited::new(g.edge_count());
-        let leg = |a, b, v: &Visited| region.leg(p, a, b, v).or_else(|| route(g, p, a, b, v));
-        let Some(route) = route_legs_with(g, &snaps, &mut visited, away_from_start, leg) else {
+        let Some(route) = route_loop(g, region, p, start, &vias) else {
             r *= 0.7;
             continue;
-        };
-        // A via point on a dead end would leave an out-and-back spur; cut it. Where the
-        // network allows only out-and-backs (trimming removes most of it), keep the original.
-        let trimmed = drop_backtracks(g, route.clone());
-        let route = if trimmed.distance_m >= 0.5 * route.distance_m {
-            trimmed
-        } else {
-            route
         };
         if route.distance_m < 1.0 {
             r *= 1.5;
             continue;
         }
-        let err = (route.distance_m - target).abs() / target;
-        // Signed climb error for a target; for "as much as possible", climb per 100 m/km.
-        let (climb_term, climb_err) = match req.climb {
-            Some(ClimbGoal {
-                target_m: Some(c),
-                strictness,
-            }) if c > 0.0 => {
-                let e = (route.climb_m - c) / c;
-                ((0.25 + 4.0 * strictness as f64) * e.abs(), Some(e))
-            }
-            Some(ClimbGoal {
-                target_m: None,
-                strictness,
-            }) => (
-                -(0.25 + 4.0 * strictness as f64) * route.climb_m / route.distance_m / 0.1,
-                None,
-            ),
-            _ => (0.0, None),
-        };
-        // How close every meter is to the best the user's weights allow (D82); 0.1 of it counts
-        // like a 10 % distance error. The displayed score is too flat for this: at unit weight
-        // a loop's forest share moves its bar by only a few points.
-        let preference = route_stats(g, &route, p).preference;
-        let rank = err + climb_term - PREFERENCE_RANK * preference;
+        let (err, climb_err, rank) = judge(g, req, p, &route);
         let scale = (target / route.distance_m).clamp(0.5, 2.0);
         let c = Candidate {
-            vias: vias.iter().map(|v| v.pos).collect(),
+            vias,
+            radius: r,
             route,
             err,
             rank,
@@ -296,6 +276,129 @@ fn seed(
     best
 }
 
+/// The loop start → vias → start, with out-and-back spurs at dead-end vias cut.
+fn route_loop(
+    g: &Graph,
+    region: &Region,
+    p: &Profile,
+    start: Snap,
+    vias: &[Snap],
+) -> Option<Route> {
+    let snaps: Vec<Snap> = std::iter::once(start)
+        .chain(vias.iter().copied())
+        .chain(std::iter::once(start))
+        .collect();
+    let away_from_start = |e: u32| {
+        haversine_m(g.node(g.edge_from(e)), start.pos) > STEM_M
+            || haversine_m(g.node(g.edge_to(e)), start.pos) > STEM_M
+    };
+    let mut visited = Visited::new(g.edge_count());
+    let leg = |a, b, v: &Visited| region.leg(p, a, b, v).or_else(|| route(g, p, a, b, v));
+    let route = route_legs_with(g, &snaps, &mut visited, away_from_start, leg)?;
+    // A via point on a dead end would leave an out-and-back spur; cut it. Where the
+    // network allows only out-and-backs (trimming removes most of it), keep the original.
+    let trimmed = drop_backtracks(g, route.clone());
+    Some(if trimmed.distance_m >= 0.5 * route.distance_m {
+        trimmed
+    } else {
+        route
+    })
+}
+
+/// Distance error, signed climb error (None without a target) and rank of a loop: distance and
+/// climb error minus how close every meter is to the best the user's weights allow (D82).
+fn judge(g: &Graph, req: &GenerateRequest, p: &Profile, route: &Route) -> (f64, Option<f64>, f64) {
+    let target = req.distance_m;
+    let err = (route.distance_m - target).abs() / target;
+    // Signed climb error for a target; for "as much as possible", climb per 100 m/km.
+    let (climb_term, climb_err) = match req.climb {
+        Some(ClimbGoal {
+            target_m: Some(c),
+            strictness,
+        }) if c > 0.0 => {
+            let e = (route.climb_m - c) / c;
+            ((0.25 + 4.0 * strictness as f64) * e.abs(), Some(e))
+        }
+        Some(ClimbGoal {
+            target_m: None,
+            strictness,
+        }) => (
+            -(0.25 + 4.0 * strictness as f64) * route.climb_m / route.distance_m / 0.1,
+            None,
+        ),
+        _ => (0.0, None),
+    };
+    // 0.1 of preference counts like a 10 % distance error. The displayed bars are too flat for
+    // this: at unit weight a loop's forest share moves its bar by only a few points.
+    let preference = route_stats(g, route, p).preference;
+    (
+        err,
+        climb_err,
+        err + climb_term - PREFERENCE_RANK * preference,
+    )
+}
+
+/// Local search (D86): move one via at a time a quarter of the seed radius in four
+/// directions, onto the cheapest node near there, and keep a move when the loop ranks better.
+/// Up to `POLISH_ROUNDS` rounds, stopping early when no move helps.
+fn polish(
+    g: &Graph,
+    region: &Region,
+    req: &GenerateRequest,
+    start: Snap,
+    c: Candidate,
+) -> Candidate {
+    let p = with_pressure(&req.profile, c.pressure);
+    let sac = p.max_sac;
+    let home = g.edge_component(start.edge, sac);
+    let proj = LocalProjection::new(start.pos.lat);
+    let step = c.radius * POLISH_STEP;
+    let mut best = c;
+    for _ in 0..POLISH_ROUNDS {
+        let mut moved = false;
+        for i in 0..best.vias.len() {
+            for k in 0..4 {
+                let q = proj.project(best.vias[i].pos);
+                let a = (k as f64 * 90.0).to_radians();
+                let spot = proj.unproject([q[0] + step * a.sin(), q[1] + step * a.cos()]);
+                let pt = region
+                    .via_near(best.pressure, spot, step / 2.0, None)
+                    .unwrap_or(spot);
+                let Some(snap) = g.snap_filtered(pt, VIA_SNAP_M, |e| {
+                    g.edge_component(e, sac) == home && traversable(g, e, &p)
+                }) else {
+                    continue;
+                };
+                let mut vias = best.vias.clone();
+                vias[i] = snap;
+                let Some(route) = route_loop(g, region, &p, start, &vias) else {
+                    continue;
+                };
+                if route.distance_m < 1.0 {
+                    continue;
+                }
+                let (err, _, rank) = judge(g, req, &p, &route);
+                let c = Candidate {
+                    vias,
+                    radius: best.radius,
+                    route,
+                    err,
+                    rank,
+                    pressure: best.pressure,
+                };
+                if c.better_than(&best) {
+                    best = c;
+                    moved = true;
+                }
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+    best
+}
+
 /// The route vertex nearest `p`: a via point cut off with its spur moves back onto the loop.
 fn on_route(g: &Graph, r: &Route, p: LatLon) -> LatLon {
     route_geometry(g, r)
@@ -325,4 +428,98 @@ fn coverage(g: &Graph, r: &Route) -> HashMap<u32, f64> {
         *m.entry(s.edge).or_insert(0.0) += s.fraction() * g.edge_len_m(s.edge);
     }
     m
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::{EdgeAttrs, GraphWriter, Surface};
+
+    /// 15×15 grid, 200 m spacing: asphalt west of x = 1400 m, gravel east of it.
+    fn graph() -> Graph {
+        let at = |x: f64, y: f64| LatLon {
+            lat: 46.0 + y / 111_195.0,
+            lon: 7.0 + x / (111_195.0 * 46f64.to_radians().cos()),
+        };
+        let mut w = GraphWriter::new(0);
+        let ids: Vec<Vec<u32>> = (0..15)
+            .map(|i| {
+                (0..15)
+                    .map(|j| w.add_node(at(i as f64 * 200.0, j as f64 * 200.0), 500.0))
+                    .collect()
+            })
+            .collect();
+        for i in 0..15 {
+            for j in 0..15 {
+                for (k, l) in [(i + 1, j), (i, j + 1)] {
+                    if k < 15 && l < 15 {
+                        let surface = if i.max(k) <= 7 {
+                            Surface::Asphalt
+                        } else {
+                            Surface::Gravel
+                        };
+                        let a = EdgeAttrs {
+                            length_m: 200.0,
+                            surface,
+                            sac: 1,
+                            ..Default::default()
+                        };
+                        let (p, q) = (
+                            at(i as f64 * 200.0, j as f64 * 200.0),
+                            at(k as f64 * 200.0, l as f64 * 200.0),
+                        );
+                        w.add_edge(
+                            ids[i][j],
+                            ids[k][l],
+                            a,
+                            &[(p.lat, p.lon, 500.0), (q.lat, q.lon, 500.0)],
+                        );
+                    }
+                }
+            }
+        }
+        Graph::from_bytes(w.finish()).unwrap()
+    }
+
+    #[test]
+    fn polish_moves_vias_toward_cheaper_terrain() {
+        let g = graph();
+        let pt = |x: f64, y: f64| LatLon {
+            lat: 46.0 + y / 111_195.0,
+            lon: 7.0 + x / (111_195.0 * 46f64.to_radians().cos()),
+        };
+        let start = g.snap(pt(1400.0, 1400.0)).unwrap();
+        let req = GenerateRequest {
+            start: start.pos,
+            distance_m: 5000.0,
+            climb: None,
+            profile: Profile::default(),
+            count: 1,
+        };
+        let region = Region::new(&g, &req.profile, start, 2500.0);
+        // A triangle west of the start, all on asphalt.
+        let vias = vec![
+            g.snap(pt(600.0, 2000.0)).unwrap(),
+            g.snap(pt(600.0, 800.0)).unwrap(),
+        ];
+        let route = route_loop(&g, &region, &req.profile, start, &vias).unwrap();
+        let (err, _, rank) = judge(&g, &req, &req.profile, &route);
+        let asphalt = |r: &Route| route_stats(&g, r, &req.profile).surface_m[0] / r.distance_m;
+        let before = asphalt(&route);
+        let c = Candidate {
+            vias,
+            radius: 1200.0,
+            route,
+            err,
+            rank,
+            pressure: 0.0,
+        };
+        let after = polish(&g, &region, &req, start, c);
+        assert!(after.rank < rank, "rank {rank} → {}", after.rank);
+        assert!(
+            asphalt(&after.route) < before,
+            "asphalt share {before} → {}",
+            asphalt(&after.route)
+        );
+    }
 }
