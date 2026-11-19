@@ -15,14 +15,12 @@ use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use crate::cost::{
-    best_tech_factor, climb_match, term_minima, traversable, Breakdown, Profile, ProfileError,
-    Weights,
-};
+use crate::cost::{climb_match, traversable, Profile, ProfileError};
 use crate::generate::{generate, ClimbGoal, GenerateError, GenerateRequest};
 use crate::graph::{Graph, LatLon};
 use crate::route::{
-    route_cost_per_m, route_geometry, route_stats, route_term_steps, route_via, Route, RouteStats,
+    route_cost_per_m, route_geometry, route_stats, route_term_steps, route_via, term_values,
+    weighted_score, Route, RouteStats,
 };
 use crate::snap::{Snap, SNAP_LIMIT_M};
 
@@ -199,7 +197,9 @@ fn route_json(
         "distance_m": r.distance_m,
         "climb_m": r.climb_m,
         "descent_m": r.descent_m,
-        "score": weighted_score(&bars, &profile.weights),
+        // D75: the bars weighted by the user's exponents; the climb match counts with weight 1.
+        "score": weighted_score(term_values(&stats, profile).iter().map(|t| (t.1, t.2)).chain(
+            climb_target_m.map(|t| (climb_match(r.climb_m, t), 1.0)))),
         "official_share": stats.official_share,
         "breakdown": bars,
         "distance_met": distance_met,
@@ -317,13 +317,8 @@ fn best_first(mut routes: Vec<Value>) -> Vec<Value> {
 
 /// Per-term score items: 1 means the route hit the best factor, on the unit-weight scale (D73).
 fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value {
-    let unit = p.weights.unit();
-    let best = Breakdown {
-        tech: best_tech_factor(&unit, p.max_sac),
-        ..term_minima(&unit)
-    };
-    let mean = s.breakdown;
-    let value = |b: f32, m: f32| if m <= b { 1.0 } else { (b / m).clamp(0.0, 1.0) };
+    let vals = term_values(s, p);
+    let value = |k: &str| vals.iter().find(|t| t.0 == k).map_or(0.0, |t| t.1);
     let km = |m: f64| format!("{:.1} km", m / 1000.0);
     let surface = &s.surface_m;
     let tech = match s.missing_tags_m {
@@ -341,45 +336,21 @@ fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value 
             "detail": format!("{:.0} m of climb, aiming for {:.0} m", s.climb_m, t)}));
     }
     bars.extend([
-        json!({"key": "official", "value": value(best.official, mean.official),
+        json!({"key": "official", "value": value("official"),
          "detail": format!("{} on marked trails", km(s.official_m))}),
-        json!({"key": "surface", "value": value(best.surface, mean.surface),
+        json!({"key": "surface", "value": value("surface"),
          "detail": format!("{} on asphalt or paved", km(surface[0] + surface[1]))}),
-        json!({"key": "slope", "value": value(best.slope, mean.slope),
+        json!({"key": "slope", "value": value("slope"),
          "detail": format!("{} steep uphill and {} steep downhill (over 15 %)",
              km(s.grade_m[6..].iter().sum()), km(s.grade_m[..3].iter().sum()))}),
-        json!({"key": "tech", "value": value(best.tech, mean.tech),
+        json!({"key": "tech", "value": value("tech"),
          "detail": format!("{} T3 or harder{tech}", km(s.sac_m[3..].iter().sum()))}),
-        json!({"key": "forest", "value": value(best.forest, mean.forest),
+        json!({"key": "forest", "value": value("forest"),
          "detail": format!("{forest:.0} % in forest")}),
-        json!({"key": "urban", "value": value(best.urban, mean.urban),
+        json!({"key": "urban", "value": value("urban"),
          "detail": format!("{} through built-up areas", km(s.urban_m[1] + s.urban_m[2]))}),
     ]);
     Value::Array(bars)
-}
-
-/// The headline score (D75): 100 · the bars' geometric mean, each weighted by the user's
-/// exponent for that term, so Off terms don't count. The climb match counts with weight 1.
-fn weighted_score(bars: &Value, w: &Weights) -> f32 {
-    let (mut num, mut den) = (0.0f64, 0.0f64);
-    for b in bars.as_array().into_iter().flatten() {
-        let wt = match b["key"].as_str() {
-            Some("official") => w.official,
-            Some("surface") => w.surface,
-            Some("slope") => w.slope,
-            Some("tech") => w.tech,
-            Some("forest") => w.forest,
-            Some("urban") => w.urban,
-            _ => 1.0,
-        } as f64;
-        num += wt * b["value"].as_f64().unwrap_or(0.0).max(1e-6).ln();
-        den += wt;
-    }
-    if den > 0.0 {
-        (100.0 * (num / den).exp()) as f32
-    } else {
-        100.0
-    }
 }
 
 async fn api_not_found() -> StatusCode {

@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::cost::{climb_discount, edge_cost_split, FactorTable, Profile};
 use crate::geodesy::LocalProjection;
-use crate::graph::{Direction, Graph};
+use crate::graph::{Direction, Graph, LatLon};
 use crate::route::{assemble, Route, RouteStep, Visited, REPEAT_PENALTY};
 use crate::snap::Snap;
 
@@ -37,6 +37,9 @@ struct Trees {
     pred: Vec<(RouteStep, bool)>,
     /// Cost from each node to the start snap.
     to: Vec<f64>,
+    /// Meters along the `from` and `to` paths, for cost per meter (D82).
+    from_len: Vec<f32>,
+    to_len: Vec<f32>,
 }
 
 pub(crate) struct Region<'g> {
@@ -46,6 +49,10 @@ pub(crate) struct Region<'g> {
     /// Global node id → local id + 1, 0 = outside. Zero-allocated, so only touched pages cost.
     local: Vec<u32>,
     xy: Vec<[f64; 2]>,
+    /// Local id → global node id.
+    global: Vec<u32>,
+    /// Local ids by `CELL_M` grid cell, for the nodes near a point.
+    cells: HashMap<(i32, i32), Vec<u32>>,
     first: Vec<u32>,
     hops: Vec<Hop>,
     proj: LocalProjection,
@@ -62,6 +69,19 @@ struct Scratch {
 
 thread_local! {
     static SCRATCH: RefCell<Scratch> = RefCell::new(Scratch::default());
+}
+
+/// Grid cell size of the node index used to place via points.
+const CELL_M: f64 = 250.0;
+/// A peak or viewpoint wins a via spot when its node costs at most this much more per meter
+/// than the cheapest node there (D82).
+const ANCHOR_SLACK: f64 = 1.1;
+
+fn cell(q: [f64; 2]) -> (i32, i32) {
+    (
+        (q[0] / CELL_M).floor() as i32,
+        (q[1] / CELL_M).floor() as i32,
+    )
 }
 
 fn key(x: f64) -> u64 {
@@ -138,12 +158,18 @@ impl<'g> Region<'g> {
             i += 1;
         }
         first.push(hops.len() as u32);
+        let mut cells: HashMap<(i32, i32), Vec<u32>> = HashMap::new();
+        for (i, q) in xy.iter().enumerate() {
+            cells.entry(cell(*q)).or_default().push(i as u32);
+        }
         Region {
             g,
             profile: p0,
             start,
             local,
             xy,
+            global,
+            cells,
             first,
             hops,
             proj,
@@ -198,15 +224,24 @@ impl<'g> Region<'g> {
         let (fwd, bwd) = (at(fwd, d), at(bwd, d));
         let t = s.t as f64;
 
+        let len = |e: u32| self.g.hot_edge(e).len_cm as f32 / 100.0;
+        let s_len = len(s.edge);
         let mut from = vec![f64::INFINITY; n];
+        let mut from_len = vec![0f32; n];
         let mut pred = vec![(step(0, 0.0, 0.0), false); n];
         let mut heap = BinaryHeap::new();
-        for (v, c, st) in [
-            (b, fwd * (1.0 - t), step(s.edge, s.t, 1.0)),
-            (a, bwd * t, step(s.edge, s.t, 0.0)),
+        for (v, c, st, l) in [
+            (
+                b,
+                fwd * (1.0 - t),
+                step(s.edge, s.t, 1.0),
+                s_len * (1.0 - s.t),
+            ),
+            (a, bwd * t, step(s.edge, s.t, 0.0), s_len * s.t),
         ] {
             if c < from[v as usize] {
                 from[v as usize] = c;
+                from_len[v as usize] = l;
                 pred[v as usize] = (st, true);
                 heap.push(Reverse((key(c), v)));
             }
@@ -220,6 +255,7 @@ impl<'g> Region<'g> {
                 let c = du + at(h.out, d);
                 if c < from[h.to as usize] {
                     from[h.to as usize] = c;
+                    from_len[h.to as usize] = from_len[u as usize] + len(h.edge);
                     pred[h.to as usize] = (
                         if h.forward {
                             step(h.edge, 0.0, 1.0)
@@ -235,9 +271,14 @@ impl<'g> Region<'g> {
 
         // Into the start: from `a` forward along the start edge to t, from `b` backward.
         let mut to = vec![f64::INFINITY; n];
-        for (v, c) in [(a, fwd * t), (b, bwd * (1.0 - t))] {
+        let mut to_len = vec![0f32; n];
+        for (v, c, l) in [
+            (a, fwd * t, s_len * s.t),
+            (b, bwd * (1.0 - t), s_len * (1.0 - s.t)),
+        ] {
             if c < to[v as usize] {
                 to[v as usize] = c;
+                to_len[v as usize] = l;
                 heap.push(Reverse((key(c), v)));
             }
         }
@@ -250,11 +291,72 @@ impl<'g> Region<'g> {
                 let c = du + at(h.back, d);
                 if c < to[h.to as usize] {
                     to[h.to as usize] = c;
+                    to_len[h.to as usize] = to_len[u as usize] + len(h.edge);
                     heap.push(Reverse((key(c), h.to)));
                 }
             }
         }
-        Trees { from, pred, to }
+        Trees {
+            from,
+            pred,
+            to,
+            from_len,
+            to_len,
+        }
+    }
+
+    /// Where to put a via point near `pt` (D82): the region node within `radius_m` whose
+    /// cheapest way out from the start and back costs least per meter under this climb
+    /// pressure, so the via sits where the user's preferred terrain leads. `anchor` (a peak or
+    /// viewpoint) wins when its nearest node is within `ANCHOR_SLACK` of that. None when no
+    /// reachable node is near.
+    pub(crate) fn via_near(
+        &self,
+        pressure: f32,
+        pt: LatLon,
+        radius_m: f64,
+        anchor: Option<LatLon>,
+    ) -> Option<LatLon> {
+        let cell_ = self.trees(pressure);
+        let tr = cell_.get().expect("built");
+        let c = self.proj.project(pt);
+        let a = anchor.map(|p| self.proj.project(p));
+        let ratio = |v: usize| {
+            let l = (tr.from_len[v] + tr.to_len[v]) as f64;
+            (tr.from[v].is_finite() && tr.to[v].is_finite() && l > 0.0)
+                .then(|| (tr.from[v] + tr.to[v]) / l)
+        };
+        let (lo, hi) = (
+            cell([c[0] - radius_m, c[1] - radius_m]),
+            cell([c[0] + radius_m, c[1] + radius_m]),
+        );
+        let (mut best, mut near_anchor) = (None::<(f64, u32)>, None::<(f64, u32)>);
+        for x in lo.0..=hi.0 {
+            for y in lo.1..=hi.1 {
+                for &v in self.cells.get(&(x, y)).into_iter().flatten() {
+                    let q = self.xy[v as usize];
+                    if (q[0] - c[0]).powi(2) + (q[1] - c[1]).powi(2) > radius_m * radius_m {
+                        continue;
+                    }
+                    let Some(r) = ratio(v as usize) else { continue };
+                    if best.is_none_or(|b| r < b.0) {
+                        best = Some((r, v));
+                    }
+                    if let Some(a) = a {
+                        let d = (q[0] - a[0]).powi(2) + (q[1] - a[1]).powi(2);
+                        if near_anchor.is_none_or(|n| d < n.0) {
+                            near_anchor = Some((d, v));
+                        }
+                    }
+                }
+            }
+        }
+        let (r, v) = best?;
+        let v = match near_anchor {
+            Some((_, n)) if ratio(n as usize).is_some_and(|ra| ra <= ANCHOR_SLACK * r) => n,
+            _ => v,
+        };
+        Some(self.g.node(self.global[v as usize]))
     }
 
     /// One leg as `route::route` would route it, or None to leave it to the full graph (an

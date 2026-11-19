@@ -6,7 +6,9 @@ use std::collections::BinaryHeap;
 
 use serde::Serialize;
 
-use crate::cost::{edge_cost_with, score, term_minima, Breakdown, FactorTable, Profile, Weights};
+use crate::cost::{
+    best_tech_factor, edge_cost_with, score, term_minima, Breakdown, FactorTable, Profile, Weights,
+};
 use crate::geodesy::{gain_loss, haversine_m, polyline_length_m, LocalProjection};
 use crate::graph::{flags, Direction, Graph, LatLon, FLAT_BAND, GRADE_BANDS};
 use crate::snap::Snap;
@@ -482,11 +484,20 @@ pub struct RouteStats {
     pub breakdown: Breakdown,
     /// Σ len * edge_factors(.., &Weights::default()).product() / distance.
     pub mean_factor_default: f64,
+    /// Σ len * edge factors under the user's weights (no climb pressure) / distance, against the
+    /// smallest those weights allow: 1 = every meter as good as it gets. Ranks loops (D82).
+    pub preference: f64,
     /// cost::score(mean_factor_default).
     pub score: f32,
 }
 
 pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
+    let user = Weights {
+        climb_pressure: 0.0,
+        ..p.weights
+    };
+    let t_user = FactorTable::new(&user);
+    let mut mean_user = 0.0;
     let (t, t_default) = (
         FactorTable::new(&p.weights.unit()),
         FactorTable::new(&Weights::default()),
@@ -506,6 +517,7 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
         surface_inferred_m: 0.0,
         breakdown: Breakdown::default(),
         mean_factor_default: 0.0,
+        preference: 0.0,
         score: 0.0,
     };
     let mut bd = [0.0f64; 6];
@@ -546,11 +558,17 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
             *acc += len * v as f64;
         }
         st.mean_factor_default += len * t_default.breakdown(g, s.edge, dir).product();
+        mean_user += len * t_user.breakdown(g, s.edge, dir).product();
     }
     let d = r.distance_m;
     if d > 0.0 {
         st.official_share = st.official_m / d;
         st.mean_factor_default /= d;
+        let best = Breakdown {
+            tech: best_tech_factor(&user, p.max_sac),
+            ..term_minima(&user)
+        };
+        st.preference = (best.product() / (mean_user / d)).min(1.0);
         let m = |i: usize| (bd[i] / d) as f32;
         st.breakdown = Breakdown {
             slope: m(0),
@@ -563,4 +581,44 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
     }
     st.score = score(st.mean_factor_default);
     st
+}
+
+/// Each term's bar value under `p` (1 = the best its weights and grade limit allow, measured
+/// at unit weight: D73, D81) paired with the user's weight for it (D75).
+pub fn term_values(st: &RouteStats, p: &Profile) -> [(&'static str, f64, f64); 6] {
+    let unit = p.weights.unit();
+    let best = Breakdown {
+        tech: best_tech_factor(&unit, p.max_sac),
+        ..term_minima(&unit)
+    };
+    let (m, w) = (st.breakdown, &p.weights);
+    let v = |b: f32, x: f32| {
+        if x <= b {
+            1.0
+        } else {
+            (b / x).clamp(0.0, 1.0) as f64
+        }
+    };
+    [
+        ("official", v(best.official, m.official), w.official as f64),
+        ("surface", v(best.surface, m.surface), w.surface as f64),
+        ("slope", v(best.slope, m.slope), w.slope as f64),
+        ("tech", v(best.tech, m.tech), w.tech as f64),
+        ("forest", v(best.forest, m.forest), w.forest as f64),
+        ("urban", v(best.urban, m.urban), w.urban as f64),
+    ]
+}
+
+/// 100 · the weighted geometric mean of `(value, weight)` pairs; all weights 0 gives 100 (D75).
+pub fn weighted_score(terms: impl IntoIterator<Item = (f64, f64)>) -> f32 {
+    let (mut num, mut den) = (0.0f64, 0.0f64);
+    for (v, w) in terms {
+        num += w * v.max(1e-6).ln();
+        den += w;
+    }
+    if den > 0.0 {
+        (100.0 * (num / den).exp()) as f32
+    } else {
+        100.0
+    }
 }

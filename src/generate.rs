@@ -1,6 +1,7 @@
-//! Loop generation (D39): triangle and 3-via seeds at fixed headings, pulled toward nearby
-//! anchors, radius rescaled until the length fits and climb pressure tuned until the climb fits
-//! (D52), then ranked and deduplicated.
+//! Loop generation (D39): triangle and 3-via seeds at fixed headings, each via placed where the
+//! user's costs are lowest nearby, preferring peaks and viewpoints (D82), radius rescaled until
+//! the length fits and climb pressure tuned until the climb fits (D52), then ranked by the
+//! user's score and deduplicated.
 
 use std::collections::HashMap;
 
@@ -22,6 +23,8 @@ const VIA_SNAP_M: f32 = 500.0;
 /// Edges this close to the start may be reused without penalty (the access stem).
 const STEM_M: f64 = 500.0;
 const TOLERANCE: f64 = 0.10;
+/// Weight of a loop's preference (0–1) in its rank, against distance and climb error.
+const PREFERENCE_RANK: f64 = 1.0;
 const MAX_OVERLAP: f64 = 0.5;
 const ATTEMPTS: usize = 8;
 /// Search region radius over the target distance. A loop of length D stays within D/2 of
@@ -185,11 +188,13 @@ fn seed(
             .iter()
             .map(|d: &f64| {
                 let b = (heading_deg + d).to_radians();
-                let pt = pull(
-                    g,
-                    proj.unproject([o[0] + r * b.sin(), o[1] + r * b.cos()]),
-                    r / 3.0,
-                );
+                let ideal = proj.unproject([o[0] + r * b.sin(), o[1] + r * b.cos()]);
+                // D82: the via goes where the user's costs are low, a peak or viewpoint if close.
+                let anchor = anchor_near(g, ideal, r / 3.0);
+                let pt = region
+                    .via_near(pressure, ideal, r / 3.0, anchor)
+                    .or(anchor)
+                    .unwrap_or(ideal);
                 g.snap_filtered(pt, VIA_SNAP_M, |e| {
                     g.edge_component(e, sac) == home && traversable(g, e, p)
                 })
@@ -245,8 +250,11 @@ fn seed(
             ),
             _ => (0.0, None),
         };
-        let score = route_stats(g, &route, p).score as f64;
-        let rank = err + climb_term - 0.2 * score / 100.0;
+        // How close every meter is to the best the user's weights allow (D82); 0.1 of it counts
+        // like a 10 % distance error. The displayed score is too flat for this: at unit weight
+        // a loop's forest share moves its bar by only a few points.
+        let preference = route_stats(g, &route, p).preference;
+        let rank = err + climb_term - PREFERENCE_RANK * preference;
         let scale = (target / route.distance_m).clamp(0.5, 2.0);
         let c = Candidate {
             vias: vias.iter().map(|v| v.pos).collect(),
@@ -295,8 +303,8 @@ fn on_route(g: &Graph, r: &Route, p: LatLon) -> LatLon {
         .unwrap_or(p)
 }
 
-/// The nearest anchor within `max_m` of `pt`, else `pt` itself.
-fn pull(g: &Graph, pt: LatLon, max_m: f64) -> LatLon {
+/// The nearest anchor (peak or viewpoint) within `max_m` of `pt`.
+fn anchor_near(g: &Graph, pt: LatLon, max_m: f64) -> Option<LatLon> {
     // A degree of latitude is >= 110.5 km, so this skips the haversine for far anchors.
     let dlat = max_m / 110_000.0;
     g.anchors()
@@ -305,7 +313,7 @@ fn pull(g: &Graph, pt: LatLon, max_m: f64) -> LatLon {
         .map(|a| (haversine_m(a.pos, pt), a.pos))
         .filter(|(d, _)| *d <= max_m)
         .min_by(|a, b| a.0.total_cmp(&b.0))
-        .map_or(pt, |(_, pos)| pos)
+        .map(|(_, pos)| pos)
 }
 
 /// Edge id → meters of it the route covers.

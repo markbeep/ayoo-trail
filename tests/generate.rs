@@ -196,3 +196,40 @@ fn components_follow_the_sac_limit() {
     assert_ne!(g.edge_component(island, 3), g.main_component(3));
     assert_eq!(g.edge_component(island, 5), g.main_component(5));
 }
+
+#[test]
+fn loops_go_where_the_user_preferences_are_cheap() {
+    // D82: the east half is T3, the west half T1. The default score avoids technical trails;
+    // a user who seeks them strongly should get loops that run mostly east.
+    let (n, step) = (21, 200.0);
+    let mut w = grid_writer(n, step);
+    for e in 0..w.edge_count() as u32 {
+        let mid = at(2000.0, 0.0).lon + 1e-9;
+        if w.edge_geometry(e).iter().any(|&(_, lon, _)| lon > mid) {
+            w.edge_attrs_mut(e).sac = 3;
+        }
+    }
+    let g = Graph::from_bytes(w.finish()).unwrap();
+    let mut r = req(at(2000.0, 2000.0), 6000.0);
+    r.profile.weights.technical = 1.0;
+    r.profile.weights.tech = 4.0;
+    let routes = generate(&g, &r).unwrap();
+    let east = |gr: &GeneratedRoute| {
+        let cov = coverage(&g, gr);
+        let total: f64 = cov.values().sum();
+        cov.iter()
+            .filter(|(e, _)| g.edge_attrs(**e).sac == 3)
+            .map(|(_, m)| m)
+            .sum::<f64>()
+            / total
+    };
+    let best = routes
+        .iter()
+        .find(|r| r.distance_met)
+        .expect("a loop in tolerance");
+    assert!(
+        east(best) >= 0.8,
+        "best loop only {:.0} % on the side the user prefers",
+        100.0 * east(best)
+    );
+}
