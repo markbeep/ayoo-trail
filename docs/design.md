@@ -208,11 +208,14 @@ paths and footways stay unknown. Inferred values carry a flag.
 Hard filters, applied before costing: sac above the profile maximum, motorway
 and trunk always, access restrictions, exclusion markers configured to block.
 
-A slider weight `w` adjusts a factor as `1 + (factor − 1) * w`, so 0 disables
-the term and 2 doubles its deviation from neutral. The result is clamped to a
-floor of 0.05, so no slider setting can produce a non-positive edge cost. The
-`slope` weight is labelled "slope sensitivity" in the UI: it scales the uphill
-bonus and the downhill penalty together.
+A weight `w ∈ [0, 4]` raises a factor to `factor^w` (D51): 0 disables the
+term, 1 is the table value, 4 lets one term dominate. Powers stay positive, so
+no setting produces a non-positive edge cost. The `slope` weight ("Counts" in
+the Hills panel) scales the uphill and downhill factors together;
+`uphill`/`downhill` run −1 gentle … 0 any … +1 steep and blend the band tables
+(D53). `climb_pressure ∈ [0, 1]` is set by the generator, not the user: every
+band steeper than 8 % (both directions) is multiplied by `1 − 0.8·pressure`, so
+at full pressure hilly edges cost a fifth of their slope factor (D52).
 
 Score = `100 * min(0.63 / mean_factor_default, 1)^(1/6)` (D32, geometric mean per D44), where
 `mean_factor_default = cost / distance_m`, the cost per metre under **default
@@ -222,10 +225,19 @@ gravel 63, asphalt about 32; only routes better than that clamp. The
 per-term contribution is displayed as bars so the drag debugger shows *why* the
 score moved.
 
-Distance and climb are **not** in the cost function. Distance is a target
-enforced by generation and refinement; climb is soft and optional.
+Distance is **not** in the cost function; it is a target enforced by
+generation. Climb enters only through the generator's climb pressure above;
+it is a soft goal and never filters a route (D20, D52).
 
 ## 9. Generation
+
+> **As built (D39, D52):** triangle (θ±30°) and 3-via (θ−40°, θ, θ+40°) seeds
+> at 12 headings, pulled to an anchor within r/3. Per seed, up to 8 attempts
+> rescale the radius by D*/D and bisect the climb pressure inside
+> `[0, strictness]` until distance is within ±10 % and climb within ±15 % of the
+> target. "As much as possible" uses `pressure = strictness`. Rank
+> `= |D−D*|/D* + (0.25 + 4·strictness)·|C−C*|/C* − 0.2·score/100`; for max climb
+> the climb term is `−(C/D)/0.1`. The steps below are the original design.
 
 Seeds alone cannot hit a distance target; the local search does the targeting.
 
@@ -286,14 +298,17 @@ validated to `0..=3`; anything outside is a `422`.
 
 | Endpoint | Body / query | Returns |
 |---|---|---|
-| `POST /api/generate` | `{start, distance_m, climb_m?, profile, count}` | `{routes: [...]}` |
+| `POST /api/generate` | `{start, distance_m, climb?: {target_m: number \| null, strictness: 0–1}, profile, count}` | `{routes: [...]}` |
 | `POST /api/route` | `{waypoints, profile}` | `{route}` |
 | `GET /api/health` | | `{status, graph_date}` |
 | `GET /` | | static client |
 
 `route` = `{geometry: GeoJSON LineString with [lon, lat, z], waypoints:
 [{lat, lon}], distance_m, climb_m, descent_m, score, breakdown,
-official_share, distance_met, graph_date}`. `waypoints` are the via points the
+official_share, distance_met, graph_date, climb_pressure, cost_per_m}`.
+`climb_pressure` is what the route was generated with; the client sends it back
+in `profile.weights` when re-routing an edit. `cost_per_m` has one value per
+coordinate (the step leaving it) for the colour-by-cost view (D54). `waypoints` are the via points the
 route was built from, so the client can place drag handles; `generate` returns
 them with every route.
 
@@ -309,11 +324,14 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 
 ## 11. Frontend
 
-- Left panel: start (last used, or click the map), distance, hilliness slider
-  (m/km, default 60), one button. Advanced drawer with the weight sliders, max
-  sac, exclusion markers.
-- Hilliness maps to an optional soft `climb_m` target (`hilliness × distance`).
-  It biases the search; it never rejects a route.
+- Left panel: start (last used, or click the map), distance, "How hilly?"
+  (Gentle/Hilly/Mountain/Max quick picks over a metre slider and a "Stick to
+  it" strictness slider, D52/D56), one button. Weight sliders live in each
+  score bar's Adjust panel (D56); changes regenerate live (D55).
+- Presets follow the distance (30/60/90 m per km); a slider value is fixed
+  metres; Max asks for as much climb as possible.
+- The selected loop is drag-editable with Undo/Reset and an optional
+  colour-by-cost view (D54).
 - Base map: swisstopo WMTS fetched directly by the browser from
   `wmts.geo.admin.ch` (CORS `*`, CDN-cached, `©swisstopo` attribution):
   `pixelkarte-farbe` (JPEG, maxzoom 18) by default, `swissimage` satellite

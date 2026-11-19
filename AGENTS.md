@@ -9,6 +9,8 @@ dev-only `?dev=route` client mode are being built, with the 2026-11-18
 revisions (D30–D37) overriding `docs/milestones.md` where they differ. Loop
 generation and `/api/generate` (D39) plus the map/overlay redesign (D40–D42)
 are in progress; no response cache (generation takes tens of ms, D39).
+Fine-grained weights and climb goals (D51–D53, D55–D56) and drag editing with
+colour-by-cost (D54) are built.
 
 ## Layout
 
