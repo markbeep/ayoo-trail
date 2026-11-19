@@ -51,20 +51,59 @@ data REGION="demo":
     # Download to .part first so an interrupted fetch is not mistaken for a finished one.
     fetch() { [ -f "$2" ] || { curl -fL --retry 3 -o "$2.part" "$1" && mv "$2.part" "$2"; }; }
     fetch https://download.geofabrik.de/europe/switzerland-latest.osm.pbf "$raw/switzerland-latest.osm.pbf"
-    url="https://data.geo.admin.ch/api/stac/v0.9/collections/ch.swisstopo.swissalti3d/items?bbox=$bbox&limit=100"
-    list=$(mktemp)
-    trap 'rm -f "$list"' EXIT
-    while [ -n "$url" ]; do
-      page=$(curl -fsSL --retry 3 "$url")
-      # "<E-N> <year> <href>" per 2 m GeoTIFF asset.
-      jq -r '.features[].assets | to_entries[] | select(.key | endswith("_2_2056_5728.tif"))
-        | .value.href | . as $h | (split("/") | last | split("_")) as $p | "\($p[2]) \($p[1]) \($h)"' <<<"$page" >>"$list"
-      url=$(jq -r 'first(.links[] | select(.rel == "next") | .href) // empty' <<<"$page")
-    done
-    # Items repeat per survey year; keep the newest year per tile.
-    sort -k1,1 -k2,2r "$list" | awk '!seen[$1]++ { print $3 }' \
-      | xargs -r -P 8 -n 1 sh -c 'f="$1/${2##*/}"; [ -f "$f" ] || { curl -fsSL --retry 3 -o "$f.part" "$2" && mv "$f.part" "$f"; }' _ "$raw/alti3d"
-    echo "swissALTI3D: $(ls "$raw/alti3d" | grep -c '\.tif$') tiles"
+    # Resolved tile URLs (newest survey year per tile), cached so a rerun skips the slow listing.
+    # Delete it to pick up new survey years.
+    urls="$raw/alti3d/.tiles-$region.txt"
+    if [ -f "$urls" ]; then
+      echo "swissALTI3D: using cached tile list $urls"
+    else
+      url="https://data.geo.admin.ch/api/stac/v0.9/collections/ch.swisstopo.swissalti3d/items?bbox=$bbox&limit=100"
+      list=$(mktemp)
+      trap 'rm -f "$list"' EXIT
+      pages=0
+      while [ -n "$url" ]; do
+        page=$(curl -fsSL --retry 3 "$url")
+        # "<E-N> <year> <href>" per 2 m GeoTIFF asset.
+        jq -r '.features[].assets | to_entries[] | select(.key | endswith("_2_2056_5728.tif"))
+          | .value.href | . as $h | (split("/") | last | split("_")) as $p | "\($p[2]) \($p[1]) \($h)"' <<<"$page" >>"$list"
+        url=$(jq -r 'first(.links[] | select(.rel == "next") | .href) // empty' <<<"$page")
+        pages=$((pages + 1))
+        # The API reports no total, so show pages and items listed so far.
+        printf '\rswissALTI3D: listing page %d, %d items' "$pages" "$(wc -l <"$list")" >&2
+      done
+      echo >&2
+      # Items repeat per survey year; keep the newest year per tile.
+      sort -k1,1 -k2,2r "$list" | awk '!seen[$1]++ { print $3 }' >"$urls.part"
+      mv "$urls.part" "$urls"
+    fi
+    total=$(wc -l <"$urls")
+    # Names still missing; progress counts how many of these have appeared.
+    todo=$(mktemp)
+    trap 'rm -f "${list:-}" "$todo"' EXIT
+    while read -r u; do f="${u##*/}"; [ -f "$raw/alti3d/$f" ] || echo "$f"; done <"$urls" >"$todo"
+    missing=$(wc -l <"$todo")
+    echo "swissALTI3D: $((total - missing))/$total tiles present, $missing to download"
+    if [ "$missing" -gt 0 ]; then
+      grep -F -f "$todo" "$urls" \
+        | xargs -r -P 8 -n 1 sh -c 'f="$1/${2##*/}"; [ -f "$f" ] || { curl -fsSL --retry 3 -o "$f.part" "$2" && mv "$f.part" "$f"; }' _ "$raw/alti3d" &
+      pid=$!
+      t0=$(date +%s)
+      report() {
+        got=$( (cd "$raw/alti3d" && ls -1) | grep -c -x -F -f "$todo" || true)
+        el=$(( $(date +%s) - t0 ))
+        eta="--"
+        if [ "$got" -gt 0 ] && [ "$el" -gt 0 ]; then
+          s=$(( (missing - got) * el / got ))
+          eta=$(printf '%dh%02dm' $((s / 3600)) $((s % 3600 / 60)))
+        fi
+        printf '\rswissALTI3D: %d/%d tiles (%d%%), %s/min, ETA %s   ' \
+          "$((total - missing + got))" "$total" "$(( (total - missing + got) * 100 / total ))" \
+          "$(( el > 0 ? got * 60 / el : 0 ))" "$eta" >&2
+      }
+      while kill -0 "$pid" 2>/dev/null; do report; sleep 5; done
+      report; echo >&2
+      wait "$pid"
+    fi
     if ! ls "$raw/wanderwege"/*.gpkg >/dev/null 2>&1; then
       zip="$raw/wanderwege/wanderwege.gpkg.zip"
       fetch https://data.geo.admin.ch/ch.swisstopo.swisstlm3d-wanderwege/swisstlm3d-wanderwege/swisstlm3d-wanderwege_2056_5728.gpkg.zip "$zip"

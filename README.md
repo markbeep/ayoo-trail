@@ -22,8 +22,11 @@ just dev                     # API on :8080, client on http://localhost:5173
 Open http://localhost:5173, pick a start inside the demo region, and press
 "Find loops".
 
-- Use `ch` instead of `demo` for all of Switzerland. The download and import
-  take much longer.
+- Use `ch` instead of `demo` for all of Switzerland. The download (~42k
+  elevation tiles, ~55 GB) and import take much longer. `just data` shows
+  progress and an ETA, and an interrupted run resumes where it stopped. The tile
+  list is cached in `data/raw/alti3d/.tiles-<region>.txt`; delete it to pick up
+  new survey years.
 - Without `data/graph.bin` the server still starts, but `/api/route` and
   `/api/generate` answer 503.
 - `just check` runs fmt, clippy, the Rust tests and the client typecheck.
