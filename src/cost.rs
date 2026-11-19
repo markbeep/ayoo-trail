@@ -293,12 +293,16 @@ pub fn edge_cost(g: &Graph, e: u32, dir: Direction, p: &Profile) -> Option<EdgeC
     })
 }
 
-/// D32: `100 * min(SCORE_REFERENCE / mean_factor_default, 1)`.
+/// D44: `100 * min(SCORE_REFERENCE / mean_factor_default, 1)^(1/6)`, the geometric mean over
+/// the six cost terms of D32's ratio. A monotone rescale, so rankings and slider stability stay.
 pub fn score(mean_factor_default: f64) -> f32 {
     if !mean_factor_default.is_finite() || mean_factor_default <= 0.0 {
         return 0.0;
     }
-    (100.0 * (SCORE_REFERENCE / mean_factor_default).min(1.0)) as f32
+    (100.0
+        * (SCORE_REFERENCE / mean_factor_default)
+            .min(1.0)
+            .powf(1.0 / 6.0)) as f32
 }
 
 #[cfg(test)]

@@ -206,7 +206,7 @@ floor of 0.05, so no slider setting can produce a non-positive edge cost. The
 `slope` weight is labelled "slope sensitivity" in the UI: it scales the uphill
 bonus and the downhill penalty together.
 
-Score = `100 * min(0.63 / mean_factor_default, 1)` (D32), where
+Score = `100 * min(0.63 / mean_factor_default, 1)^(1/6)` (D32, geometric mean per D44), where
 `mean_factor_default = cost / distance_m`, the cost per metre under **default
 weights**, without exclusion or repetition penalties, so the score does not
 move with the sliders. A flat official forest trail (0.63) scores 100, plain

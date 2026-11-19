@@ -166,9 +166,11 @@ fn extreme_weight_cannot_make_cost_non_positive() {
 }
 
 #[test]
-fn score_follows_d32() {
+fn score_follows_d44() {
     assert!((score(0.63) - 100.0).abs() < 1e-4);
-    assert!((score(1.26) - 50.0).abs() < 1e-4);
+    // Geometric mean over the six terms (D44): twice the reference cost is 100 * 0.5^(1/6).
+    assert!((score(1.26) - 89.089_87).abs() < 1e-3);
+    assert!((score(0.63 * 64.0) - 50.0).abs() < 1e-3);
     assert_eq!(score(0.5), 100.0);
     assert_eq!(score(0.0), 0.0);
     assert_eq!(score(f64::NAN), 0.0);
