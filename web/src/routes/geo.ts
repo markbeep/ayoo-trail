@@ -38,3 +38,23 @@ export function nearestIndex(coords: readonly (readonly number[])[], lon: number
   });
   return best;
 }
+
+/** Coordinate index of each waypoint along the route, in order: the first is 0, the last the end
+ * (a loop's start and finish coincide), the rest searched forward from the previous one. */
+export function waypointIndices(coords: readonly (readonly number[])[], wps: readonly { lat: number; lon: number }[]): number[] {
+  let from = 0;
+  return wps.map((p, i) => {
+    if (i === 0) return 0;
+    if (i === wps.length - 1) return coords.length - 1;
+    from += nearestIndex(coords.slice(from), p.lon, p.lat);
+    return from;
+  });
+}
+
+/** The leg (between waypoints `leg` and `leg + 1`) that coordinate `k` lies on. */
+export function legAt(coords: readonly (readonly number[])[], wps: readonly { lat: number; lon: number }[], k: number): number {
+  const idx = waypointIndices(coords, wps);
+  let leg = 0;
+  for (let i = 0; i < idx.length - 1; i++) if (idx[i]! <= k) leg = i;
+  return leg;
+}

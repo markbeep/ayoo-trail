@@ -4,7 +4,7 @@ import { createMemo, createRoot, createSignal } from "solid-js";
 import type { BaseMapId } from "./map/basemaps";
 import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
 import type { BreakdownKey, LatLon, Route, Weights } from "./routes/types";
-import { ApiError, generate } from "./api";
+import { ApiError, generate, routeVia } from "./api";
 
 export type NumericWeight = Exclude<keyof Weights, "uphill" | "downhill" | "climb_pressure">;
 
@@ -132,6 +132,57 @@ export function setStrictness(v: number) {
   settingsChanged();
 }
 
+/** Edited loops (D54): earlier versions per loop id for Undo; the first is the loop as generated. */
+export const [history, setHistory] = createSignal<Record<string, Route[]>>({});
+export const isEdited = (id: string) => (history()[id]?.length ?? 0) > 0;
+export const [editError, setEditError] = createSignal<string | null>(null);
+/** Colour the selected route by cost per metre (D54). */
+export const [costView, setCostView] = createSignal(false);
+/** `/api/route` takes at most 20 waypoints. */
+export const MAX_WAYPOINTS = 20;
+
+const withinDistance = (m: number) => Math.abs(m - distanceKm() * 1000) / (distanceKm() * 1000) <= 0.1;
+/** Re-route a loop through its waypoints under the current weights and its own climb pressure. */
+async function reroute(r: Route, wps: LatLon[], id: string): Promise<Route> {
+  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure });
+  return { ...next, id, climb_pressure: r.climb_pressure, distance_met: withinDistance(next.distance_m) };
+}
+const replaceRoute = (id: string, r: Route) => setRoutes((rs) => rs.map((x) => (x.id === id ? r : x)));
+
+let editSeq = 0;
+/** Replace a loop's waypoints and re-route it; the old version goes on its undo stack. */
+export async function editWaypoints(id: string, wps: LatLon[]) {
+  const r = routes().find((x) => x.id === id);
+  if (!r || wps.length > MAX_WAYPOINTS) return;
+  const mine = ++editSeq;
+  setRefreshing(true);
+  try {
+    const next = await reroute(r, wps, id);
+    if (mine !== editSeq) return;
+    setHistory((h) => ({ ...h, [id]: [...(h[id] ?? []), r] }));
+    replaceRoute(id, next);
+    setEditError(null);
+  } catch (e) {
+    if (mine !== editSeq) return;
+    setEditError(e instanceof ApiError ? `Couldn't route there: ${e.message}` : "Couldn't reach the route server.");
+  }
+  setRefreshing(false);
+}
+export function undoEdit(id: string) {
+  const h = history()[id];
+  if (!h?.length) return;
+  replaceRoute(id, h[h.length - 1]!);
+  setHistory((x) => ({ ...x, [id]: h.slice(0, -1) }));
+  setEditError(null);
+}
+export function resetEdit(id: string) {
+  const first = history()[id]?.[0];
+  if (!first) return;
+  replaceRoute(id, first);
+  setHistory((x) => ({ ...x, [id]: [] }));
+  setEditError(null);
+}
+
 let seq = 0;
 /** Generate loops with `POST /api/generate`. A live refresh keeps the query card as it is and the same loop slot selected. */
 export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
@@ -144,6 +195,21 @@ export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
   try {
     const rs = await generate(start(), distanceKm() * 1000, { target_m: climbTargetM(), strictness: strictness() }, weights());
     if (mine !== seq) return; // a newer request superseded this one
+    if (opts.keepOpen) {
+      // Edited loops keep their points and re-route under the new settings; Reset goes to the fresh loop.
+      const h = history();
+      const kept = await Promise.all(rs.map(async (fresh) => {
+        const old = routes().find((x) => x.id === fresh.id);
+        if (!old || !h[fresh.id]?.length) return fresh;
+        return reroute(fresh, old.waypoints, fresh.id).catch(() => fresh);
+      }));
+      if (mine !== seq) return;
+      setHistory((x) => Object.fromEntries(Object.entries(x).map(([id, v]) => {
+        const fresh = rs.find((r) => r.id === id);
+        return [id, fresh && v.length ? [fresh] : []];
+      })));
+      rs.splice(0, rs.length, ...kept);
+    } else setHistory({});
     setRoutes(rs);
     setSelectedId(rs[opts.keepOpen ? Math.min(slot, rs.length - 1) : 0]?.id ?? null);
     setStale(false);

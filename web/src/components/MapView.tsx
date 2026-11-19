@@ -3,8 +3,10 @@ import { MapMenu, type MenuState } from "./MapMenu";
 import { DEV_ROUTE, addWaypoint, devHealth, devWaypoints } from "../dev/routeDebug";
 import { MapController } from "../map/controller";
 import { nearestIndex } from "../routes/geo";
+import type { LatLon } from "../routes/types";
 import {
   hoverIndex, selected, setHoverIndex, baseMap, overlays, pickingStart, routes, selectedId, setPickingStart, setSelectedId, setStart, start,
+  costView, editWaypoints, MAX_WAYPOINTS, refreshing,
 } from "../state";
 
 /** Reads a CSS custom property so map paint colours follow the design tokens. */
@@ -30,6 +32,7 @@ export function MapView(props: { padding: () => { left: number; right: number; t
       here: token("--here"),
       shade: token("--map-shade"),
       forest: token("--map-forest"),
+      cost: [1, 2, 3, 4, 5].map((i) => token(`--cost-${i}`)),
       palette: {
         land: token("--map-land"), wood: token("--map-wood"), grass: token("--map-grass"),
         rock: token("--map-rock"), ice: token("--map-ice"), water: token("--map-water"),
@@ -46,6 +49,19 @@ export function MapView(props: { padding: () => { left: number; right: number; t
       },
       onContextMenu: (p, at) => setMenu({ p, x: at.x, y: at.y }),
       onMoveStart: () => setMenu(null),
+      onWaypointMove: (i, p) => {
+        const r = untrack(selected);
+        if (r) void editWaypoints(r.id, r.waypoints.map((w, j) => (j === i ? p : w)));
+      },
+      onWaypointInsert: (leg, p) => {
+        const r = untrack(selected);
+        if (r && r.waypoints.length < MAX_WAYPOINTS) void editWaypoints(r.id, [...r.waypoints.slice(0, leg + 1), p, ...r.waypoints.slice(leg + 1)]);
+      },
+      onWaypointRemove: (i) => {
+        const r = untrack(selected);
+        // Keep the start, the finish and at least one point to turn at.
+        if (r && r.waypoints.length > 3) void editWaypoints(r.id, r.waypoints.filter((_, j) => j !== i));
+      },
       onRouteHover: (p) => {
         const r = untrack(selected);
         setHoverIndex(p && r ? nearestIndex(r.geometry.coordinates, p.lon, p.lat) : null);
@@ -71,7 +87,8 @@ export function MapView(props: { padding: () => { left: number; right: number; t
   createEffect(routes, (rs) => {
     const id = untrack(selectedId);
     void ctl?.setRoutes(rs, id);
-    if (id && !DEV_ROUTE) ctl?.fitRoute(id, untrack(props.padding));
+    // Edits and live refreshes keep the view where the user is working.
+    if (id && !DEV_ROUTE && !untrack(refreshing)) ctl?.fitRoute(id, untrack(props.padding));
   }, { defer: true });
   createEffect(selectedId, (id) => {
     void ctl?.select(id);
@@ -82,6 +99,8 @@ export function MapView(props: { padding: () => { left: number; right: number; t
     return c ? { lon: c[0], lat: c[1] } : null;
   }, (p) => void ctl?.setHover(p), { defer: true });
   createEffect(selectedId, () => { setHoverIndex(null); }, { defer: true });
+  if (!DEV_ROUTE) createEffect(() => selected()?.waypoints ?? ([] as LatLon[]), (w) => void ctl?.setHandles(w), { defer: true });
+  createEffect(costView, (on) => void ctl?.setCostView(on), { defer: true });
   createEffect(pickingStart, (p) => { el.classList.toggle("picking", p); }, { defer: true });
 
   return (

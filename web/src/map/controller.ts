@@ -11,7 +11,7 @@ import {
 } from "./basemaps";
 import { OMT, outdoorFills, outdoorLabels, outdoorLines, type MapPalette } from "./outdoorStyle";
 import type { LatLon, Route } from "../routes/types";
-import { bounds } from "../routes/geo";
+import { bounds, cumulative, legAt, nearestIndex } from "../routes/geo";
 
 export interface RouteColors {
   selected: string;
@@ -27,6 +27,27 @@ export interface MapColors extends RouteColors {
   /** Hillshade shadow and the forest overlay tint. */
   shade: string;
   forest: string;
+  /** Cost-per-metre ramp, cheapest first, for COST_STOPS (D54). */
+  cost: string[];
+}
+
+/** Upper cost/m bound of each cost colour but the last; 0.63 is a flat official forest trail (D32). */
+export const COST_STOPS = [0.8, 1.1, 1.6, 2.4];
+
+/** `step` colour expression over line progress, one stop per change of cost bucket. */
+function costGradient(r: Route, ramp: string[]): maplibregl.ExpressionSpecification | null {
+  const coords = r.geometry.coordinates, cost = r.cost_per_m;
+  if (!cost?.length || coords.length < 2) return null;
+  const d = cumulative(coords), total = d[d.length - 1]!;
+  if (!(total > 0)) return null;
+  const bucket = (c: number) => { const i = COST_STOPS.findIndex((s) => c <= s); return ramp[i < 0 ? ramp.length - 1 : i]!; };
+  const out: unknown[] = ["step", ["line-progress"], bucket(cost[0]!)];
+  let prev = out[2], last = 0;
+  for (let i = 1; i < coords.length - 1; i++) {
+    const col = bucket(cost[i]!), p = d[i]! / total;
+    if (col !== prev && p > last) { out.push(p, col); prev = col; last = p; }
+  }
+  return out as maplibregl.ExpressionSpecification;
 }
 
 maplibregl.setWorkerUrl(workerUrl);
@@ -97,6 +118,10 @@ export interface MapHandlers {
   onMoveStart?: () => void;
   /** Pointer over the selected route (null when it leaves). */
   onRouteHover?: (p: LatLon | null) => void;
+  /** Drag edits on the selected route (D54): `i` indexes its waypoints, `leg` the leg after waypoint `leg`. */
+  onWaypointMove?: (i: number, p: LatLon) => void;
+  onWaypointInsert?: (leg: number, p: LatLon) => void;
+  onWaypointRemove?: (i: number) => void;
 }
 
 export class MapController {
@@ -104,6 +129,11 @@ export class MapController {
   private ready: Promise<void>;
   private routes: Route[] = [];
   private selected: string | null = null;
+  private costOn = false;
+  /** The selected route's waypoints; the first and last (the start) get no handle. */
+  private wps: LatLon[] = [];
+  private drag: { i: number; insert: boolean; at: LatLon | null; from: maplibregl.Point } | null = null;
+  private justDragged = false;
 
   constructor(
     container: HTMLElement, base: BaseMapId, overlays: readonly string[], private colors: MapColors, handlers: MapHandlers = {},
@@ -131,6 +161,7 @@ export class MapController {
     }));
 
     this.map.on("click", (e) => {
+      if (this.justDragged) { this.justDragged = false; return; }
       const hit = this.map.queryRenderedFeatures(e.point, { layers: ["route-hit"] })[0];
       const id = hit?.properties?.id;
       if (typeof id === "string") handlers.onRouteClick?.(id);
@@ -150,11 +181,65 @@ export class MapController {
     });
     this.map.on("mouseenter", "route-hit", () => (this.map.getCanvas().style.cursor = "pointer"));
     this.map.on("mouseleave", "route-hit", () => (this.map.getCanvas().style.cursor = ""));
+    this.attachDrag(handlers);
+  }
+
+  /** Drag a handle to move it, drag the selected line to add a point, click a handle to remove it. */
+  private attachDrag(h: MapHandlers) {
+    const canvas = () => this.map.getCanvas();
+    const begin = (e: maplibregl.MapMouseEvent | maplibregl.MapTouchEvent, i: number, insert: boolean) => {
+      e.preventDefault(); // keeps the map from panning
+      this.drag = { i, insert, at: null, from: e.point };
+      canvas().style.cursor = "grabbing";
+    };
+    const handleAt = (e: maplibregl.MapMouseEvent | maplibregl.MapTouchEvent) =>
+      this.map.queryRenderedFeatures(e.point, { layers: ["waypoints"] })[0];
+    const onHandle = (e: maplibregl.MapMouseEvent | maplibregl.MapTouchEvent) => {
+      const f = handleAt(e);
+      if (f && this.drag === null && this.wps.length) begin(e, Number(f.properties?.i), false);
+    };
+    this.map.on("mousedown", "waypoints", onHandle);
+    this.map.on("touchstart", "waypoints", (e) => { if (e.points.length === 1) onHandle(e); });
+    // shortcut: adding points by dragging the line is mouse-only, so touch panning over the route still pans; add a long-press if phones need it.
+    this.map.on("mousedown", "route-hit", (e) => {
+      const r = this.routes.find((x) => x.id === this.selected);
+      const onSel = e.features?.some((f) => f.properties?.id === this.selected);
+      if (!r || !onSel || handleAt(e) || this.wps.length < 2 || e.originalEvent.button !== 0) return;
+      const k = nearestIndex(r.geometry.coordinates, e.lngLat.lng, e.lngLat.lat);
+      begin(e, legAt(r.geometry.coordinates, this.wps, k), true);
+    });
+    const move = (e: maplibregl.MapMouseEvent | maplibregl.MapTouchEvent) => {
+      // A few pixels of jitter is still a click (removes a handle).
+      if (!this.drag || (!this.drag.at && this.drag.from.dist(e.point) < 5)) return;
+      this.drag.at = { lat: e.lngLat.lat, lon: e.lngLat.lng };
+      const shown = [...this.wps];
+      if (this.drag.insert) shown.splice(this.drag.i + 1, 0, this.drag.at);
+      else shown[this.drag.i] = this.drag.at;
+      this.drawHandles(shown);
+    };
+    this.map.on("mousemove", move);
+    this.map.on("touchmove", move);
+    const end = () => {
+      const d = this.drag;
+      if (!d) return;
+      this.drag = null;
+      this.justDragged = true;
+      canvas().style.cursor = "";
+      if (d.at && d.insert) h.onWaypointInsert?.(d.i, d.at);
+      else if (d.at) h.onWaypointMove?.(d.i, d.at);
+      else if (!d.insert) h.onWaypointRemove?.(d.i);
+      else this.justDragged = false; // a plain click on the line selects as before
+      this.drawHandles(this.wps);
+    };
+    this.map.on("mouseup", end);
+    this.map.on("touchend", end);
+    this.map.on("mouseenter", "waypoints", () => (canvas().style.cursor = "grab"));
+    this.map.on("mouseleave", "waypoints", () => { if (!this.drag) canvas().style.cursor = ""; });
   }
 
   private addRouteLayers() {
     const c = this.colors;
-    this.map.addSource(ROUTES, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    this.map.addSource(ROUTES, { type: "geojson", lineMetrics: true, data: { type: "FeatureCollection", features: [] } });
     this.map.addSource(START, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     this.map.addSource(WAYPOINTS, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     this.map.addSource(HOVER, { type: "geojson", data: EMPTY });
@@ -185,6 +270,12 @@ export class MapController {
     });
     this.map.addLayer({
       id: "route-selected", type: "line", source: ROUTES, layout: join,
+      filter: isSel,
+      paint: { "line-color": c.selected, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4, 15, 6.5] },
+    });
+    // Debug view: the selected line coloured by cost per metre (D54).
+    this.map.addLayer({
+      id: "route-cost", type: "line", source: ROUTES, layout: { ...join, visibility: "none" },
       filter: isSel,
       paint: { "line-color": c.selected, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4, 15, 6.5] },
     });
@@ -248,14 +339,37 @@ export class MapController {
     });
   }
 
+  /** Dev route mode: every point is drawn (and draggable). */
   async setWaypoints(points: LatLon[]) {
     await this.ready;
+    this.wps = [];
+    this.drawPoints(points.map((p, i) => [p, i]));
+  }
+
+  /** The selected loop's waypoints; the start and finish get no handle. */
+  async setHandles(points: LatLon[]) {
+    await this.ready;
+    this.wps = points;
+    this.drawHandles(points);
+  }
+
+  private drawHandles(points: LatLon[]) {
+    this.drawPoints(points.map((p, i) => [p, i] as [LatLon, number]).slice(1, -1));
+  }
+
+  private drawPoints(points: [LatLon, number][]) {
     (this.map.getSource(WAYPOINTS) as GeoJSONSource).setData({
       type: "FeatureCollection",
-      features: points.map((p, i) => ({
-        type: "Feature", properties: { n: String(i + 1) }, geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+      features: points.map(([p, i]) => ({
+        type: "Feature", properties: { i }, geometry: { type: "Point", coordinates: [p.lon, p.lat] },
       })),
     });
+  }
+
+  async setCostView(on: boolean) {
+    this.costOn = on;
+    await this.ready;
+    this.redraw();
   }
 
   fitBounds(b: { min_lat: number; min_lon: number; max_lat: number; max_lon: number }, padding: maplibregl.PaddingOptions) {
@@ -288,6 +402,10 @@ export class MapController {
   zoomOut() { this.map.zoomOut(); }
 
   private redraw() {
+    const sel = this.routes.find((r) => r.id === this.selected);
+    const grad = this.costOn && sel ? costGradient(sel, this.colors.cost) : null;
+    this.map.setLayoutProperty("route-cost", "visibility", grad ? "visible" : "none");
+    if (grad) this.map.setPaintProperty("route-cost", "line-gradient", grad);
     // Selected route last so it sits on top within the shared source.
     const ordered = [...this.routes].sort((a, b) => Number(a.id === this.selected) - Number(b.id === this.selected));
     (this.map.getSource(ROUTES) as GeoJSONSource).setData({

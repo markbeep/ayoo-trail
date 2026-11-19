@@ -1,7 +1,11 @@
 import { createSignal, For, Show } from "solid-js";
-import { Download, LoaderCircle, RefreshCw, TriangleAlert } from "@lucide/solid";
+import { Download, LoaderCircle, RefreshCw, RotateCcw, TriangleAlert, Undo2 } from "@lucide/solid";
 import type { BreakdownKey, Route } from "../routes/types";
-import { FACTORS, findRoutes, refreshing, stale } from "../state";
+import {
+  FACTORS, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, stale, undoEdit,
+} from "../state";
+import { COST_STOPS } from "../map/controller";
+import { narrow } from "../layout";
 import { HillsPanel, WeightSlider } from "./Controls";
 import { downloadGpx } from "../routes/gpx";
 import { km, meters, score } from "../routes/format";
@@ -26,6 +30,34 @@ export function RouteCard(props: { route: Route; name: string }) {
       <Show when={!r().distance_met}><p class="badge warn"><TriangleAlert size={14} />Closest match to your distance</p></Show>
 
       <ElevationProfile route={r()} />
+
+      <Show when={isEdited(r().id)} fallback={
+        <p class="hint edit-hint">{narrow() ? "Drag a point on the map to move it, tap it to remove it." : "Drag a point to move it, drag the line to add one, click a point to remove it."}</p>
+      }>
+        <div class="edited">
+          <span>Edited</span>
+          <button class="link-btn" onClick={() => undoEdit(r().id)}><Undo2 size={14} />Undo</button>
+          <button class="link-btn" onClick={() => resetEdit(r().id)}><RotateCcw size={14} />Reset</button>
+        </div>
+      </Show>
+      <Show when={editError()}>{(m) => <p class="query-error" role="alert">{m()}</p>}</Show>
+
+      <button role="switch" aria-checked={`${costView()}`} class={["layer overlay cost-switch", { active: costView() }]}
+        onClick={() => setCostView(!costView())}>
+        Colour by cost<span class="switch" aria-hidden="true" />
+      </button>
+      <Show when={costView()}>
+        <div class="cost-legend" aria-label="Cost per metre, cheap to expensive">
+          <span class="cost-ramp" aria-hidden="true"><i /><i /><i /><i /><i /></span>
+          <span class="cost-scale"><span>Cheap</span><span>{COST_STOPS[0]}</span><span>{COST_STOPS[1]}</span><span>{COST_STOPS[2]}</span><span>{COST_STOPS[3]}</span><span>Costly</span></span>
+          <p class="hint">
+            <Show when={hoverIndex() !== null && r().cost_per_m?.[hoverIndex()!] !== undefined}
+              fallback="Cost per metre under your settings. A flat marked forest trail is 0.63.">
+              Here: <strong>{r().cost_per_m[hoverIndex()!]!.toFixed(2)}</strong> per metre
+            </Show>
+          </p>
+        </div>
+      </Show>
 
       <Show when={stale()}>
         <div class="stale">
