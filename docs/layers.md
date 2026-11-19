@@ -1,9 +1,9 @@
-# Layers — data sources, licences, algorithms
+# Layers — data sources, licenses, algorithms
 
 Research note, 2026-11-16. One section per layer. Status column: **v1** is the
 first usable version, **later** is the layer milestone.
 
-Licence conclusions checked on this date:
+License conclusions checked on this date:
 
 - **swisstopo OGD**: free use, distribution, enrichment, and **commercial**
   use; source reference mandatory (`©swisstopo`). No per-dataset fee.
@@ -28,7 +28,7 @@ Licence conclusions checked on this date:
 
 - **Source**: OSM tags on ways (`highway`, `surface`, `smoothness`, `tracktype`).
 - **Derivation**: map to a small enum at import: paved, compacted, gravel,
-  dirt, grass, rock, unknown. Unknown is penalised, not assumed good.
+  dirt, grass, rock, unknown. Unknown is penalized, not assumed good.
 - **Status**: v1.
 
 ## Technicality
@@ -124,9 +124,9 @@ Licence conclusions checked on this date:
 
 - **Source**: unclear. Public webcam networks (cantonal, Roundshot) have
   varying APIs and terms; hikr.org photos are user-uploaded with mixed
-  licences; SchweizMobil has photos of official routes.
+  licenses; SchweizMobil has photos of official routes.
 - **Derivation**: link-out rather than embedding unless licensing is clear.
-- **Status**: later; needs its own licence investigation.
+- **Status**: later; needs its own license investigation.
 
 ## Elevation-profile matching
 

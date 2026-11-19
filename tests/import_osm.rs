@@ -36,7 +36,7 @@ fn closed_way_does_not_create_a_self_loop() {
 }
 
 #[test]
-fn maps_osm_tags_and_penalises_unknown() {
+fn maps_osm_tags_and_penalizes_unknown() {
     let (w, _stats, _extras) = import_osm(&fixture("tags.osm"), None, 0).unwrap();
     let g = Graph::from_bytes(w.finish()).unwrap();
     assert_eq!(g.edge_attrs(0).surface, Surface::Unknown);

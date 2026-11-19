@@ -11,7 +11,7 @@ import { downloadGpx } from "../routes/gpx";
 import { km, meters, score } from "../routes/format";
 import { ElevationProfile } from "./ElevationProfile";
 
-/** Plain words for each colour of the cost ramp, best first. */
+/** Plain words for each color of the cost ramp, best first. */
 const PREFERENCE = ["preferred", "good", "fine", "avoided", "strongly avoided"];
 
 export function RouteCard(props: { route: Route; name: string }) {
@@ -25,7 +25,7 @@ export function RouteCard(props: { route: Route; name: string }) {
   /** Each term at the hovered point (D61), or null when nothing is hovered. */
   const termsHere = () => {
     const i = hoverIndex(), ts = r().terms;
-    if (i === null || !ts?.length) return null;
+    if (!costView() || i === null || !ts?.length) return null;
     let lo = 0, hi = ts.length - 1; // last stretch starting at or before i
     while (lo < hi) { const m = (lo + hi + 1) >> 1; if (ts[m]!.i <= i) lo = m; else hi = m - 1; }
     return ts[lo]!;
@@ -60,7 +60,7 @@ export function RouteCard(props: { route: Route; name: string }) {
 
       <button role="switch" aria-checked={`${costView()}`} class={["layer overlay cost-switch", { active: costView() }]}
         onClick={() => setCostView(!costView())}>
-        Colour by preference<span class="switch" aria-hidden="true" />
+        Color by preference<span class="switch" aria-hidden="true" />
       </button>
       <Show when={costView()}>
         <div class="cost-legend">
@@ -83,7 +83,7 @@ export function RouteCard(props: { route: Route; name: string }) {
         </div>
       </Show>
 
-      <h3 class="why">Why it scores {score(r().score)}<Show when={termsHere()}><span class="why-here"> · colours show the point you're on</span></Show><Show when={refreshing()}><span class="updating"><LoaderCircle size={13} class="spin" />Updating</span></Show></h3>
+      <h3 class="why">Why it scores {score(r().score)}<Show when={termsHere()}><span class="why-here"> · colors show the point you're on</span></Show><Show when={refreshing()}><span class="updating"><LoaderCircle size={13} class="spin" />Updating</span></Show></h3>
       <ul class="bars">
         <For each={r().breakdown}>{(b) => {
           const f = FACTORS[b.key];

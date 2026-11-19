@@ -127,7 +127,7 @@ pub const FLAT_GRADE: [u8; GRADE_BANDS] = [0, 0, 0, 0, 255, 0, 0, 0, 0];
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EdgeAttrs {
     pub length_m: f32,
-    /// Metres, forward direction.
+    /// Meters, forward direction.
     pub gain: i16,
     pub loss: i16,
     pub grade: [u8; GRADE_BANDS],

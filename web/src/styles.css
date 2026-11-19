@@ -19,7 +19,7 @@
   --route-casing: #ffffff;
   /* Your-location dot: the platform convention blue, kept apart from the indigo route. */
   --here: #1a8cff;
-  /* Cost-per-metre ramp for the "colour by cost" debug view, cheap to expensive (D54). */
+  /* Cost-per-meter ramp for the "color by cost" debug view, cheap to expensive (D54). */
   --cost-1: #2f8a57;
   --cost-2: #9bb53a;
   --cost-3: #e0a92a;

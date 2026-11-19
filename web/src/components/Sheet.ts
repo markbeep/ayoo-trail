@@ -1,4 +1,4 @@
-// Bottom-sheet drag behaviour for narrow screens. Four snap points; the sheet
+// Bottom-sheet drag behavior for narrow screens. Four snap points; the sheet
 // follows the finger and settles on the nearest one (or the next one in the
 // direction of a quick flick).
 

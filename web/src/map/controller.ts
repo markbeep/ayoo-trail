@@ -27,19 +27,19 @@ export interface MapColors extends RouteColors {
   /** Hillshade shadow and the forest overlay tint. */
   shade: string;
   forest: string;
-  /** Cost-per-metre ramp, cheapest first, for COST_STOPS (D54). */
+  /** Cost-per-meter ramp, cheapest first, for COST_STOPS (D54). */
   cost: string[];
 }
 
-/** Upper cost/m bound of each cost colour but the last; 0.63 is a flat official forest trail (D32). */
+/** Upper cost/m bound of each cost color but the last; 0.63 is a flat official forest trail (D32). */
 export const COST_STOPS = [0.8, 1.1, 1.6, 2.4];
-/** One term at one stretch relative to its best (1 = ideal): upper bound of each colour but the last. */
+/** One term at one stretch relative to its best (1 = ideal): upper bound of each color but the last. */
 export const TERM_STOPS = [1.05, 1.2, 1.5, 2.2];
 export const termBucket = (ratio: number) => { const i = TERM_STOPS.findIndex((s) => ratio <= s); return i < 0 ? TERM_STOPS.length : i; };
-/** Index into the cost ramp for a cost per metre. */
+/** Index into the cost ramp for a cost per meter. */
 export const costBucket = (c: number) => { const i = COST_STOPS.findIndex((s) => c <= s); return i < 0 ? COST_STOPS.length : i; };
 
-/** `step` colour expression over line progress, one stop per change of cost bucket. */
+/** `step` color expression over line progress, one stop per change of cost bucket. */
 function costGradient(r: Route, ramp: string[]): maplibregl.ExpressionSpecification | null {
   const coords = r.geometry.coordinates, cost = r.cost_per_m;
   if (!cost?.length || coords.length < 2) return null;
@@ -278,7 +278,7 @@ export class MapController {
       filter: isSel,
       paint: { "line-color": c.selected, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4, 15, 6.5] },
     });
-    // Debug view: the selected line coloured by cost per metre (D54).
+    // Debug view: the selected line colored by cost per meter (D54).
     this.map.addLayer({
       id: "route-cost", type: "line", source: ROUTES, layout: { ...join, visibility: "none" },
       filter: isSel,

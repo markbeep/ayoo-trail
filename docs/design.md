@@ -3,7 +3,7 @@
 Status: **approved; engine and importer in implementation** (D29), 2026-11-18.
 Generation, the generate API and the cache are not started.
 Companions: `brief.md` (intent and backlog), `decisions.md` (log),
-`routing-engines.md` (engine choice), `layers.md` (data sources and licences).
+`routing-engines.md` (engine choice), `layers.md` (data sources and licenses).
 
 Revision history:
 
@@ -23,7 +23,7 @@ Revision history:
   drag handles, waypoints in the generate response, raster maxzoom.
 - **v5** — pre-implementation review, 2026-11-18 (D29–D37): grade histogram
   instead of extrema splitting, CSR adjacency, highway class and tag
-  inference, non-saturating score in per-metre units, `max_sac` 3,
+  inference, non-saturating score in per-meter units, `max_sac` 3,
   configurable DEM (swissALTI3D default, DHM25), no GDAL.
 
 ## 1. Intent
@@ -40,7 +40,7 @@ drag one point to adjust it, export the GPX.
 - Fast: warm request to routes in well under a second; cold generation in a
   few seconds.
 - Trustworthy: official-trail share shown per route, weak-data segments
-  penalised and visible.
+  penalized and visible.
 - Quick path minimal, power controls available but collapsed.
 - Layers are additive: adding viewshed, snow or POIs later must not reshape the
   core.
@@ -69,7 +69,7 @@ drag one point to adjust it, export the GPX.
   The graph is cut from the CH OSM extract, so a route cannot leave the
   country. A buffered extract for border cities is a later change, and the
   region-pack layout (§6.3) is the path to both.
-- Licences: swisstopo OGD (attribution, commercial allowed), SLF CC BY 4.0,
+- Licenses: swisstopo OGD (attribution, commercial allowed), SLF CC BY 4.0,
   OSM ODbL, GTFS from opentransportdata.swiss (registration).
 - Client lightweight; no graph download.
 - Rust for the engine and service; TypeScript + Solid + MapLibre for the UI.
@@ -218,7 +218,7 @@ band steeper than 8 % (both directions) is multiplied by `1 − 0.8·pressure`, 
 at full pressure hilly edges cost a fifth of their slope factor (D52).
 
 Score = `100 * min(0.63 / mean_factor_default, 1)^(1/6)` (D32, geometric mean per D44), where
-`mean_factor_default = cost / distance_m`, the cost per metre under **default
+`mean_factor_default = cost / distance_m`, the cost per meter under **default
 weights**, without exclusion or repetition penalties, so the score does not
 move with the sliders. A flat official forest trail (0.63) scores 100, plain
 gravel 63, asphalt about 32; only routes better than that clamp. The
@@ -308,7 +308,7 @@ validated to `0..=3`; anything outside is a `422`.
 official_share, distance_met, graph_date, climb_pressure, cost_per_m}`.
 `climb_pressure` is what the route was generated with; the client sends it back
 in `profile.weights` when re-routing an edit. `cost_per_m` has one value per
-coordinate (the step leaving it) for the colour-by-cost view (D54). `waypoints` are the via points the
+coordinate (the step leaving it) for the color-by-cost view (D54). `waypoints` are the via points the
 route was built from, so the client can place drag handles; `generate` returns
 them with every route.
 
@@ -325,13 +325,13 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 ## 11. Frontend
 
 - Left panel: start (last used, or click the map), distance, "How hilly?"
-  (Gentle/Hilly/Mountain/Max quick picks over a metre slider and a "Stick to
+  (Gentle/Hilly/Mountain/Max quick picks over a meter slider and a "Stick to
   it" strictness slider, D52/D56), one button. Weight sliders live in each
   score bar's Adjust panel (D56); changes regenerate live (D55).
 - Presets follow the distance (30/60/90 m per km); a slider value is fixed
-  metres; Max asks for as much climb as possible.
+  meters; Max asks for as much climb as possible.
 - The selected loop is drag-editable with Undo/Reset and an optional
-  colour-by-cost view (D54).
+  color-by-cost view (D54).
 - Base map: swisstopo WMTS fetched directly by the browser from
   `wmts.geo.admin.ch` (CORS `*`, CDN-cached, `©swisstopo` attribution):
   `pixelkarte-farbe` (JPEG, maxzoom 18) by default, `swissimage` satellite
@@ -344,11 +344,11 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 - Overlay tiles (official trails, forest, viewshed, ...) are ours: produced by
   the importer as PMTiles and served by `navilau-server` when those layers land.
 - Map: MapLibre. Candidate routes drawn from the list; selected route
-  emphasised.
+  emphasized.
 - Results: scrollable cards with distance, climb, score, official share.
   Clicking a card highlights the route and shows the elevation profile (read
   from the geometry Z values; reverse the sliced coordinates when `from_t >
-  to_t`) and score breakdown. Out-of-band results are labelled "closest match".
+  to_t`) and score breakdown. Out-of-band results are labeled "closest match".
 - Drag editing: edit mode reveals handles at the interior waypoints; dragging
   shows a ghost line, and releasing calls `POST /api/route` with the new
   waypoints. Dragging a segment midpoint inserts a new waypoint there, so a
@@ -383,7 +383,7 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 ## 13. Testing
 
 - Unit: grade histogram direction, cost monotonicity (steeper descent costs
-  more), surface/tech lookup, dedup, GPX serialisation.
+  more), surface/tech lookup, dedup, GPX serialization.
 - Import fixture: a hand-written tiny `.osm` XML and a synthetic DEM in
   `tests/fixtures`, so the pipeline runs in CI without downloads.
 - Generation: fixture graph with a known loop; assert the target-miss path
@@ -392,7 +392,7 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 - Golden route: fixed fixture graph, fixed request, assert distance band and
   that the route uses the expected edges.
 - API: axum `oneshot` tests for endpoints and error codes.
-- Frontend: manual in the browser for v1; no test suite until the UI stabilises.
+- Frontend: manual in the browser for v1; no test suite until the UI stabilizes.
 - `just check`: fmt, clippy, tests.
 
 ## 14. Risks

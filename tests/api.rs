@@ -272,7 +272,7 @@ async fn generate_without_graph_is_503() {
 }
 
 #[tokio::test]
-async fn route_carries_cost_per_metre_per_vertex() {
+async fn route_carries_cost_per_meter_per_vertex() {
     let plain = two((LAT, 7.4), (LAT, 7.402));
     let (status, v) = post(Some(graph()), plain.clone()).await;
     assert_eq!(status, StatusCode::OK, "{v}");
@@ -286,7 +286,7 @@ async fn route_carries_cost_per_metre_per_vertex() {
     assert_eq!(cost.len(), n);
     assert!(cost.iter().all(|&c| c > 0.0), "{cost:?}");
 
-    // A penalise marker over the whole route multiplies every vertex by the exclusion penalty.
+    // A penalize marker over the whole route multiplies every vertex by the exclusion penalty.
     let mut marked = plain;
     marked["profile"] =
         json!({"exclude":[{"lat":LAT,"lon":7.401,"radius_m":5000,"mode":"penalize"}]});

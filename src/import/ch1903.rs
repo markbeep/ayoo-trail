@@ -1,7 +1,7 @@
 //! WGS84 ↔ Swiss grid (CH1903+/LV95, CH1903/LV03) with the official swisstopo
-//! approximate formulas (sub-metre accuracy inside Switzerland), no PROJ.
+//! approximate formulas (sub-meter accuracy inside Switzerland), no PROJ.
 
-/// (lat, lon) degrees → (E, N) LV95 metres.
+/// (lat, lon) degrees → (E, N) LV95 meters.
 pub fn wgs84_to_lv95(lat: f64, lon: f64) -> (f64, f64) {
     let p = (lat * 3600.0 - 169_028.66) / 10_000.0;
     let l = (lon * 3600.0 - 26_782.5) / 10_000.0;
@@ -12,7 +12,7 @@ pub fn wgs84_to_lv95(lat: f64, lon: f64) -> (f64, f64) {
     (e, n)
 }
 
-/// (E, N) LV95 metres → (lat, lon) degrees.
+/// (E, N) LV95 meters → (lat, lon) degrees.
 pub fn lv95_to_wgs84(e: f64, n: f64) -> (f64, f64) {
     let y = (e - 2_600_000.0) / 1_000_000.0;
     let x = (n - 1_200_000.0) / 1_000_000.0;
@@ -25,7 +25,7 @@ pub fn lv95_to_wgs84(e: f64, n: f64) -> (f64, f64) {
         - 0.0140 * x * x * x;
     let (mut lat, mut lon) = (p * 100.0 / 36.0, l * 100.0 / 36.0);
     // The two approximations disagree by up to ~1 m; refine against the forward
-    // formula so that a round trip is exact (metres per degree as the step).
+    // formula so that a round trip is exact (meters per degree as the step).
     for _ in 0..3 {
         let (e1, n1) = wgs84_to_lv95(lat, lon);
         lat += (n - n1) / 111_200.0;
@@ -34,7 +34,7 @@ pub fn lv95_to_wgs84(e: f64, n: f64) -> (f64, f64) {
     (lat, lon)
 }
 
-/// (lat, lon) degrees → (y, x) LV03 metres.
+/// (lat, lon) degrees → (y, x) LV03 meters.
 pub fn wgs84_to_lv03(lat: f64, lon: f64) -> (f64, f64) {
     let (e, n) = wgs84_to_lv95(lat, lon);
     (e - 2_000_000.0, n - 1_000_000.0)

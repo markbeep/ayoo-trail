@@ -41,7 +41,7 @@ export const FACTORS: Record<BreakdownKey, { label: string; question: string; we
   urban: { label: "Away from towns", weight: "urban", question: "How much should villages and towns be avoided?" },
 };
 
-/** Climb: a preset follows the distance, metres are fixed, "max" asks for as much as possible (D52). */
+/** Climb: a preset follows the distance, meters are fixed, "max" asks for as much as possible (D52). */
 export type Climb = { preset: Hilliness } | { m: number } | "max";
 export const CLIMB_STEP_M = 10;
 export const climbMaxM = () => Math.max(1500, Math.ceil((150 * distanceKm()) / 100) * 100);
@@ -99,7 +99,7 @@ export function toggleOverlay(id: string) {
   setOverlaysRaw(next);
   save({ overlays: next });
 }
-/** Target metres of climb, or null for "as much as possible". */
+/** Target meters of climb, or null for "as much as possible". */
 export function climbTargetM(): number | null {
   const c = climb();
   if (c === "max") return null;
@@ -139,7 +139,7 @@ export function setStrictness(v: number) {
 export const [history, setHistory] = createSignal<Record<string, Route[]>>({});
 export const isEdited = (id: string) => (history()[id]?.length ?? 0) > 0;
 export const [editError, setEditError] = createSignal<string | null>(null);
-/** Colour the selected route by cost per metre (D54). */
+/** Color the selected route by cost per meter (D54). */
 export const [costView, setCostView] = createSignal(false);
 /** `/api/route` takes at most 20 waypoints. */
 export const MAX_WAYPOINTS = 20;

@@ -29,7 +29,7 @@ const SHAPES: [&[f64]; 2] = [&[-30.0, 30.0], &[-40.0, 0.0, 40.0]];
 /// How much climb the generator chases (D52).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ClimbGoal {
-    /// Metres of climb to aim for; None = as much as possible.
+    /// Meters of climb to aim for; None = as much as possible.
     pub target_m: Option<f64>,
     /// 0..1: how hard to chase it, both in ranking and as the ceiling of the climb pressure.
     pub strictness: f32,
@@ -277,7 +277,7 @@ fn pull(g: &Graph, pt: LatLon, max_m: f64) -> LatLon {
         .map_or(pt, |(_, pos)| pos)
 }
 
-/// Edge id → metres of it the route covers.
+/// Edge id → meters of it the route covers.
 fn coverage(g: &Graph, r: &Route) -> HashMap<u32, f64> {
     let mut m = HashMap::new();
     for s in &r.steps {

@@ -12,7 +12,7 @@ fn ll(lat: f64, lon: f64) -> LatLon {
     LatLon { lat, lon }
 }
 
-/// Point `x` metres east and `y` metres north of (LAT, LON).
+/// Point `x` meters east and `y` meters north of (LAT, LON).
 fn at(x: f64, y: f64) -> LatLon {
     ll(LAT + y / M_LAT, LON + x / (M_LAT * LAT.to_radians().cos()))
 }
@@ -305,7 +305,7 @@ fn partial_step_reports_the_last_partial_swing() {
         (400.0, 0.0, 4.0),
         (500.0, 0.0, 4.0),
     ];
-    // Stored geometry z is whole metres, so 0 -> 4 stands in for 0 -> 4.5; the old deadband dropped the last 1 m.
+    // Stored geometry z is whole meters, so 0 -> 4 stands in for 0 -> 4.5; the old deadband dropped the last 1 m.
     edge(&mut w, None, None, &pts, attrs(Surface::Gravel, 500.0));
     let g = Graph::from_bytes(w.finish()).unwrap();
     let (start, end) = (snap(&g, at(0.0, 0.0)), snap(&g, at(450.0, 0.0)));

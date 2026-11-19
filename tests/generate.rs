@@ -10,7 +10,7 @@ const LAT: f64 = 46.0;
 const LON: f64 = 7.0;
 const M_LAT: f64 = 111_195.0;
 
-/// Point `x` metres east and `y` metres north of (LAT, LON).
+/// Point `x` meters east and `y` meters north of (LAT, LON).
 fn at(x: f64, y: f64) -> LatLon {
     LatLon {
         lat: LAT + y / M_LAT,
@@ -18,7 +18,7 @@ fn at(x: f64, y: f64) -> LatLon {
     }
 }
 
-/// n×n gravel grid with `step` metre spacing, origin at (0, 0).
+/// n×n gravel grid with `step` meter spacing, origin at (0, 0).
 fn grid(n: usize, step: f64) -> Graph {
     let mut w = GraphWriter::new(0);
     let ids: Vec<Vec<u32>> = (0..n)
@@ -69,7 +69,7 @@ fn req(start: LatLon, distance_m: f64) -> GenerateRequest {
     }
 }
 
-/// Edge id → metres covered.
+/// Edge id → meters covered.
 fn coverage(g: &Graph, r: &GeneratedRoute) -> HashMap<u32, f64> {
     let mut m = HashMap::new();
     for s in &r.route.steps {

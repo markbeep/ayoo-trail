@@ -73,7 +73,7 @@ impl PolyIndex {
         })
     }
 
-    /// Any polygon boundary within `d` metres.
+    /// Any polygon boundary within `d` meters.
     fn near(&self, p: &[f64; 2], d: f64) -> bool {
         self.segs.locate_within_distance(*p, d * d).next().is_some()
     }

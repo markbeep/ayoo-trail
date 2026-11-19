@@ -9,7 +9,7 @@ import {
   costView, editWaypoints, MAX_WAYPOINTS, refreshing,
 } from "../state";
 
-/** Reads a CSS custom property so map paint colours follow the design tokens. */
+/** Reads a CSS custom property so map paint colors follow the design tokens. */
 function token(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }

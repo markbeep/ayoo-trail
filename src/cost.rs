@@ -18,7 +18,7 @@ const ASCENT_FACTORS: [[f32; 4]; 3] = [
     [1.0, 1.0, 1.0, 1.0],   // any
     [0.95, 0.9, 0.9, 0.95], // steep
 ];
-/// Cost per metre of a flat official forest trail; scores 100 (D32).
+/// Cost per meter of a flat official forest trail; scores 100 (D32).
 pub const SCORE_REFERENCE: f64 = 0.63;
 pub const EXCLUSION_PENALTY: f64 = 5.0;
 /// Largest weight exponent (D51).
@@ -151,7 +151,7 @@ impl Profile {
         Ok(())
     }
 
-    /// Admissible A* lower bound on cost per metre under these weights.
+    /// Admissible A* lower bound on cost per meter under these weights.
     pub fn min_cost_per_m(&self) -> f64 {
         // The slack absorbs f32 rounding in the slope average, keeping the bound admissible.
         (1.0 - 1e-6) * term_minima(&self.weights).product()

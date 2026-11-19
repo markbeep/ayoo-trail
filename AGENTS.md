@@ -10,7 +10,7 @@ revisions (D30–D37) overriding `docs/milestones.md` where they differ. Loop
 generation and `/api/generate` (D39) plus the map/overlay redesign (D40–D42)
 are in progress; no response cache (generation takes tens of ms, D39).
 Fine-grained weights and climb goals (D51–D53, D55–D56) and drag editing with
-colour-by-cost (D54) are built.
+color-by-cost (D54) are built.
 
 ## Layout
 
@@ -36,7 +36,7 @@ pluggable, and layer gating/tiers may come later.
 | `docs/brief.md` | Vision, goals, full feature backlog, open questions. Live source of truth during brainstorming. |
 | `docs/decisions.md` | Append-only log of decisions and why. |
 | `docs/routing-engines.md` | Research: engine options, comparison, recommendation. |
-| `docs/layers.md` | Per-layer data sources, licences, algorithms, precompute cost. |
+| `docs/layers.md` | Per-layer data sources, licenses, algorithms, precompute cost. |
 | `docs/design.md` | Approved design: architecture, graph format, cost model, API, frontend, setup. |
 | `docs/milestones.md` | 16-task implementation plan, executed subagent-driven. |
 | `PRODUCT.md` | Product context for design work (impeccable). |

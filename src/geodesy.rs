@@ -12,8 +12,8 @@ pub fn haversine_m(a: LatLon, b: LatLon) -> f64 {
     2.0 * EARTH_RADIUS_M * h.sqrt().min(1.0).asin()
 }
 
-/// Equirectangular projection around a reference latitude; metres. Accurate enough
-/// for nearest-neighbour ordering and point-to-segment distances over tens of km.
+/// Equirectangular projection around a reference latitude; meters. Accurate enough
+/// for nearest-neighbor ordering and point-to-segment distances over tens of km.
 #[derive(Debug, Clone, Copy)]
 pub struct LocalProjection {
     cos_lat0: f64,
@@ -43,7 +43,7 @@ impl LocalProjection {
     }
 }
 
-/// Closest point on segment ab to p in projected metres: (point, t in 0..=1 along ab).
+/// Closest point on segment ab to p in projected meters: (point, t in 0..=1 along ab).
 pub fn closest_on_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> ([f64; 2], f64) {
     let d = [b[0] - a[0], b[1] - a[1]];
     let len2 = d[0] * d[0] + d[1] * d[1];

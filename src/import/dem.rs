@@ -51,8 +51,8 @@ pub(crate) fn bilinear(c: [Option<f32>; 4], fx: f64, fy: f64) -> Option<f32> {
 }
 
 /// ESRI ASCII grid (DHM200 / a 25 m DHM25 matrix / any Swiss-grid .asc).
-/// Values are cell centres (`xllcorner` is the outer corner, `xllcenter` the
-/// first centre). LV03 is detected from xllcorner < 1_000_000.
+/// Values are cell centers (`xllcorner` is the outer corner, `xllcenter` the
+/// first center). LV03 is detected from xllcorner < 1_000_000.
 pub struct AscGrid {
     ncols: usize,
     nrows: usize,
@@ -143,8 +143,8 @@ impl AscGrid {
         })
     }
 
-    /// Bilinear between cell centres at an LV95 coordinate; clamped to the
-    /// outermost centres at the grid edge; None outside the grid.
+    /// Bilinear between cell centers at an LV95 coordinate; clamped to the
+    /// outermost centers at the grid edge; None outside the grid.
     pub fn sample_grid(&self, e: f64, n: f64) -> Option<f32> {
         let fx = (e - self.west) / self.cell;
         let fy = (n - self.south) / self.cell;
@@ -262,7 +262,7 @@ fn process_edge(
     dem: &dyn ElevationSource,
 ) -> Option<EdgeOut> {
     let first = geom.first()?;
-    // Resample every SAMPLE_SPACING_M in LV95 metres, keeping the original vertices.
+    // Resample every SAMPLE_SPACING_M in LV95 meters, keeping the original vertices.
     let lv: Vec<(f64, f64)> = geom
         .iter()
         .map(|&(la, lo, _)| wgs84_to_lv95(la, lo))
@@ -324,7 +324,7 @@ fn round_i16(v: f64) -> i16 {
     v.round().clamp(i16::MIN as f64, i16::MAX as f64) as i16
 }
 
-/// Missing samples linearly interpolated (by distance) from valid neighbours;
+/// Missing samples linearly interpolated (by distance) from valid neighbors;
 /// constant beyond the first/last valid one; all zero if none is valid.
 fn fill(raw: &[Option<f32>], d: &[f64]) -> Vec<f32> {
     let valid: Vec<usize> = (0..raw.len()).filter(|&i| raw[i].is_some()).collect();

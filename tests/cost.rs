@@ -31,7 +31,7 @@ const F: Direction = Direction::Forward;
 const B: Direction = Direction::Backward;
 
 #[test]
-fn steep_descent_is_penalised_only_forward() {
+fn steep_descent_is_penalized_only_forward() {
     let mut a = gravel();
     a.grade = [255, 0, 0, 0, 0, 0, 0, 0, 0];
     let g = one_edge(1000.0, a);
@@ -84,11 +84,11 @@ fn slope_preference_is_per_direction() {
     let w = with(-1.0, -1.0);
     assert!(
         edge_factors(&g, 0, F, &w).slope > 2.0,
-        "steep descent penalised"
+        "steep descent penalized"
     );
     assert!(
         edge_factors(&g, 0, B, &w).slope > 1.5,
-        "steep climb penalised"
+        "steep climb penalized"
     );
 
     // Default is any up, gentle down (D45).
@@ -195,7 +195,7 @@ fn climb_pressure_makes_steep_edges_cheaper_than_flat_ones() {
 }
 
 #[test]
-fn missing_sac_penalised_only_when_flagged() {
+fn missing_sac_penalized_only_when_flagged() {
     let mut a = gravel();
     a.sac = 0;
     a.flags = flags::MISSING_TAGS;
@@ -221,7 +221,7 @@ fn sac_above_max_is_not_traversable() {
 }
 
 #[test]
-fn marker_penalises_or_blocks() {
+fn marker_penalizes_or_blocks() {
     let g = one_edge(1000.0, gravel());
     let mut p = Profile::default();
     let base = edge_cost(&g, 0, F, &p).unwrap();

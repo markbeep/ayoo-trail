@@ -29,7 +29,7 @@ export interface Weights {
 
 export type BreakdownKey = "official" | "surface" | "slope" | "tech" | "forest" | "urban";
 
-/** One term of the score, normalised so 1 is ideal. */
+/** One term of the score, normalized so 1 is ideal. */
 export interface BreakdownItem {
   key: BreakdownKey;
   value: number;
@@ -52,7 +52,7 @@ export interface Route {
   distance_met: boolean;
   /** Climb pressure this route was generated with; drag edits re-route with it. */
   climb_pressure: number;
-  /** Cost per metre at each coordinate (the step leaving it). */
+  /** Cost per meter at each coordinate (the step leaving it). */
   cost_per_m: number[];
   /** From coordinate `i` on, each term relative to its best possible value (1 = ideal), D61. */
   terms: ({ i: number } & Record<BreakdownKey, number>)[];

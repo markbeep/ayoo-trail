@@ -59,7 +59,7 @@ fn nodata_corner_falls_back() {
         "-9999 110\n200 210\n",
     );
     let g = AscGrid::from_asc(&p).unwrap();
-    // Cell centres at E 2600005/2600015, N 1200005/1200015. Near the NODATA
+    // Cell centers at E 2600005/2600015, N 1200005/1200015. Near the NODATA
     // (north-west) corner the nearest valid corner wins.
     let v = g.sample_grid(2_600_006.0, 1_200_014.0).unwrap();
     assert!((110.0..=210.0).contains(&v), "got {v}");
@@ -321,7 +321,7 @@ fn alti3d_tile_samples_and_seams() {
     write_tile(dir.path(), 2019, 2601, 1200, |_| 9999.0);
     let t = Alti3dTiles::open(dir.path()).unwrap();
     assert_eq!(t.tile_count(), 2);
-    // Pixel centres at 2600050 + 100 k → value = 100 + (E - 2600050) / 100.
+    // Pixel centers at 2600050 + 100 k → value = 100 + (E - 2600050) / 100.
     let at = |e: f64| t.sample_lv95(e, 1_200_500.0).unwrap();
     assert!((at(2_600_050.0) - 100.0).abs() < 1e-3);
     assert!((at(2_600_500.0) - 104.5).abs() < 1e-3);

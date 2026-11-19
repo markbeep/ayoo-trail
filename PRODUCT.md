@@ -43,7 +43,7 @@ official-trail share honestly instead of hiding weak data.
 - Map-centric: swisstopo topographic map (default) and SWISSIMAGE satellite,
   fetched directly from `wmts.geo.admin.ch`. Satellite exists to confirm that a
   trail is real.
-- Default base map is an own-styled OSM vector map (Europe-wide, colours follow
+- Default base map is an own-styled OSM vector map (Europe-wide, colors follow
   the UI); swisstopo Topo and Satellite are alternates (D40).
 - Everything else is a toggleable overlay on any base map: relief, marked
   trails, forest now; snow, popular trails, path steepness, 360° view and
@@ -69,7 +69,7 @@ exist yet.
 ## Evidence on Hand
 
 No screenshots, testimonials, users or benchmarks exist. Weak route data
-(unofficial trails, missing tags) must be labelled as such.
+(unofficial trails, missing tags) must be labeled as such.
 
 ## Product Principles
 

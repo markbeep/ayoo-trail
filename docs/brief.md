@@ -6,7 +6,7 @@ until the design is approved; then `docs/design.md` takes over.
 ## One-liner
 
 A web app that generates trail-running routes from a set of metrics and map
-layers, instead of hunting through existing route catalogues.
+layers, instead of hunting through existing route catalogs.
 
 ## Why
 
@@ -64,7 +64,7 @@ What this means for the product:
 
 ## Feature backlog
 
-Grouped as the owner described them. None of this is scoped or prioritised yet.
+Grouped as the owner described them. None of this is scoped or prioritized yet.
 
 ### Route targets
 
@@ -171,12 +171,12 @@ swissmobility (difficulty imagery), MeteoSwiss snow map, SLF, OSM.
 | Q5 | Hosting and monthly cost ceiling for tiles + route computation | answered in part — personal, one image; no cost cap stated |
 | Q6 | Data pipeline: precompute a Swiss graph + layer rasters offline, or compute per request? | answered — D18 (offline graph + PMTiles) |
 | Q7 | Route shapes beyond round-trip; how many alternatives and how different | answered — loops only, 6 routes, dedup at 0.5 overlap (design §9) |
-| Q9 | Technicality source: official Swiss scale, OSM tags, imagery, or a blend | answered — OSM `sac_scale` + Wanderwege category, missing tags penalised |
+| Q9 | Technicality source: official Swiss scale, OSM tags, imagery, or a blend | answered — OSM `sac_scale` + Wanderwege category, missing tags penalized |
 | Q10 | Licensing: OSM/ODbL, swisstopo, SLF, webcams/photos | answered in part — swisstopo OGD free incl. commercial with attribution, SLF CC BY 4.0, GTFS free with registration; webcam/photo terms open |
 | Q11 | Outputs: GPX (confirmed, for Coros), share links, saved routes, mobile/offline | answered in part — GPX download + URL share; no saved routes, no mobile |
 | Q12 | Persistence without accounts: local storage, share links, or nothing in v1 | answered — localStorage + URL, no database |
 | Q13 | Route editing: full graph snapping like gpx.studio, or waypoint shaping first | answered in part — drag editing in v1 (D14); snapping semantics in design |
-| Q14 | Unmaintained OSM trails: exclude outright, or strongly penalise? | answered — D16 (allow all walkable, bonus official, show share) |
+| Q14 | Unmaintained OSM trails: exclude outright, or strongly penalize? | answered — D16 (allow all walkable, bonus official, show share) |
 | Q15 | Interaction model: generator-first (options → routes) or workspace-first (layers + manual drawing, generator assists) | answered — D13 (generator-first) |
 | Q16 | Routing engine: hand-rolled Rust vs GraphHopper service vs Valhalla bindings (see `docs/routing-engines.md`) | answered — D12 (hand-rolled Rust) |
 | Q17 | What counts as "steep uphill" (preferred) vs "too steep downhill" for the cost model? | answered in part — defaults in design §8; continuous uphill/downhill sliders (D53) and climb pressure (D52) now let the user tune it |

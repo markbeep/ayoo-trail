@@ -1,4 +1,4 @@
-// Our own calm outdoor base map over OpenMapTiles (D40). Colours come from the
+// Our own calm outdoor base map over OpenMapTiles (D40). Colors come from the
 // `--map-*` CSS tokens, so a palette change restyles map and UI together.
 
 import type { LayerSpecification } from "maplibre-gl";

@@ -269,8 +269,8 @@ impl Alti3dTiles {
 }
 
 impl ElevationSource for Alti3dTiles {
-    /// Bilinear between pixel centres, across tile seams by reading the
-    /// neighbouring tile; missing corners fall back like `AscGrid`.
+    /// Bilinear between pixel centers, across tile seams by reading the
+    /// neighboring tile; missing corners fall back like `AscGrid`.
     fn sample_lv95(&self, e: f64, n: f64) -> Option<f32> {
         let home_key = key_of(e, n)?;
         let home = self.tile(home_key)?;

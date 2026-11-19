@@ -13,7 +13,7 @@
 > **Revision 2026-11-18 (D29–D37).** Tasks 1–8 and 11 run now; 9, 10, 12 wait. Where this text and the decisions differ, the decisions win:
 > - Task 1–2: format adds a CSR adjacency section, `grade[9]` histogram and `highway` byte per edge, bbox in the header; `bytemuck` zero-copy reads. `flatgeobuf`, `blake3`, `lru` are not needed yet.
 > - Task 3: R-tree over geometry segments; snap takes a traversability predicate.
-> - Task 4: slope cost is the length-weighted band factor over `grade`; missing-sac penalty only on `path`/`bridleway`; default `max_sac` 3; score is `100·min(0.63/mean_factor_default, 1)` per metre (the `route_score` tests below are wrong and are replaced).
+> - Task 4: slope cost is the length-weighted band factor over `grade`; missing-sac penalty only on `path`/`bridleway`; default `max_sac` 3; score is `100·min(0.63/mean_factor_default, 1)` per meter (the `route_score` tests below are wrong and are replaced).
 > - Task 6: highway inference for surface (D31); forest includes multipolygons, excludes `landuse=meadow`.
 > - Task 7: no `split_edges_at_extrema` (D30); DEM behind a trait with swissALTI3D tiles (default) and DHM25 ASCII; 10 m sampling; bridge/tunnel interpolation; Z densification.
 > - Task 8: official trails read from the GPKG with `rusqlite` and matched in LV95; no GDAL.
@@ -43,7 +43,7 @@ The five failure modes most likely to bite a user, each pinned by a test in the 
 1. Start point in water, a building, or off-network → snap returns `None` → API `422` with a clear message, never a panic. (Task 11)
 2. Target distance unreachable (tiny village, 40 km request) → closest routes returned with `distance_met: false`, never an empty list or a hang. (Task 10)
 3. Disconnected graph or an island trail → A* returns `None` → the seed is skipped; another seed still succeeds. (Tasks 5, 9)
-4. Malformed or missing OSM tags (`sac_scale=foo`, unknown `surface`) → treated as unknown and penalised, no panic. (Task 8)
+4. Malformed or missing OSM tags (`sac_scale=foo`, unknown `surface`) → treated as unknown and penalized, no panic. (Task 8)
 5. An exclusion marker covering the start or the only path → `422` "start is blocked", not a silent empty result. (Task 11)
 
 ## Milestones
@@ -166,7 +166,7 @@ Expected: compile error, `unresolved import navilau::graph`.
 
 `src/graph.rs`: a 40-byte little-endian header (`magic [u8;4] = *b"TRGR"`, `version u32 = 1`, `osm_date i64`, counts for nodes, edges, geometry and anchors, reserved padding), followed by struct-of-arrays sections in this order, each padded to 8-byte alignment: `node_lat f32`, `node_lon f32`, `node_elev i16`, `edge_from u32`, `edge_to u32`, `edge_len_cm u32`, `edge_gain i16`, `edge_loss i16`, `edge_surface u8`, `edge_sac u8`, `edge_forest u8`, `edge_flags u8`, `edge_urban u8`, `edge_official_category u8`, `edge_geom_start u32`, `edge_geom_len u32`, `geom_lat f32`, `geom_lon f32`, `geom_z i16`, `anchor_lat f32`, `anchor_lon f32`, `anchor_kind u8`, `anchor_weight f32`.
 
-`GraphWriter` is a staged builder, not an in-memory file. It owns struct-of-arrays `Vec<Node>`, `Vec<Edge>`, `Vec<Geom>` and an anchor list, exposes `node_mut`/`edge_mut` for the later import passes, and `write_to` streams each section into the destination file. `finish()` materialises a `Vec<u8>` only for tests. The Swiss import therefore holds one SoA copy plus a small write buffer, not a second full copy of the graph.
+`GraphWriter` is a staged builder, not an in-memory file. It owns struct-of-arrays `Vec<Node>`, `Vec<Edge>`, `Vec<Geom>` and an anchor list, exposes `node_mut`/`edge_mut` for the later import passes, and `write_to` streams each section into the destination file. `finish()` materializes a `Vec<u8>` only for tests. The Swiss import therefore holds one SoA copy plus a small write buffer, not a second full copy of the graph.
 
 `Surface` discriminants: `Asphalt=0, Paved=1, Compacted=2, Gravel=3, Dirt=4, Grass=5, Rock=6, Unknown=7`. `Flags` are `u8` bits: bridge 1, tunnel 2, informal 4, missing_tags 8, ferry 16. `official_category: u8` is 0 for none and 1–3 for the official network class. `GraphError`: `Io`, `Magic`, `Version`, `Truncated`, `Index`.
 
@@ -326,7 +326,7 @@ jj commit -m "feat: edge snapping with spatial index"
 
 ```rust
 #[test]
-fn steep_descent_is_penalised_only_forward() {
+fn steep_descent_is_penalized_only_forward() {
     let g = edge_graph(gain = 0, loss = 300, len = 1000.0, Surface::Gravel, sac = 1, forest = 0);
     let p = Profile::default();
     let fwd = edge_cost(&g, 0, Direction::Forward, &p).unwrap();
@@ -352,7 +352,7 @@ fn weights_scale_around_neutral() {
 }
 
 #[test]
-fn marker_penalises_or_blocks() {
+fn marker_penalizes_or_blocks() {
     let g = gravel_graph();
     let mut p = Profile::default();
     p.exclude = vec![Exclusion { lat: 46.0, lon: 7.0, radius_m: 100.0, mode: ExclusionMode::Block }];
@@ -385,7 +385,7 @@ fn score_is_zero_to_hundred() {
 }
 
 #[test]
-fn score_divides_by_kilometres_once() {
+fn score_divides_by_kilometers_once() {
     // 750 cost over 1000 m is 0.75 per km -> 100, not 0.00075
     assert!((route_score(750.0, 1000.0) - 100.0).abs() < 0.01);
     assert!((route_score(1500.0, 2000.0) - 75.0).abs() < 0.01);
@@ -412,7 +412,7 @@ Apply the design §8 defaults exactly. `slope` uses `loss/len` forward, `gain/le
 
 Weight application: `factor' = (1 + (factor - 1) * w).max(0.05)`. The `slope` weight scales the whole slope factor, uphill and downhill alike; label it "slope sensitivity" in the UI. Exclusion: compute the distance from the marker point to each geometry **segment**, not only to vertices; if it is within the radius, `Block` → `None`, `Penalize` → `cost *= 5`. `score = 100.0 * (0.75 / cost_per_km).clamp(0.0, 1.0)` with `cost_per_km = cost / (distance_m / 1000.0)`; `route_score` is that whole formula.
 
-`Profile::min_cost_per_m` is the product of the smallest weighted value of each factor across the enum values and slope classes, computed once per request, with the same `0.05` floor applied per factor. It is the admissible A* lower bound; it must never exceed any edge's actual per-metre cost.
+`Profile::min_cost_per_m` is the product of the smallest weighted value of each factor across the enum values and slope classes, computed once per request, with the same `0.05` floor applied per factor. It is the admissible A* lower bound; it must never exceed any edge's actual per-meter cost.
 
 - [ ] **Step 4: Run the tests**
 
@@ -578,7 +578,7 @@ fn closed_way_does_not_create_a_self_loop() {
 }
 
 #[test]
-fn maps_osm_tags_and_penalises_unknown() {
+fn maps_osm_tags_and_penalizes_unknown() {
     let (w, _stats, _extras) = import_osm(Path::new("tests/fixtures/tags.osm"), 0).unwrap();
     let g = Graph::from_bytes(w.finish()).unwrap();
     assert_eq!(g.edge_attrs(0).surface, Surface::Unknown);
@@ -705,7 +705,7 @@ Expected: compile error, `Dem` missing.
 
 - [ ] **Step 3: Implement the projection, ASC parser, and DEM application**
 
-Keep the DEM in its native Swiss grid; do not reproject it. `ch1903.rs` holds the official swisstopo approximate WGS84↔LV95/LV03 polynomials (sub-metre, no PROJ dependency); the Bern reference point pins it. `Dem::from_asc` parses the ESRI header and detects LV03 vs LV95 from the magnitude of `xllcorner`, then `sample_grid` is bilinear with edge clamping and nearest-valid fallback for `NODATA`.
+Keep the DEM in its native Swiss grid; do not reproject it. `ch1903.rs` holds the official swisstopo approximate WGS84↔LV95/LV03 polynomials (sub-meter, no PROJ dependency); the Bern reference point pins it. `Dem::from_asc` parses the ESRI header and detects LV03 vs LV95 from the magnitude of `xllcorner`, then `sample_grid` is bilinear with edge clamping and nearest-valid fallback for `NODATA`.
 
 `apply_dem` converts each geometry vertex to grid coordinates, samples Z, sets node elevation from the first vertex, and computes gain/loss with a 2 m vertical deadband (count a rise or fall only once it exceeds 2 m from the current turning point).
 
@@ -854,7 +854,7 @@ jj commit -m "feat: anchor selection and loop seeds"
 
 **Interfaces:**
 - Consumes: Task 9 internals.
-- Produces: `repair_length`, `refine`, `dedup`, and the final `generate` behaviour: sorted by distance error, `distance_met` computed as `|d − d*| / d* <= 0.10`, closest returned when none is in band.
+- Produces: `repair_length`, `refine`, `dedup`, and the final `generate` behavior: sorted by distance error, `distance_met` computed as `|d − d*| / d* <= 0.10`, closest returned when none is in band.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -985,7 +985,7 @@ Expected: compile error, `server` missing.
 
 - [ ] **Step 3: Implement the handlers**
 
-Reject fewer than 2 or more than 20 waypoints with `422 {"error":"need 2-20 waypoints"}`. Reject any profile weight outside `0..=3` with `422 {"error":"weight out of range"}`. Snap every waypoint; any `None` → `422 {"error":"no trail near waypoint N"}`. Route between consecutive waypoints with an empty `visited` set, because a manual edit may legitimately be an out-and-back; any `None` → `422 {"error":"no path between waypoints"}`. Echo the input waypoints in the response. Serialise the geometry by slicing each `RouteStep` between `from_t` and `to_t` along the edge's geometry, reversing the sub-array when `from_t > to_t`, so a reverse-traversed step does not zigzag and a mid-edge start is not rounded to the edge endpoint. Emit a GeoJSON `LineString` with `[lon, lat, z]` coordinates. `Profile` deserialises with defaults for every field, so `{}` is valid. Serve the static client from `web/dist` at `/` with a fallback to `index.html`. `src/bin/server.rs` reads `DATA_DIR` (default `./data`), opens `graph.bin`, builds `AppState`, binds `0.0.0.0:8080`, and exits with a readable error when the graph is missing.
+Reject fewer than 2 or more than 20 waypoints with `422 {"error":"need 2-20 waypoints"}`. Reject any profile weight outside `0..=3` with `422 {"error":"weight out of range"}`. Snap every waypoint; any `None` → `422 {"error":"no trail near waypoint N"}`. Route between consecutive waypoints with an empty `visited` set, because a manual edit may legitimately be an out-and-back; any `None` → `422 {"error":"no path between waypoints"}`. Echo the input waypoints in the response. Serialize the geometry by slicing each `RouteStep` between `from_t` and `to_t` along the edge's geometry, reversing the sub-array when `from_t > to_t`, so a reverse-traversed step does not zigzag and a mid-edge start is not rounded to the edge endpoint. Emit a GeoJSON `LineString` with `[lon, lat, z]` coordinates. `Profile` deserializes with defaults for every field, so `{}` is valid. Serve the static client from `web/dist` at `/` with a fallback to `index.html`. `src/bin/server.rs` reads `DATA_DIR` (default `./data`), opens `graph.bin`, builds `AppState`, binds `0.0.0.0:8080`, and exits with a readable error when the graph is missing.
 
 - [ ] **Step 4: Run the tests**
 
@@ -1035,7 +1035,7 @@ Expected: 404.
 
 - [ ] **Step 3: Implement the endpoint**
 
-Key = the 32-byte BLAKE3 digest of `graph.osm_date()` plus a canonical byte encoding of the request with latitude/longitude rounded to 1e-6 and distances to 1 m. Use `LruCache<[u8; 32], String>`; do not truncate to `u64` and do not use `DefaultHasher` or `serde_json::Value`. On miss, call `generate`, serialise once, insert, return with `X-Cache: miss`; on hit, return the stored body with `X-Cache: hit`. Always send `Cache-Control: no-store` on `generate`; `X-Cache` is a debug header only. Validate `distance_m` in `500..=80_000` and `count` in `1..=12`, else `422`.
+Key = the 32-byte BLAKE3 digest of `graph.osm_date()` plus a canonical byte encoding of the request with latitude/longitude rounded to 1e-6 and distances to 1 m. Use `LruCache<[u8; 32], String>`; do not truncate to `u64` and do not use `DefaultHasher` or `serde_json::Value`. On miss, call `generate`, serialize once, insert, return with `X-Cache: miss`; on hit, return the stored body with `X-Cache: hit`. Always send `Cache-Control: no-store` on `generate`; `X-Cache` is a debug header only. Validate `distance_m` in `500..=80_000` and `count` in `1..=12`, else `422`.
 
 - [ ] **Step 4: Run the tests**
 
@@ -1196,7 +1196,7 @@ Expected: exit 0, prints `health ok`, `generate ok`, `route ok`.
 
 - [ ] **Step 3: Write the README**
 
-Cover: what it is, `just data`, `just import`, `just dev`, `docker compose up`, the data sources and licences (`©swisstopo`, `© OpenStreetMap contributors`, SLF CC BY 4.0 when snow lands), and the deliberate limits (CH only, no accounts, no cross-border loops).
+Cover: what it is, `just data`, `just import`, `just dev`, `docker compose up`, the data sources and licenses (`©swisstopo`, `© OpenStreetMap contributors`, SLF CC BY 4.0 when snow lands), and the deliberate limits (CH only, no accounts, no cross-border loops).
 
 - [ ] **Step 4: Run the full check**
 

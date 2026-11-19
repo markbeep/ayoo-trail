@@ -8,7 +8,7 @@ use crate::graph::{Bbox, Graph, LatLon};
 
 pub const SNAP_LIMIT_M: f32 = 150.0;
 
-/// Grid cell edge in projected metres. CH: ~17 M segments over ~1.3 M cells.
+/// Grid cell edge in projected meters. CH: ~17 M segments over ~1.3 M cells.
 const CELL_M: f64 = 250.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -130,7 +130,7 @@ impl Graph {
         let grid = self.snap_grid();
         let (first, segs) = self.snap_cells();
         let q = grid.proj.project(p);
-        // The projection drifts from true metres away from its reference latitude.
+        // The projection drifts from true meters away from its reference latitude.
         let r = max_m as f64 * 1.05;
         let mut best: Option<(f64, u32, u32)> = None; // (dist², geometry index, edge)
         for c in grid.cells_in([q[0] - r, q[1] - r], [q[0] + r, q[1] + r]) {

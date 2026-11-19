@@ -152,7 +152,7 @@ Elevation:
 - Primary glow (an indigo-tinted version of the card shadow): the primary button only.
 - Sheet (an upward ink shadow): the phone bottom sheet.
 Don't:
-- Don't colour terrain, data bars or map overlays indigo.
+- Don't color terrain, data bars or map overlays indigo.
 - Don't dash route lines.
 - Don't use flat under-shadows, hard offset shadows or borders to lift cards.
 - Don't use uppercase tracking labels or kicker lines.

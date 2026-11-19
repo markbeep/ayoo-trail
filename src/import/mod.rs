@@ -72,7 +72,7 @@ impl PointDistance for Seg {
     }
 }
 
-/// LV95 points every `spacing` metres or less along a (lat, lon, z) geometry,
+/// LV95 points every `spacing` meters or less along a (lat, lon, z) geometry,
 /// both endpoints included.
 pub(crate) fn sample_lv95(geom: &[(f64, f64, f32)], spacing: f64) -> Vec<[f64; 2]> {
     let lv: Vec<[f64; 2]> = geom

@@ -76,7 +76,7 @@ every option.
 - Encoded values already include `surface`, `smoothness`, `hike_rating`
   (sac_scale 0–6), `average_slope`, `max_slope`, `foot_network`,
   `urban_density`, `country`. Slope values flip sign with direction, so a
-  priority rule can penalise steep descent specifically.
+  priority rule can penalize steep descent specifically.
 - Custom models are JSON per request: `speed`/`priority` rules over encoded
   values, plus `areas` — polygons passed in the request and referenced as
   `in_<id>`. That covers the exclusion-marker feature directly.
@@ -188,7 +188,7 @@ Verified in the 2026-11-17 source/docs:
   `polygons` (lon/lat list, weight) per request, so exclusion areas are
   requirement 4 solved.
 - It documents `profile:<var>=<value>` request parameters; those values reach
-  the path model through `RoutingContext.keyValues`. So one parameterised
+  the path model through `RoutingContext.keyValues`. So one parameterized
   profile file can serve per-request slider values. Profiles are still files
   selected by name.
 - Cost is evaluated per way at route time from the rd5 tag bitstream, so a new

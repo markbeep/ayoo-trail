@@ -115,7 +115,7 @@ export function StrictnessSlider() {
   );
 }
 
-/** A slider over 0…climbMax metres whose last stop is Max. */
+/** A slider over 0…climbMax meters whose last stop is Max. */
 export function ClimbSlider() {
   const maxM = climbMaxM;
   // The top 4 % of the track is the Max stop.
@@ -123,7 +123,7 @@ export function ClimbSlider() {
   const fromPos = (p: number): number | null => (p > 0.98 ? null : Math.round(((p / 0.96) * maxM()) / CLIMB_STEP_M) * CLIMB_STEP_M);
   return (
     <Slider
-      label="Metres of climb" value={toPos()}
+      label="Meters of climb" value={toPos()}
       text={(p) => { const m = fromPos(p); return m === null ? "As much as possible" : `${m} m`; }}
       ends={["0 m", "Max"]}
       onCommit={(p) => { const m = fromPos(p); setClimb(m === null ? "max" : { m }); }}

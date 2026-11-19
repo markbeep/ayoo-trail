@@ -5,7 +5,7 @@ fn ll(lat: f64, lon: f64) -> LatLon {
     LatLon { lat, lon }
 }
 
-/// Metres per degree of latitude.
+/// Meters per degree of latitude.
 const M_LAT: f64 = 111_195.0;
 
 fn graph(edges: &[&[(f64, f64)]]) -> Graph {
