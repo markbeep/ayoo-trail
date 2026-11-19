@@ -240,10 +240,7 @@ button { cursor: pointer; border: 0; background: none; }
 .bar-value { font-weight: 900; font-size: 13px; text-align: right; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .bar:hover .link-btn { color: var(--accent-deep); }
-/* The lane is the full 0–100 scale. The track in it is as long as the term's weight, and the fill sits on the lane, so it can run past a short track. */
-.lane { position: relative; display: flex; align-items: center; height: 10px; background: linear-gradient(var(--ground-deep), var(--ground-deep)) center / 100% 2px no-repeat; }
-.track { height: 10px; border-radius: 5px; background: var(--ground); transition: width .5s cubic-bezier(.2,.8,.2,1); }
-.lane .fill { position: absolute; left: 0; top: 0; }
+.track { height: 10px; border-radius: 5px; background: var(--ground); overflow: hidden; }
 .fill { display: block; height: 100%; border-radius: 5px; background: var(--ink); transition: width .5s cubic-bezier(.2,.8,.2,1); }
 .adjust {
   background: var(--accent-wash); border-radius: 14px; padding: 11px 12px 12px; margin: 2px -6px 8px;

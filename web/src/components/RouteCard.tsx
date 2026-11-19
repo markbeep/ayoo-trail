@@ -2,7 +2,7 @@ import { createSignal, For, Show } from "solid-js";
 import { Download, LoaderCircle, RefreshCw, RotateCcw, TriangleAlert, Undo2 } from "@lucide/solid";
 import type { BreakdownKey, Route } from "../routes/types";
 import {
-  FACTORS, costView, positionOf, strictness, weights, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, stale, undoEdit,
+  FACTORS, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, stale, undoEdit,
 } from "../state";
 import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
@@ -13,9 +13,6 @@ import { ElevationProfile } from "./ElevationProfile";
 
 /** Plain words for each color of the cost ramp, best first. */
 const PREFERENCE = ["preferred", "good", "fine", "avoided", "strongly avoided"];
-
-/** Where this term's importance slider sits, 0 (off) to 1 (above all); climb uses "Stick to it". */
-const weightPos = (k: BreakdownKey) => (k === "climb" ? strictness() : positionOf(weights()[FACTORS[k].weight!]));
 
 export function RouteCard(props: { route: Route; name: string }) {
   const [open, setOpen] = createSignal<BreakdownKey | null>(null);
@@ -95,8 +92,7 @@ export function RouteCard(props: { route: Route; name: string }) {
             <li class={{ open: isOpen() }}>
               <button class="bar" aria-expanded={`${isOpen()}`} onClick={() => setOpen(isOpen() ? null : b.key)}>
                 <span class="bar-label">{f.label}</span>
-                {/* The track is as long as the term's slider; the fill is the route's own value on the full lane, so it only grows when the loop does (D73). */}
-                <span class="lane" aria-hidden="true"><span class="track" style={{ width: `${Math.max(weightPos(b.key) * 100, 4)}%` }} /><span class="fill" style={{
+                <span class="track" aria-hidden="true"><span class="fill" style={{
                   width: `${Math.round(b.value * 100)}%`,
                   background: termsHere() && b.key !== "climb" ? `var(--cost-${termBucket(termsHere()![b.key]) + 1})` : undefined,
                 }} /></span>
