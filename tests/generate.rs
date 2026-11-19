@@ -88,7 +88,8 @@ fn loops_start_and_end_at_the_start_and_hit_the_distance() {
     let start = at(2000.0, 2000.0);
     let routes = generate(&g, &req(start, 6000.0)).unwrap();
     assert!(!routes.is_empty());
-    assert!(routes.iter().any(|r| r.distance_met));
+    // D87: when a loop fits the distance, only loops that fit come back.
+    assert!(routes.iter().all(|r| r.distance_met));
     for r in &routes {
         let geom = route_geometry(&g, &r.route);
         let first = LatLon {
@@ -113,8 +114,9 @@ fn loops_start_and_end_at_the_start_and_hit_the_distance() {
 fn impossible_target_returns_closest_with_flag() {
     let g = grid(5, 200.0);
     let routes = generate(&g, &req(at(400.0, 400.0), 40_000.0)).unwrap();
-    assert!(!routes.is_empty());
-    assert!(routes.iter().all(|r| !r.distance_met));
+    // D87: nothing fits, so only the single closest loop comes back, flagged.
+    assert_eq!(routes.len(), 1);
+    assert!(!routes[0].distance_met);
 }
 
 #[test]

@@ -351,7 +351,7 @@ fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value 
         json!({"key": "forest", "value": value("forest"),
          "detail": format!("{forest:.0} % in forest")}),
         json!({"key": "urban", "value": value("urban"),
-         "detail": format!("{} through built-up areas", km(s.urban_m[1] + s.urban_m[2]))}),
+         "detail": format!("{} in towns, {} next to them", km(s.urban_m[2]), km(s.urban_m[1]))}),
     ]);
     Value::Array(bars)
 }
