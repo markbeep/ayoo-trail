@@ -1,4 +1,4 @@
-use trail_route::graph::{
+use navilau::graph::{
     flags, AnchorKind, Direction, EdgeAttrs, Graph, GraphError, GraphWriter, Highway, LatLon,
     Surface,
 };

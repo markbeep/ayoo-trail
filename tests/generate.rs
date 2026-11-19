@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use trail_route::cost::Profile;
-use trail_route::generate::{generate, GenerateError, GenerateRequest, GeneratedRoute};
-use trail_route::geodesy::haversine_m;
-use trail_route::graph::{EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
-use trail_route::route::route_geometry;
+use navilau::cost::Profile;
+use navilau::generate::{generate, GenerateError, GenerateRequest, GeneratedRoute};
+use navilau::geodesy::haversine_m;
+use navilau::graph::{EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
+use navilau::route::route_geometry;
 
 const LAT: f64 = 46.0;
 const LON: f64 = 7.0;

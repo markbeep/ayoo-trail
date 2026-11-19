@@ -78,12 +78,12 @@ drag one point to adjust it, export the GPX.
 
 ```mermaid
 flowchart LR
-  OSM[OSM PBF] --> IMP[trail-import]
+  OSM[OSM PBF] --> IMP[navilau-import]
   DEM[swisstopo DEM] --> IMP
   OFF[swissTLM3D Wanderwege] --> IMP
   LC[land cover] --> IMP
   IMP --> GRAPH[(graph.bin)]
-  GRAPH --> SRV[trail-server]
+  GRAPH --> SRV[navilau-server]
   SRV --> WEB[Solid + MapLibre]
 ```
 
@@ -92,9 +92,9 @@ lands; v1 has no tile endpoint.
 
 ### 6.1 Components
 
-- `trail-import` (binary): builds `graph.bin` from raw sources. Offline,
+- `navilau-import` (binary): builds `graph.bin` from raw sources. Offline,
   idempotent, versioned by OSM date.
-- `trail-server` (binary, axum): mmaps `graph.bin`, serves the API and the
+- `navilau-server` (binary, axum): mmaps `graph.bin`, serves the API and the
   static client.
 - `web/`: Solid + MapLibre client, built to static assets and served by the
   server in production; Vite dev server proxies the API in development.
@@ -316,7 +316,7 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
   so MapLibre overzooms instead of requesting 404 tiles. The server does not
   proxy these tiles.
 - Overlay tiles (official trails, forest, viewshed, ...) are ours: produced by
-  the importer as PMTiles and served by `trail-server` when those layers land.
+  the importer as PMTiles and served by `navilau-server` when those layers land.
 - Map: MapLibre. Candidate routes drawn from the list; selected route
   emphasised.
 - Results: scrollable cards with distance, climb, score, official share.

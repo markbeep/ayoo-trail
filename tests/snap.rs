@@ -1,5 +1,5 @@
-use trail_route::geodesy::haversine_m;
-use trail_route::graph::{EdgeAttrs, Graph, GraphWriter, LatLon};
+use navilau::geodesy::haversine_m;
+use navilau::graph::{EdgeAttrs, Graph, GraphWriter, LatLon};
 
 fn ll(lat: f64, lon: f64) -> LatLon {
     LatLon { lat, lon }

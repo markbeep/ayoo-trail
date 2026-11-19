@@ -801,6 +801,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "navilau"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bytemuck",
+ "clap",
+ "geo",
+ "http-body-util",
+ "memmap2 0.9.12",
+ "osmpbf",
+ "rayon",
+ "roxmltree",
+ "rstar",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tiff",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "weezl",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1513,34 +1541,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "trail-route"
-version = "0.1.0"
-dependencies = [
- "axum",
- "bytemuck",
- "clap",
- "geo",
- "http-body-util",
- "memmap2 0.9.12",
- "osmpbf",
- "rayon",
- "roxmltree",
- "rstar",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tiff",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "weezl",
 ]
 
 [[package]]

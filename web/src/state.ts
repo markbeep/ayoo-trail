@@ -62,8 +62,7 @@ export const FACTORS: Record<BreakdownKey, {
 /** Wattwil: inside the demo graph (D34). */
 export const DEFAULT_START: LatLon = { lat: 47.2985, lon: 9.095 };
 
-// Pre-rename key, kept so saved starts and map settings survive the rename to navilau (D48).
-const STORE_KEY = "trail-route:v1";
+const STORE_KEY = "navilau:v1";
 interface Stored { start?: LatLon; baseMap?: BaseMapId; overlays?: string[] }
 function load(): Stored {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Stored; } catch { return {}; }

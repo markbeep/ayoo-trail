@@ -1,5 +1,5 @@
-use trail_route::cost::*;
-use trail_route::graph::{flags, Direction, EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
+use navilau::cost::*;
+use navilau::graph::{flags, Direction, EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
 
 fn ll(lat: f64, lon: f64) -> LatLon {
     LatLon { lat, lon }

@@ -8,7 +8,7 @@ dev:
     #!/usr/bin/env bash
     set -euo pipefail
     trap 'kill 0' EXIT
-    cargo run --bin trail-server &
+    cargo run --bin navilau-server &
     (cd web && npm run dev) &
     wait
 
@@ -18,12 +18,12 @@ web:
 
 # Rust server only.
 server:
-    cargo run --bin trail-server
+    cargo run --bin navilau-server
 
 # Build the client, then the release server that serves it.
 build:
     cd web && npm ci && npm run build
-    cargo build --release --bin trail-server
+    cargo build --release --bin navilau-server
 
 # fmt, clippy, tests, client typecheck.
 check:
@@ -34,7 +34,7 @@ check:
 
 # Build data/graph.bin from data/raw (`just import ch`; default demo).
 import REGION="demo":
-    cargo run --release --bin trail-import -- --region {{REGION}}
+    cargo run --release --bin navilau-import -- --region {{REGION}}
 
 # Fetch OSM, swissALTI3D 2 m tiles and Wanderwege into data/raw (`just data REGION=demo|ch`).
 data REGION="demo":

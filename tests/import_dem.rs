@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use trail_route::graph::{flags, EdgeAttrs, Graph, GraphWriter, LatLon, GRADE_BANDS};
-use trail_route::import::alti3d::Alti3dTiles;
-use trail_route::import::ch1903::{lv95_to_wgs84, wgs84_to_lv95};
-use trail_route::import::dem::{apply_dem, grade_band, AscGrid, ElevationSource, DEM_ASC};
+use navilau::graph::{flags, EdgeAttrs, Graph, GraphWriter, LatLon, GRADE_BANDS};
+use navilau::import::alti3d::Alti3dTiles;
+use navilau::import::ch1903::{lv95_to_wgs84, wgs84_to_lv95};
+use navilau::import::dem::{apply_dem, grade_band, AscGrid, ElevationSource, DEM_ASC};
 
 #[test]
 fn projects_the_bern_reference_point() {
@@ -232,7 +232,7 @@ fn bridge_interpolates_between_endpoints() {
     assert_eq!((a.gain, a.loss), (10, 0));
     let mid = w.edge_geometry(0)[1].2;
     assert!((mid - 705.0).abs() < 0.5, "mid z {mid}");
-    assert_eq!(a.grade, trail_route::graph::FLAT_GRADE);
+    assert_eq!(a.grade, navilau::graph::FLAT_GRADE);
 }
 
 #[test]
@@ -287,7 +287,7 @@ fn shares_sum_to_255() {
     // A zero-length edge is flat.
     let mut w = edge_writer(&[(E0, N0), (E0, N0)], 0);
     apply_dem(&mut w, &Surface(|_: f64, _: f64| 5.0));
-    assert_eq!(w.edge_attrs(0).grade, trail_route::graph::FLAT_GRADE);
+    assert_eq!(w.edge_attrs(0).grade, navilau::graph::FLAT_GRADE);
 }
 
 /// 10×10 float32 tile with value `f(col)`, tiepoint at its north-west corner.

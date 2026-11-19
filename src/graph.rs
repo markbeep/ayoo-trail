@@ -197,7 +197,7 @@ pub struct Bbox {
 pub enum GraphError {
     #[error("graph file I/O: {0}")]
     Io(#[from] std::io::Error),
-    #[error("not a trail-route graph file (bad magic)")]
+    #[error("not a navilau graph file (bad magic)")]
     Magic,
     #[error("unsupported graph file version {0}")]
     Version(u32),

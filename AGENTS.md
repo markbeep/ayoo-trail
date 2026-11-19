@@ -12,7 +12,7 @@ are in progress; no response cache (generation takes tens of ms, D39).
 
 ## Layout
 
-- `src/` — Rust crate (`trail_route`), `src/bin/server.rs` is `trail-server`.
+- `src/` — Rust crate (`navilau`), `src/bin/server.rs` is `navilau-server`.
 - `web/` — Vite + Solid + MapLibre client. Routes come from `/api/generate`
   (`web/src/state.ts`); the layer registry is in `web/src/map/basemaps.ts`.
 - `PRODUCT.md`, `.impeccable/` — impeccable design context. The surface brief
