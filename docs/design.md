@@ -374,10 +374,13 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 - `docker compose up` is the full-stack path: an `import` service that exits
   immediately if `data/graph.bin` exists (otherwise builds `REGION`, default
   `demo`) and a `server` service that depends on its successful completion.
-- `Dockerfile`: multi-stage — Node builds the client, Rust 1.100 (matching
-  `mise.toml`) builds a static musl binary, final stage is distroless/static
-  with the binary, `web/dist`, and `/data` as a volume. Port 8080. Runs as
-  non-root.
+- `Dockerfile` (D64): multi-stage. `node:26.13.1-slim` builds the client
+  (glibc, because the Solid compiler ships per-libc native binaries),
+  `rust:1.100.0-alpine` builds static musl binaries, and the final stage is
+  `distroless/static-debian12:nonroot` with `navilau-server`,
+  `navilau-import`, the client at `/app/web` and `/data` as a volume. The graph
+  is mounted, not baked in. Port 8080, non-root, ~14 MB. The server stops
+  gracefully on SIGTERM.
 - No Kubernetes manifests.
 
 ## 13. Testing

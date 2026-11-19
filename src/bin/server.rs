@@ -49,7 +49,13 @@ async fn main() -> std::io::Result<()> {
     tracing::info!(%addr, static_dir = %static_dir.display(), "navilau-server listening");
     axum::serve(listener, app(ServerConfig { static_dir, graph }))
         .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
+            // Ctrl-C locally; SIGTERM is how Docker and Kubernetes stop the container.
+            let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("install SIGTERM handler");
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = term.recv() => {}
+            }
         })
         .await
 }

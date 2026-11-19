@@ -1,0 +1,25 @@
+# `docker compose up --build`: builds the graph into ./data if it is missing, then serves on :8080.
+# REGION=demo|ch picks what the import builds; it needs `just data REGION=...` to have filled data/raw.
+services:
+  import:
+    build: .
+    image: navilau
+    entrypoint: ["/app/navilau-import"]
+    environment:
+      REGION: ${REGION:-demo}
+      DATA_DIR: /data
+    # Write ./data as you, not as the image's nonroot user.
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./data:/data
+
+  server:
+    image: navilau
+    depends_on:
+      import:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data:ro
+    restart: unless-stopped

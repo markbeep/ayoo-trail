@@ -1,0 +1,13 @@
+target
+data
+**/node_modules
+web/dist
+.git
+.jj
+.claude
+.impeccable
+.superpowers
+.worktrees
+docs
+tests
+*.log
