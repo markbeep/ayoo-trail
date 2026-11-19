@@ -4,16 +4,24 @@ import type { BreakdownKey, Route } from "../routes/types";
 import {
   FACTORS, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, stale, undoEdit,
 } from "../state";
-import { COST_STOPS } from "../map/controller";
+import { costBucket } from "../map/controller";
 import { narrow } from "../layout";
 import { HillsPanel, WeightSlider } from "./Controls";
 import { downloadGpx } from "../routes/gpx";
 import { km, meters, score } from "../routes/format";
 import { ElevationProfile } from "./ElevationProfile";
 
+/** Plain words for each colour of the cost ramp, best first. */
+const PREFERENCE = ["preferred", "good", "fine", "avoided", "strongly avoided"];
+
 export function RouteCard(props: { route: Route; name: string }) {
   const [open, setOpen] = createSignal<BreakdownKey | null>(null);
   const r = () => props.route;
+  const best = () => Math.min(...(r().cost_per_m ?? []).filter((c) => c > 0));
+  const hoverAt = () => {
+    const i = hoverIndex(), c = i === null ? undefined : r().cost_per_m?.[i];
+    return c === undefined || !(c > 0) ? null : { cost: c, ratio: c / best() };
+  };
   return (
     <section class="card route-card" aria-label={`${props.name}, score ${score(r().score)}`}>
       <header class="rc-head">
@@ -44,17 +52,18 @@ export function RouteCard(props: { route: Route; name: string }) {
 
       <button role="switch" aria-checked={`${costView()}`} class={["layer overlay cost-switch", { active: costView() }]}
         onClick={() => setCostView(!costView())}>
-        Colour by cost<span class="switch" aria-hidden="true" />
+        Colour by preference<span class="switch" aria-hidden="true" />
       </button>
       <Show when={costView()}>
-        <div class="cost-legend" aria-label="Cost per metre, cheap to expensive">
+        <div class="cost-legend">
           <span class="cost-ramp" aria-hidden="true"><i /><i /><i /><i /><i /></span>
-          <span class="cost-scale"><span>Cheap</span><span>{COST_STOPS[0]}</span><span>{COST_STOPS[1]}</span><span>{COST_STOPS[2]}</span><span>{COST_STOPS[3]}</span><span>Costly</span></span>
+          <span class="cost-scale" aria-hidden="true"><span>Preferred</span><span>Avoided</span></span>
           <p class="hint">
-            <Show when={hoverIndex() !== null && r().cost_per_m?.[hoverIndex()!] !== undefined}
-              fallback="Cost per metre under your settings. A flat marked forest trail is 0.63.">
-              Here: <strong>{r().cost_per_m[hoverIndex()!]!.toFixed(2)}</strong> per metre
-            </Show>
+            <Show when={hoverAt()} fallback={
+              "Green is what your settings like, red what they avoid. The loop takes the most preferred way between its points, so red shows where it had to compromise. Hover the line for details."
+            }>{(h) => (
+              <>Here: <strong>{PREFERENCE[costBucket(h().cost)]}</strong>{h().ratio >= 1.05 ? `, ${h().ratio.toFixed(1)}× the cost of this loop's best stretch` : ", as good as this loop gets"}</>
+            )}</Show>
           </p>
         </div>
       </Show>

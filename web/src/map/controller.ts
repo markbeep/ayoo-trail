@@ -33,6 +33,8 @@ export interface MapColors extends RouteColors {
 
 /** Upper cost/m bound of each cost colour but the last; 0.63 is a flat official forest trail (D32). */
 export const COST_STOPS = [0.8, 1.1, 1.6, 2.4];
+/** Index into the cost ramp for a cost per metre. */
+export const costBucket = (c: number) => { const i = COST_STOPS.findIndex((s) => c <= s); return i < 0 ? COST_STOPS.length : i; };
 
 /** `step` colour expression over line progress, one stop per change of cost bucket. */
 function costGradient(r: Route, ramp: string[]): maplibregl.ExpressionSpecification | null {
@@ -40,7 +42,7 @@ function costGradient(r: Route, ramp: string[]): maplibregl.ExpressionSpecificat
   if (!cost?.length || coords.length < 2) return null;
   const d = cumulative(coords), total = d[d.length - 1]!;
   if (!(total > 0)) return null;
-  const bucket = (c: number) => { const i = COST_STOPS.findIndex((s) => c <= s); return ramp[i < 0 ? ramp.length - 1 : i]!; };
+  const bucket = (c: number) => ramp[Math.min(costBucket(c), ramp.length - 1)]!;
   const out: unknown[] = ["step", ["line-progress"], bucket(cost[0]!)];
   let prev = out[2], last = 0;
   for (let i = 1; i < coords.length - 1; i++) {
