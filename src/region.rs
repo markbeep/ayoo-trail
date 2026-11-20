@@ -73,9 +73,6 @@ thread_local! {
 
 /// Grid cell size of the node index used to place via points.
 const CELL_M: f64 = 250.0;
-/// A peak or viewpoint wins a via spot when its node costs at most this much more per meter
-/// than the cheapest node there (D82).
-const ANCHOR_SLACK: f64 = 1.1;
 
 fn cell(q: [f64; 2]) -> (i32, i32) {
     (
@@ -307,20 +304,12 @@ impl<'g> Region<'g> {
 
     /// Where to put a via point near `pt` (D82): the region node within `radius_m` whose
     /// cheapest way out from the start and back costs least per meter under this climb
-    /// pressure, so the via sits where the user's preferred terrain leads. `anchor` (a peak or
-    /// viewpoint) wins when its nearest node is within `ANCHOR_SLACK` of that. None when no
-    /// reachable node is near.
-    pub(crate) fn via_near(
-        &self,
-        pressure: f32,
-        pt: LatLon,
-        radius_m: f64,
-        anchor: Option<LatLon>,
-    ) -> Option<LatLon> {
+    /// pressure, so the via sits where the user's preferred terrain leads. Peaks and viewpoints
+    /// don't pull it (D92). None when no reachable node is near.
+    pub(crate) fn via_near(&self, pressure: f32, pt: LatLon, radius_m: f64) -> Option<LatLon> {
         let cell_ = self.trees(pressure);
         let tr = cell_.get().expect("built");
         let c = self.proj.project(pt);
-        let a = anchor.map(|p| self.proj.project(p));
         let ratio = |v: usize| {
             let l = (tr.from_len[v] + tr.to_len[v]) as f64;
             (tr.from[v].is_finite() && tr.to[v].is_finite() && l > 0.0)
@@ -330,7 +319,7 @@ impl<'g> Region<'g> {
             cell([c[0] - radius_m, c[1] - radius_m]),
             cell([c[0] + radius_m, c[1] + radius_m]),
         );
-        let (mut best, mut near_anchor) = (None::<(f64, u32)>, None::<(f64, u32)>);
+        let mut best = None::<(f64, u32)>;
         for x in lo.0..=hi.0 {
             for y in lo.1..=hi.1 {
                 for &v in self.cells.get(&(x, y)).into_iter().flatten() {
@@ -342,20 +331,10 @@ impl<'g> Region<'g> {
                     if best.is_none_or(|b| r < b.0) {
                         best = Some((r, v));
                     }
-                    if let Some(a) = a {
-                        let d = (q[0] - a[0]).powi(2) + (q[1] - a[1]).powi(2);
-                        if near_anchor.is_none_or(|n| d < n.0) {
-                            near_anchor = Some((d, v));
-                        }
-                    }
                 }
             }
         }
-        let (r, v) = best?;
-        let v = match near_anchor {
-            Some((_, n)) if ratio(n as usize).is_some_and(|ra| ra <= ANCHOR_SLACK * r) => n,
-            _ => v,
-        };
+        let (_, v) = best?;
         Some(self.g.node(self.global[v as usize]))
     }
 
