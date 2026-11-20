@@ -1,12 +1,15 @@
 // Map context menu (D46): right-click, or long-press on phones.
 import { createEffect, createSignal, onSettled, Show } from "solid-js";
-import { CircleDot, CircleSlash, Copy, MapPin, Repeat2, Trash2 } from "@lucide/solid";
+import { CircleDot, CircleSlash, Copy, Flag, MapPin, Repeat2, Trash2 } from "@lucide/solid";
 import type { LatLon } from "../routes/types";
-import { addZone, removeZone, setStart, toggleHard, zones } from "../state";
+import {
+  addCheckpoint, addZone, checkpoints, removeCheckpoint, removeZone, renameCheckpoint, selected, setStart, toggleHard, zones,
+} from "../state";
+import { MAX_CHECKPOINTS } from "../url";
 import { isMust, MAX_MUST, MAX_ZONES } from "../routes/zones";
 
-/** `zone`: the avoid or prefer area that was long-pressed or right-clicked, if any (D90, D97). */
-export interface MenuState { p: LatLon; x: number; y: number; zone?: number | undefined }
+/** `zone` / `checkpoint`: what was long-pressed or right-clicked, if anything (D90, D97, D98). */
+export interface MenuState { p: LatLon; x: number; y: number; zone?: number | undefined; checkpoint?: number | undefined }
 
 export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
   const [copied, setCopied] = createSignal(false);
@@ -16,7 +19,7 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
   createEffect(() => props.menu, () => {
     clearTimeout(closing);
     setCopied(false);
-    el.querySelector("button")?.focus();
+    el.querySelector<HTMLElement>("input, button")?.focus();
   }, { defer: true });
   const zone = () => (props.menu.zone === undefined ? undefined : zones()[props.menu.zone]);
   const full = () => zones().length >= MAX_ZONES;
@@ -25,7 +28,7 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
   const coords = () => `${props.menu.p.lat.toFixed(5)}, ${props.menu.p.lon.toFixed(5)}`;
 
   onSettled(() => {
-    el.querySelector("button")?.focus();
+    el.querySelector<HTMLElement>("input, button")?.focus();
     const outside = (e: PointerEvent) => { if (!el.contains(e.target as Node)) props.onClose(); };
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };
     document.addEventListener("pointerdown", outside, true);
@@ -41,11 +44,25 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
   // Keep the menu inside the map: open leftward/upward near the right/bottom edge.
   const style = () => ({
     left: `${props.menu.x}px`, top: `${props.menu.y}px`,
-    transform: `translate(${props.menu.x > innerWidth - 240 ? "-100%" : "0"}, ${props.menu.y > innerHeight - 190 ? "-100%" : "0"})`,
+    transform: `translate(${props.menu.x > innerWidth - 240 ? "-100%" : "0"}, ${props.menu.y > innerHeight - 290 ? "-100%" : "0"})`,
   });
+
+  const cp = () => (props.menu.checkpoint === undefined ? undefined : checkpoints()[props.menu.checkpoint]);
 
   return (
     <div class="map-menu" role="menu" aria-label="Map actions" ref={el} style={style()}>
+      <Show when={cp()}>
+        {(c) => <>
+          {/* Saved on every keystroke; Enter closes. */}
+          <input aria-label="Checkpoint name" value={c().name} maxlength={40}
+            onInput={(e) => renameCheckpoint(props.menu.checkpoint!, e.currentTarget.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") props.onClose(); }} />
+          <button role="menuitem" onClick={() => { removeCheckpoint(props.menu.checkpoint!); props.onClose(); }}>
+            <Trash2 size={16} />Remove checkpoint
+          </button>
+        </>}
+      </Show>
+      <Show when={!cp()}>
       <button role="menuitem" onClick={() => { setStart(props.menu.p); props.onClose(); }}>
         <MapPin size={16} />Start here
       </button>
@@ -58,6 +75,12 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
           <button role="menuitem" disabled={full()} onClick={() => { addZone(props.menu.p, "prefer"); props.onClose(); }}>
             <CircleDot size={16} />Prefer area here
           </button>
+          <Show when={selected()}>
+            <button role="menuitem" disabled={checkpoints().length >= MAX_CHECKPOINTS}
+              onClick={() => { addCheckpoint(props.menu.p); props.onClose(); }}>
+              <Flag size={16} />Checkpoint here<small>On the selected loop</small>
+            </button>
+          </Show>
         </>}
       >
         {(z) => <>
@@ -77,6 +100,7 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
       }}>
         <Copy size={16} /><Show when={copied()} fallback={<>Copy coordinates<small>{coords()}</small></>}>Copied</Show>
       </button>
+      </Show>
     </div>
   );
 }

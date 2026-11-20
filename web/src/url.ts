@@ -1,6 +1,6 @@
 // Share links (D91): the query, the selected loop and its dragged points in the URL hash.
 // Pure: no state imports, so `node --test` can run it.
-import type { LatLon, Weights } from "./routes/types";
+import type { Checkpoint, LatLon, Weights } from "./routes/types";
 import type { Zone } from "./routes/zones";
 
 export type ShareClimb = { preset: "gentle" | "hilly" | "mountain" } | { m: number } | "max";
@@ -13,6 +13,7 @@ export interface Share {
   weights: Weights;
   maxSac: number;
   zones: Zone[];
+  checkpoints: Checkpoint[];
   /** Index of the selected loop (ids are `loop-<i>`, best first, D79). */
   loop: number;
   /** The loop's waypoints when it was edited, else null. */
@@ -26,6 +27,14 @@ const pt = (p: LatLon) => `${r5(p.lat)},${r5(p.lon)}`;
 const WEIGHTS = ["slope", "uphill", "downhill", "surface", "tech", "technical", "official", "forest", "urban", "traffic"] as const;
 const HILLS = new Set(["uphill", "downhill", "technical"]);
 const PRESETS = ["gentle", "hilly", "mountain"];
+/** Zone flag in `z=` (D97): absent = soft avoid, as in links before it. */
+const ZONE_FLAGS: Record<string, Pick<Zone, "kind" | "hard">> = {
+  A: { kind: "avoid", hard: true }, p: { kind: "prefer", hard: false }, P: { kind: "prefer", hard: true },
+};
+const zoneFlag = (z: Zone) => (z.kind === "prefer" ? (z.hard ? ",P" : ",p") : z.hard ? ",A" : "");
+export const MAX_CHECKPOINTS = 50;
+// URLSearchParams decodes one level on read; the second keeps `,` and `;` in names apart.
+const nameOut = (n: string) => encodeURIComponent(encodeURIComponent(n));
 
 /** Compact `k=v&…` hash: plain numbers and commas, no JSON, so the link stays short and readable. */
 export function encodeShare(s: Share): string {
@@ -33,7 +42,8 @@ export function encodeShare(s: Share): string {
   const parts = [`s=${pt(s.start)}`, `d=${s.km}`, `c=${c}`, `t=${s.strictness}`, `x=${s.maxSac}`,
     `w=${WEIGHTS.map((k) => Math.round(s.weights[k] * 100) / 100).join(",")}`];
   if (s.loop) parts.push(`l=${s.loop}`);
-  if (s.zones.length) parts.push(`z=${s.zones.map((z) => `${pt(z)},${Math.round(z.radius_m)}`).join(";")}`);
+  if (s.zones.length) parts.push(`z=${s.zones.map((z) => `${pt(z)},${Math.round(z.radius_m)}${zoneFlag(z)}`).join(";")}`);
+  if (s.checkpoints.length) parts.push(`k=${s.checkpoints.map((c) => `${pt(c)},${nameOut(c.name)}`).join(";")}`);
   if (s.wps) parts.push(`p=${s.wps.map(pt).join(";")}`);
   return parts.join("&");
 }
@@ -72,7 +82,11 @@ export function decodeShare(hash: string): Share | null {
       strictness: num(q.get("t"), 0, 1),
       weights,
       maxSac: Math.round(num(q.get("x"), 1, 6)),
-      zones: list(q.get("z"), 32).map((a) => ({ ...latLon(a), radius_m: num(a[2], 50, 5000) })),
+      zones: list(q.get("z"), 32).map((a) => {
+        if (a[3] !== undefined && !ZONE_FLAGS[a[3]]) throw new Error("zone flag");
+        return { ...latLon(a), radius_m: num(a[2], 50, 5000), ...(a[3] ? ZONE_FLAGS[a[3]] : {}) };
+      }),
+      checkpoints: list(q.get("k"), MAX_CHECKPOINTS).map((a) => ({ ...latLon(a), name: decodeURIComponent(a[2] ?? "") })),
       loop: Math.round(num(q.get("l") ?? "0", 0, 50)),
       wps: q.has("p") ? list(q.get("p"), 20).map(latLon) : null,
     };

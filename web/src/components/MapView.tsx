@@ -6,7 +6,7 @@ import { nearestIndex } from "../routes/geo";
 import type { LatLon } from "../routes/types";
 import {
   hoverIndex, selected, setHoverIndex, baseMap, overlays, pickingStart, routes, selectedId, setPickingStart, setSelectedId, setStart, start,
-  costView, editWaypoints, MAX_WAYPOINTS, refreshing, zones, moveZone, resizeZone,
+  checkpoints, costView, editWaypoints, MAX_WAYPOINTS, refreshing, zones, moveZone, resizeZone,
 } from "../state";
 
 /** Reads a CSS custom property so map paint colors follow the design tokens. */
@@ -47,7 +47,7 @@ export function MapView(props: { padding: () => { left: number; right: number; t
           setPickingStart(false);
         } else if (DEV_ROUTE) addWaypoint(p);
       },
-      onContextMenu: (p, at, zone) => setMenu({ p, x: at.x, y: at.y, zone }),
+      onContextMenu: (p, at, hit) => setMenu({ p, x: at.x, y: at.y, ...hit }),
       onZoneMove: moveZone,
       onZoneResize: resizeZone,
       onMoveStart: () => setMenu(null),
@@ -77,6 +77,7 @@ export function MapView(props: { padding: () => { left: number; right: number; t
     }
     void c.setStart(untrack(start));
     void c.setZones(untrack(zones));
+    void c.setCheckpoints(untrack(checkpoints));
     el.classList.toggle("picking", untrack(pickingStart));
     return () => c.destroy();
   });
@@ -88,6 +89,7 @@ export function MapView(props: { padding: () => { left: number; right: number; t
   }, { defer: true });
   createEffect(start, (p) => void ctl?.setStart(p), { defer: true });
   createEffect(zones, (z) => void ctl?.setZones(z), { defer: true });
+  createEffect(checkpoints, (c) => void ctl?.setCheckpoints(c), { defer: true });
   createEffect(routes, (rs) => {
     const id = untrack(selectedId);
     void ctl?.setRoutes(rs, id);

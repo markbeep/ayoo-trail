@@ -3,10 +3,11 @@
 import { createMemo, createRoot, createSignal, flush } from "solid-js";
 import type { BaseMapId } from "./map/basemaps";
 import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
-import type { BreakdownKey, LatLon, Route, Weights } from "./routes/types";
+import type { BreakdownKey, Checkpoint, LatLon, Route, Weights } from "./routes/types";
 import { ApiError, generate, routeVia } from "./api";
 import { clampRadius, MAX_ZONES, ZONE_DEFAULT_M, type Zone } from "./routes/zones";
-import { decodeShare, encodeShare } from "./url";
+import { decodeShare, encodeShare, MAX_CHECKPOINTS } from "./url";
+import { nearestOnRoute } from "./routes/gpx";
 
 export type NumericWeight = Exclude<keyof Weights, "uphill" | "downhill" | "technical" | "climb_pressure">;
 
@@ -55,7 +56,7 @@ export const climbMaxM = () => Math.max(1500, Math.ceil((150 * distanceKm()) / 1
 export const DEFAULT_START: LatLon = { lat: 47.2985, lon: 9.095 };
 
 const STORE_KEY = "trail-calc:v1";
-interface Stored { start?: LatLon; startName?: string | null; baseMap?: BaseMapId; overlays?: string[]; zones?: Zone[] }
+interface Stored { start?: LatLon; startName?: string | null; baseMap?: BaseMapId; overlays?: string[]; zones?: Zone[]; checkpoints?: Checkpoint[] }
 function load(): Stored {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Stored; } catch { return {}; }
 }
@@ -75,6 +76,10 @@ export const [weights, setWeights] = createSignal<Weights>({ ...DEFAULT_WEIGHTS 
 export const [maxSac, setMaxSacRaw] = createSignal(3);
 /** Avoid areas (D90). */
 export const [zones, setZonesRaw] = createSignal<readonly Zone[]>(Array.isArray(stored.zones) ? stored.zones.slice(0, MAX_ZONES) : []);
+/** GPX checkpoints (D98): kept across loops, exported when near the loop. */
+export const [checkpoints, setCheckpointsRaw] = createSignal<readonly Checkpoint[]>(
+  Array.isArray(stored.checkpoints) ? stored.checkpoints.slice(0, MAX_CHECKPOINTS) : [],
+);
 export const [baseMap, setBaseMapRaw] = createSignal<BaseMapId>(stored.baseMap ?? DEFAULT_BASE_MAP);
 export const [overlays, setOverlaysRaw] = createSignal<readonly string[]>(stored.overlays ?? DEFAULT_OVERLAYS);
 export const [routes, setRoutes] = createSignal<Route[]>([]);
@@ -160,6 +165,22 @@ export const toggleHard = (i: number) => setZones(zones().map((z, j) => (j === i
 export const moveZone = (i: number, p: LatLon) => setZones(zones().map((z, j) => (j === i ? { ...z, ...p } : z)));
 export const resizeZone = (i: number, m: number) => setZones(zones().map((z, j) => (j === i ? { ...z, radius_m: clampRadius(m) } : z)));
 export const removeZone = (i: number) => setZones(zones().filter((_, j) => j !== i));
+
+/** Checkpoints don't change the routing, so no regenerate. */
+function setCheckpoints(c: readonly Checkpoint[]) {
+  setCheckpointsRaw(c);
+  save({ checkpoints: [...c] });
+}
+/** A checkpoint on the selected loop's track point nearest `p`. */
+export function addCheckpoint(p: LatLon) {
+  const r = selected();
+  if (!r || checkpoints().length >= MAX_CHECKPOINTS) return;
+  const [lon, lat] = r.geometry.coordinates[nearestOnRoute(r.geometry.coordinates, p).i]!;
+  setCheckpoints([...checkpoints(), { lat, lon, name: `CP${checkpoints().length + 1}` }]);
+}
+export const renameCheckpoint = (i: number, name: string) =>
+  setCheckpoints(checkpoints().map((c, j) => (j === i ? { ...c, name: name.slice(0, 40) } : c)));
+export const removeCheckpoint = (i: number) => setCheckpoints(checkpoints().filter((_, j) => j !== i));
 
 /** Edited loops (D54): earlier versions per loop id for Undo; the first is the loop as generated. */
 export const [history, setHistory] = createSignal<Record<string, Route[]>>({});
@@ -271,7 +292,7 @@ export function shareLink(): string {
   const r = routes()[i];
   const hash = encodeShare({
     start: start(), km: distanceKm(), climb: climb(), strictness: strictness(),
-    weights: weights(), maxSac: maxSac(), zones: [...zones()], loop: i,
+    weights: weights(), maxSac: maxSac(), zones: [...zones()], checkpoints: [...checkpoints()], loop: i,
     wps: r && isEdited(r.id) ? r.waypoints : null,
   });
   return `${location.origin}${location.pathname}#${hash}`;
@@ -289,6 +310,7 @@ export async function openShared() {
   setWeights({ ...DEFAULT_WEIGHTS, ...s.weights });
   setMaxSacRaw(s.maxSac);
   setZonesRaw(s.zones);
+  setCheckpointsRaw(s.checkpoints);
   flush(); // Solid 2.0 batches writes; findRoutes must read the shared values, not the stored ones
   await findRoutes();
   const id = routes()[s.loop]?.id;

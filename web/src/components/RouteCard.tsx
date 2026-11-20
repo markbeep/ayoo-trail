@@ -2,7 +2,7 @@ import { createSignal, For, Show } from "solid-js";
 import { Check, Download, Link, LoaderCircle, RefreshCw, RotateCcw, TriangleAlert, Undo2 } from "@lucide/solid";
 import type { BreakdownKey, Route } from "../routes/types";
 import {
-  FACTORS, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, shareLink, stale, undoEdit,
+  FACTORS, checkpoints, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, shareLink, stale, undoEdit,
 } from "../state";
 import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
@@ -43,7 +43,7 @@ export function RouteCard(props: { route: Route; name: string }) {
       <header class="rc-head">
         <h2>{props.name}</h2>
         <button class="icon-btn" aria-label={`Download ${props.name} as GPX`} title="Download GPX"
-          onClick={() => downloadGpx(r(), props.name, `${props.name} · ${km(r().distance_m)}`)}>
+          onClick={() => downloadGpx(r(), props.name, `${props.name} · ${km(r().distance_m)}`, checkpoints())}>
           <Download size={18} />
         </button>
         <button class="icon-btn" aria-label={copied() ? "Link copied" : `Copy a link to ${props.name}`} title={copied() ? "Copied" : "Copy link"} onClick={share}>

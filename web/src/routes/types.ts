@@ -64,3 +64,6 @@ export interface Route {
   terms: ({ i: number } & Record<TermKey, number>)[];
   graph_date: string | null;
 }
+
+/** A named GPX checkpoint the user placed on the route (D98). */
+export interface Checkpoint { lat: number; lon: number; name: string }

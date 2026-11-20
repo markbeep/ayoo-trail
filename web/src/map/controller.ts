@@ -13,6 +13,7 @@ import { OMT, outdoorFills, outdoorLabels, outdoorLines, type MapPalette } from 
 import type { LatLon, Route } from "../routes/types";
 import { bounds, cumulative, legAt, nearestIndex } from "../routes/geo";
 import { circle, edgePoint, radiusTo, type Zone } from "../routes/zones";
+import type { Checkpoint } from "../routes/types";
 
 export interface RouteColors {
   selected: string;
@@ -66,6 +67,7 @@ const HOVER = "hover";
 const HERE = "here";
 const ZONES = "zones";
 const ZONE_HANDLES = "zone-handles";
+const CHECKPOINTS = "checkpoints";
 const EMPTY = { type: "FeatureCollection" as const, features: [] };
 const point = (p: LatLon | null) => ({
   type: "FeatureCollection" as const,
@@ -121,8 +123,8 @@ export interface MapHandlers {
   onRouteClick?: (id: string) => void;
   onMapClick?: (p: LatLon) => void;
   /** Right-click or touch long-press: map position, screen point inside the container, and the
-   * avoid area under it, if any. */
-  onContextMenu?: (p: LatLon, at: { x: number; y: number }, zone?: number) => void;
+   * area or checkpoint under it, if any. */
+  onContextMenu?: (p: LatLon, at: { x: number; y: number }, hit: { zone?: number; checkpoint?: number }) => void;
   /** The map started moving (closes transient UI such as the context menu). */
   onMoveStart?: () => void;
   /** Pointer over the selected route (null when it leaves). */
@@ -184,10 +186,15 @@ export class MapController {
     });
     // Listening also makes MapLibre suppress the browser menu on the canvas.
     this.map.on("contextmenu", (e) => {
-      const z = this.map.getLayer("zone-fill")
-        ? this.map.queryRenderedFeatures(e.point, { layers: ["zone-fill", "zone-handles"] })[0]
-        : undefined;
-      handlers.onContextMenu?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point, z ? Number(z.properties?.i) : undefined);
+      const at = (layers: string[]) => {
+        if (!this.map.getLayer(layers[0]!)) return undefined;
+        const f = this.map.queryRenderedFeatures(e.point, { layers })[0];
+        return f ? Number(f.properties?.i) : undefined;
+      };
+      // A checkpoint sits on top of any area it is in.
+      const checkpoint = at(["checkpoints"]);
+      const zone = checkpoint === undefined ? at(["zone-fill", "zone-handles"]) : undefined;
+      handlers.onContextMenu?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point, { zone, checkpoint });
     });
     this.map.on("movestart", () => handlers.onMoveStart?.());
     let overSelected = false;
@@ -296,6 +303,7 @@ export class MapController {
     this.map.addSource(HERE, { type: "geojson", data: EMPTY });
     this.map.addSource(ZONES, { type: "geojson", data: EMPTY });
     this.map.addSource(ZONE_HANDLES, { type: "geojson", data: EMPTY });
+    this.map.addSource(CHECKPOINTS, { type: "geojson", data: EMPTY });
     // Areas sit under the routes: avoid in the "avoided" end of the cost ramp, prefer in the
     // cheap end (D97). Soft edges dashed, hard edges solid and heavier.
     const avoid = c.cost[c.cost.length - 1]!;
@@ -364,6 +372,16 @@ export class MapController {
         "circle-stroke-color": ["case", ["get", "edge"], tint, c.casing],
         "circle-stroke-width": 2.5,
       },
+    });
+    // GPX checkpoints (D98): small flags on the route, named.
+    this.map.addLayer({
+      id: "checkpoints", type: "circle", source: CHECKPOINTS,
+      paint: { "circle-radius": 5.5, "circle-color": c.casing, "circle-stroke-color": c.selected, "circle-stroke-width": 3 },
+    });
+    this.map.addLayer({
+      id: "checkpoint-labels", type: "symbol", source: CHECKPOINTS,
+      layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Bold"], "text-size": 12, "text-anchor": "left", "text-offset": [0.9, 0] },
+      paint: { "text-color": c.palette.label, "text-halo-color": c.palette.halo, "text-halo-width": 1.5 },
     });
     this.map.addLayer({
       id: "here", type: "circle", source: HERE,
@@ -476,6 +494,15 @@ export class MapController {
     this.zones = zones;
     await this.ready;
     if (!this.zoneDrag) this.drawZones(zones);
+  }
+
+  /** GPX checkpoints (D98). */
+  async setCheckpoints(cps: readonly Checkpoint[]) {
+    await this.ready;
+    (this.map.getSource(CHECKPOINTS) as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: cps.map((c, i) => ({ type: "Feature", properties: { i, name: c.name }, geometry: { type: "Point", coordinates: [c.lon, c.lat] } })),
+    });
   }
 
   private drawZones(zones: readonly Zone[]) {
