@@ -6,6 +6,7 @@ import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
 import type { BreakdownKey, LatLon, Route, Weights } from "./routes/types";
 import { ApiError, generate, routeVia } from "./api";
 import { clampRadius, MAX_ZONES, ZONE_DEFAULT_M, type Zone } from "./routes/zones";
+import { decodeShare, encodeShare } from "./url";
 
 export type NumericWeight = Exclude<keyof Weights, "uphill" | "downhill" | "technical" | "climb_pressure">;
 
@@ -261,4 +262,36 @@ export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
     setStatus("error");
   }
   setRefreshing(false);
+}
+
+/** A link that reopens this query, the selected loop and its edits (D91). */
+export function shareLink(): string {
+  const i = Math.max(0, routes().findIndex((r) => r.id === selectedId()));
+  const r = routes()[i];
+  const hash = encodeShare({
+    start: start(), startName: startName(), km: distanceKm(), climb: climb(), strictness: strictness(),
+    weights: weights(), maxSac: maxSac(), zones: [...zones()], loop: i,
+    wps: r && isEdited(r.id) ? r.waypoints : null,
+  });
+  return `${location.origin}${location.pathname}#${hash}`;
+}
+
+/** Open a share link from the URL hash, if there is one: apply it, generate, select and re-edit the loop. */
+export async function openShared() {
+  const s = decodeShare(location.hash);
+  if (!s) return;
+  window.history.replaceState(null, "", location.pathname + location.search);
+  setStartRaw(s.start);
+  setStartName(s.startName);
+  setDistanceKm(s.km);
+  setClimbRaw(s.climb);
+  setStrictnessRaw(s.strictness);
+  setWeights({ ...DEFAULT_WEIGHTS, ...s.weights });
+  setMaxSacRaw(s.maxSac);
+  setZonesRaw(s.zones);
+  await findRoutes();
+  const id = routes()[s.loop]?.id;
+  if (!id) return;
+  setSelectedId(id);
+  if (s.wps) await editWaypoints(id, s.wps);
 }

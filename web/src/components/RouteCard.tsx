@@ -1,8 +1,8 @@
 import { createSignal, For, Show } from "solid-js";
-import { Download, LoaderCircle, RefreshCw, RotateCcw, TriangleAlert, Undo2 } from "@lucide/solid";
+import { Check, Download, Link, LoaderCircle, RefreshCw, RotateCcw, TriangleAlert, Undo2 } from "@lucide/solid";
 import type { BreakdownKey, Route } from "../routes/types";
 import {
-  FACTORS, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, stale, undoEdit,
+  FACTORS, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, shareLink, stale, undoEdit,
 } from "../state";
 import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
@@ -16,6 +16,11 @@ const PREFERENCE = ["preferred", "good", "fine", "avoided", "strongly avoided"];
 
 export function RouteCard(props: { route: Route; name: string }) {
   const [open, setOpen] = createSignal<BreakdownKey | null>(null);
+  const [copied, setCopied] = createSignal(false);
+  const share = () => void navigator.clipboard?.writeText(shareLink()).then(() => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  });
   const r = () => props.route;
   // With Max there is no target to score against, but the row stays so its climb controls don't vanish (D78).
   const bars = () => r().breakdown.some((b) => b.key === "climb") ? r().breakdown
@@ -40,6 +45,9 @@ export function RouteCard(props: { route: Route; name: string }) {
         <button class="icon-btn" aria-label={`Download ${props.name} as GPX`} title="Download GPX"
           onClick={() => downloadGpx(r(), props.name, `${props.name} · ${km(r().distance_m)}`)}>
           <Download size={18} />
+        </button>
+        <button class="icon-btn" aria-label={copied() ? "Link copied" : `Copy a link to ${props.name}`} title={copied() ? "Copied" : "Copy link"} onClick={share}>
+          <Show when={copied()} fallback={<Link size={18} />}><Check size={18} /></Show>
         </button>
         <span class="score" title="Score out of 100">{score(r().score)}</span>
       </header>

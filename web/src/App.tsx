@@ -9,7 +9,7 @@ import { RouteTiles } from "./components/RouteTiles";
 import { LayersCard } from "./components/LayersCard";
 import { attachSheetDrag, setSnap, snap, snapHeight, SNAPS } from "./components/Sheet";
 import { narrow } from "./layout";
-import { pickingStart, routes, selected, selectedId, status } from "./state";
+import { openShared, pickingStart, routes, selected, selectedId, status } from "./state";
 import { loopName } from "./routes/format";
 
 function Brand() {
@@ -67,7 +67,10 @@ export function App() {
     return { left: r.right + 40, right: 300, top: 60, bottom: 60 };
   };
 
-  onSettled(() => attachSheetDrag(handle, panel));
+  onSettled(() => {
+    void openShared();
+    return attachSheetDrag(handle, panel);
+  });
   // Sheet choreography: results open it halfway, picking a start lowers it.
   createEffect(status, (s, prev) => {
     if (prev === "loading" && s === "idle" && untrack(routes).length) {
