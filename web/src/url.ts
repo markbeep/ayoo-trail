@@ -7,7 +7,6 @@ export type ShareClimb = { preset: "gentle" | "hilly" | "mountain" } | { m: numb
 
 export interface Share {
   start: LatLon;
-  startName: string | null;
   km: number;
   climb: ShareClimb;
   strictness: number;
@@ -36,7 +35,6 @@ export function encodeShare(s: Share): string {
   if (s.loop) parts.push(`l=${s.loop}`);
   if (s.zones.length) parts.push(`z=${s.zones.map((z) => `${pt(z)},${Math.round(z.radius_m)}`).join(";")}`);
   if (s.wps) parts.push(`p=${s.wps.map(pt).join(";")}`);
-  if (s.startName) parts.push(`n=${encodeURIComponent(s.startName)}`);
   return parts.join("&");
 }
 
@@ -67,10 +65,8 @@ export function decodeShare(hash: string): Share | null {
     });
     const c = q.get("c") ?? "";
     const climb: ShareClimb = c === "max" ? "max" : PRESETS.includes(c) ? { preset: c as "hilly" } : { m: num(c, 0, 20_000) };
-    const name = q.get("n");
     return {
       start: latLon(nums(start)),
-      startName: name ? name.slice(0, 200) : null,
       km: num(q.get("d"), 3, 60),
       climb,
       strictness: num(q.get("t"), 0, 1),

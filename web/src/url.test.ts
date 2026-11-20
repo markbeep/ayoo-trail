@@ -5,7 +5,6 @@ import { decodeShare, encodeShare, type Share } from "./url.ts";
 
 const share: Share = {
   start: { lat: 47.2985, lon: 9.095 },
-  startName: "Wattwil",
   km: 15,
   climb: { preset: "hilly" },
   strictness: 0.8,
@@ -18,8 +17,8 @@ const share: Share = {
 
 test("a share link round-trips", () => {
   assert.deepEqual(decodeShare(`#${encodeShare(share)}`), share);
-  assert.deepEqual(decodeShare(encodeShare({ ...share, climb: "max", wps: null, startName: null })),
-    { ...share, climb: "max", wps: null, startName: null });
+  assert.deepEqual(decodeShare(encodeShare({ ...share, climb: "max", wps: null })),
+    { ...share, climb: "max", wps: null });
 });
 
 test("garbage and out-of-range values are rejected", () => {

@@ -269,7 +269,7 @@ export function shareLink(): string {
   const i = Math.max(0, routes().findIndex((r) => r.id === selectedId()));
   const r = routes()[i];
   const hash = encodeShare({
-    start: start(), startName: startName(), km: distanceKm(), climb: climb(), strictness: strictness(),
+    start: start(), km: distanceKm(), climb: climb(), strictness: strictness(),
     weights: weights(), maxSac: maxSac(), zones: [...zones()], loop: i,
     wps: r && isEdited(r.id) ? r.waypoints : null,
   });
@@ -281,8 +281,7 @@ export async function openShared() {
   const s = decodeShare(location.hash);
   if (!s) return;
   window.history.replaceState(null, "", location.pathname + location.search);
-  setStartRaw(s.start);
-  setStartName(s.startName);
+  setStart(s.start); // no name in the link: the label shows the coordinates
   setDistanceKm(s.km);
   setClimbRaw(s.climb);
   setStrictnessRaw(s.strictness);

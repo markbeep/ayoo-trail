@@ -68,8 +68,12 @@ export function App() {
   };
 
   onSettled(() => {
-    void openShared();
-    return attachSheetDrag(handle, panel);
+    // Deferred: openShared flush()es, which 2.0 forbids inside onSettled. hashchange covers a link pasted into an open tab.
+    const open = () => queueMicrotask(() => void openShared());
+    open();
+    window.addEventListener("hashchange", open);
+    attachSheetDrag(handle, panel);
+    return () => window.removeEventListener("hashchange", open);
   });
   // Sheet choreography: results open it halfway, picking a start lowers it.
   createEffect(status, (s, prev) => {
