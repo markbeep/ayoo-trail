@@ -181,14 +181,7 @@ fn seed(
     // Climb pressure is bisected inside [lo, hi] like the radius is rescaled (D52).
     let goal = req.climb.filter(|c| c.strictness > 0.0);
     let (mut lo, mut hi) = (0.0f32, goal.map_or(0.0, |c| c.strictness));
-    let mut pressure = match goal {
-        Some(ClimbGoal {
-            target_m: Some(_),
-            strictness,
-        }) => strictness * 0.5,
-        Some(c) => c.strictness,
-        None => 0.0,
-    };
+    let mut pressure = goal.map_or(0.0, |c| c.strictness * 0.5);
     let mut best: Option<Candidate> = None;
     for _ in 0..ATTEMPTS {
         let pp = with_pressure(&req.profile, pressure);
@@ -221,6 +214,9 @@ fn seed(
             continue;
         }
         let (err, climb_err, rank) = judge(g, req, p, &route);
+        // D96: "as much as possible" walks the bracket like an unreachable target. Climb isn't
+        // monotonic in pressure, so the best-ranked attempt (most climb per km) is kept.
+        let climb_err = climb_err.or(goal.map(|_| f64::NEG_INFINITY));
         let scale = (target / route.distance_m).clamp(0.5, 2.0);
         let c = Candidate {
             vias,
@@ -294,7 +290,7 @@ fn route_loop(
 fn judge(g: &Graph, req: &GenerateRequest, p: &Profile, route: &Route) -> (f64, Option<f64>, f64) {
     let target = req.distance_m;
     let err = (route.distance_m - target).abs() / target;
-    // Signed climb error for a target; for "as much as possible", climb per 100 m/km.
+    // Signed climb error for a target; for "as much as possible", climb per 100 m/km of the target.
     let (climb_term, climb_err) = match req.climb {
         Some(ClimbGoal {
             target_m: Some(c),
@@ -307,7 +303,9 @@ fn judge(g: &Graph, req: &GenerateRequest, p: &Profile, route: &Route) -> (f64, 
             target_m: None,
             strictness,
         }) => (
-            -(0.25 + 4.0 * strictness as f64) * route.climb_m / route.distance_m / 0.1,
+            // Total climb over the asked distance, not per km of this loop: a shorter loop
+            // shouldn't win on rate while climbing less (D96).
+            -(0.25 + 4.0 * strictness as f64) * route.climb_m / target / 0.1,
             None,
         ),
         _ => (0.0, None),

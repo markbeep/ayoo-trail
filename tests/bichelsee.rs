@@ -115,3 +115,30 @@ fn finds_a_loop_like_the_bichelsee_run() {
     println!("max climb: none {none:.0}, max@0.3 {low:.0}, max@1 {high:.0}");
     assert!(none <= low && low <= high);
 }
+
+#[test]
+#[ignore = "needs a CH data/graph.bin"]
+fn max_climb_climbs_at_least_as_much_as_a_target() {
+    // D96: "as much as possible" used to find 806 m here where a 900 m target found 852 m.
+    let g = Graph::open(Path::new("data/graph.bin")).unwrap();
+    let best = |target_m| {
+        let req = GenerateRequest {
+            start: START,
+            distance_m: 15_000.0,
+            climb: Some(ClimbGoal {
+                target_m,
+                strictness: 1.0,
+            }),
+            profile: Profile::default(),
+            count: 6,
+        };
+        generate(&g, &req)
+            .unwrap()
+            .iter()
+            .map(|l| l.route.climb_m)
+            .fold(0.0, f64::max)
+    };
+    let (max, target) = (best(None), best(Some(900.0)));
+    println!("max: {max:.0} m, 900 m target: {target:.0} m");
+    assert!(max >= target, "max {max:.0} m < target {target:.0} m");
+}
