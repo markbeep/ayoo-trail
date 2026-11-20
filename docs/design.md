@@ -1,30 +1,8 @@
 # Design — ayoo
 
-Status: **approved; engine and importer in implementation** (D29), 2026-11-18.
-Generation, the generate API and the cache are not started.
-Companions: `brief.md` (intent and backlog), `decisions.md` (log),
-`routing-engines.md` (engine choice), `layers.md` (data sources and licenses).
-
-Revision history:
-
-- **v1** — first written draft.
-- **v2** — after the builder review: generation targeting (length repair +
-  refinement objective), geometry Z for elevation profiles, explicit `profile`
-  struct, PMTiles out of v1, repetition penalty, non-deterministic share links,
-  score formula. After owner answers: closest matches, reachability deferred
-  (D19), soft climb and hilliness (D20). Base map made explicit (D21).
-- **v3** — pre-implementation patch after plan review: `waypoints` in the route
-  payload, official category replaces the id table, 150 m snap threshold,
-  repetition penalty exempts the start stem, BLAKE3 cache key over a quantized
-  request, edited-waypoint URL state, Rust 1.100.
-- **v4** — second design review: forward A* with a profile-derived lower bound,
-  route steps for mid-edge starts, edge splitting at elevation extrema,
-  native-swiss-grid DEM, FlatGeobuf official trails, OSM land cover, midpoint
-  drag handles, waypoints in the generate response, raster maxzoom.
-- **v5** — pre-implementation review, 2026-11-18 (D29–D37): grade histogram
-  instead of extrema splitting, CSR adjacency, highway class and tag
-  inference, non-saturating score in per-meter units, `max_sac` 3,
-  configurable DEM (swissALTI3D default, DHM25), no GDAL.
+Status: **v1 built**, 2026-11-20. Where this text and `decisions.md` differ, the
+decisions win. Companions: `brief.md` (intent, backlog, open questions),
+`decisions.md` (log), `layers.md` (data sources and licenses).
 
 ## 1. Intent
 
@@ -111,7 +89,7 @@ src/
   graph.rs        graph format, load, snap
   cost.rs         profile -> per-edge cost
   route.rs        A* and route assembly
-  generate.rs     anchors, seeds, refinement, dedup
+  generate.rs     seeds, via placement, radius and climb tuning, dedup
   region.rs       region packs and data providers
   server.rs       axum app
   bin/import.rs
@@ -199,6 +177,7 @@ the drag debugger):
 | Official trail | 0.7 |
 | Forest | 0.9 |
 | Urban | inside settlement 2.0, within 200 m 1.3 |
+| Quiet roads | unclassified/residential 1.1, tertiary 1.3, secondary 1.6, primary 2.0, everything else 1.0 (D93) |
 | Exclusion marker | multiply by 5, or block if the marker is set to block |
 
 Missing surface tags are inferred from the highway type (D31): roads →
@@ -217,13 +196,10 @@ the Hills panel) scales the uphill and downhill factors together;
 band steeper than 8 % (both directions) is multiplied by `1 − 0.8·pressure`, so
 at full pressure hilly edges cost a fifth of their slope factor (D52).
 
-Score = `100 * min(0.63 / mean_factor_default, 1)^(1/6)` (D32, geometric mean per D44), where
-`mean_factor_default = cost / distance_m`, the cost per meter under **default
-weights**, without exclusion or repetition penalties, so the score does not
-move with the sliders. A flat official forest trail (0.63) scores 100, plain
-gravel 63, asphalt about 32; only routes better than that clamp. The
-per-term contribution is displayed as bars so the drag debugger shows *why* the
-score moved.
+Score (D84): `100 · preference^(1/7)`, or `100 · (preference · climb match)^(1/8)`
+with a climb target. `preference` is the loop's cost per meter under the user's
+weights against the smallest those weights allow, so 100 means every meter is as
+good as the settings permit. The bars show each term on its own (D73).
 
 Distance is **not** in the cost function; it is a target enforced by
 generation. Climb enters only through the generator's climb pressure above;
@@ -231,52 +207,32 @@ it is a soft goal and never filters a route (D20, D52).
 
 ## 9. Generation
 
-> **As built (D39, D52):** triangle (θ±30°) and 3-via (θ−40°, θ, θ+40°) seeds
-> at 12 headings, pulled to an anchor within r/3. Per seed, up to 8 attempts
-> rescale the radius by D*/D and bisect the climb pressure inside
-> `[0, strictness]` until distance is within ±10 % and climb within ±15 % of the
-> target. "As much as possible" uses `pressure = strictness`. Rank
-> `= |D−D*|/D* + (0.25 + 4·strictness)·|C−C*|/C* − 0.2·score/100`; for max climb
-> the climb term is `−(C/D)/0.1`. The steps below are the original design.
+As built (D39, D52, D70, D82–D87, D92, D94):
 
-Seeds alone cannot hit a distance target; the local search does the targeting.
-
-1. **Anchors.** Radius `R = clamp(target_distance / 3, 2 km, 12 km)`. Drop
-   candidates inside `Block` exclusion zones, then rank the rest by interest
-   (named OSM peak, lake, official panorama route, large forest block, DEM local
-   maximum) and by relief gained from the start. Keep the top K, spread across
-   headings.
-2. **Seeds.** `start → A → B → start` for anchor pairs with enough angular
-   separation. If no anchors exist, heading fallback: eight headings, three
-   ring points at radius R.
-3. **Legs with repetition penalty.** Route the legs in order with A*, carrying
-   the set of edges already used; an edge used earlier costs ×5, except within
-   500 m of the start, so an access stem or a peninsula trail can be shared.
-   The penalty stops a seed collapsing into an out-and-back elsewhere. It makes
-   cost path-dependent, so this search is greedy rather than provably optimal.
-4. **Length repair.** If the seed is short, insert the next-ranked anchor
-   between the existing via points and reroute; repeat up to three times. If it
-   is too long, drop the weakest anchor.
-5. **Refine.** Local search over via points. Objective
-   `J = |D−D*|/D* + 0.25·|C−C*|/C* − 0.2·score/100`, where the climb term only
-   applies when a climb target is given. Moves: shift a via point radially or
-   perpendicular by 100 m, 300 m, 1 km; insert or remove a via point; reroute
-   the affected legs. Accept moves that lower J. Two rounds. Distance
-   dominates; climb is a nudge, not a requirement.
-6. **Filter and dedup.** Keep routes within ±10 % distance. Climb never
-   filters. Overlap = shared edge distance / shorter route distance; above 0.5
-   keep the stronger route.
-7. **Return** up to 6 routes, sorted by distance error. If none is in band,
-   return the closest candidates with `distance_met: false` rather than an
-   empty list.
+1. **Region.** The nodes within half the target distance of the start, with
+   every edge's cost precomputed, plus a shortest-path tree out of the start and
+   one into it per climb pressure.
+2. **Seeds.** 12 headings × two shapes: a triangle (θ ± 30°) and a 3-via loop
+   (θ − 40°, θ, θ + 40°), at a radius from the target and a 1.3 detour factor.
+3. **Vias.** Each via goes to the node within half the radius of its seed point
+   whose way out from the start and back is cheapest per meter under the user's
+   weights, preferring nodes whose network distance from the start is within
+   ±25 % of the wanted spoke (D94). Peaks and viewpoints don't pull it (D92).
+4. **Legs.** A* through the vias with a repetition penalty (×5 for edges
+   already used, except within 500 m of the start); dead-end spurs are cut.
+5. **Tuning.** Up to 8 attempts per seed rescale the radius by target/actual and
+   bisect the climb pressure in `[0, strictness]` until distance is within
+   ±10 % and climb within the strictness tolerance (±15 % … ±3 %).
+6. **Pick.** Rank by distance error, climb error and preference. Only loops
+   within ±10 % are kept; when none fits, the single closest one is returned
+   flagged `distance_met: false`. Dedup at 0.5 shared distance; up to `count`
+   loops, best score first (D79).
 
 `Route` is a list of steps `{edge, from_t, to_t}`. A route can start and end
-mid-edge; geometry, distance and climb are sliced from those fractions, so two
-waypoints on the same edge connect directly instead of running to the endpoint
-and back.
+mid-edge; geometry, distance and climb are sliced from those fractions.
 
-Legs run in parallel with `rayon`; results are cached by canonical request plus
-graph version.
+Seeds run in parallel with `rayon`. Generation takes tens to hundreds of ms, so
+there is no response cache (D39).
 
 ## 10. API
 
@@ -284,12 +240,13 @@ Same origin as the client; no auth, no CORS.
 
 `profile` is an explicit value, not a server-side preset. Quick-mode presets are
 expanded on the client, so the server only ever sees one shape. Each weight is
-validated to `0..=3`; anything outside is a `422`.
+validated to `0..=4`; anything outside is a `422`.
 
 ```json
 {
   "weights": { "slope": 1.0, "surface": 1.0, "tech": 1.0,
-               "official": 1.0, "forest": 1.0, "urban": 1.0 },
+               "official": 1.0, "forest": 1.0, "urban": 1.0,
+               "traffic": 1.0 },
   "max_sac": 3,
   "exclude": [ { "lat": 47.0, "lon": 8.0, "radius_m": 5000,
                  "mode": "penalize" } ]
@@ -316,11 +273,8 @@ them with every route.
 legitimately produce an out-and-back. It requires 2–20 waypoints and snaps
 within 150 m, else `422`.
 
-Caching: in-memory LRU keyed by the 32-byte BLAKE3 digest of a quantized
-request (lat/lon to 1e-6, distances to 1 m) plus the graph version;
-`Cache-Control: no-store` on `generate` in v1, with `X-Cache` only as a debug
-header. A share link reproduces the query, not the exact response: parallel
-legs and tie-breaking are not deterministic across runs, and that is accepted.
+No response cache (D39). Generation is deterministic for one graph, so a share
+link (D91) reproduces the loop until the graph is rebuilt.
 
 ## 11. Frontend
 
@@ -355,11 +309,11 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
   15 km loop can be shaped with more than two anchors. Live stats and score
   replace the card values.
 - Export: GPX download from the selected route.
-- State: Solid signals. Last start and profile in localStorage. The query is
-  encoded in the URL; after a drag edit the edited waypoints are stored too
-  (`?w=lat,lon;lat,lon;...&p=<profile>`). Opening a link with `w` calls
-  `POST /api/route` with those waypoints and that profile, not `generate`, so
-  the edit is reproduced. No router library.
+- Avoid areas (D90): long-press or right-click the map, "Avoid area here",
+  then drag the circle's center or edge. Sent as `penalize` exclusions.
+- State: Solid signals. Start, map layers and avoid areas in localStorage. A
+  share link (D91) puts the query, the selected loop and its edited points in
+  the URL hash; opening it regenerates and re-applies the edit. No router library.
 - No SSR.
 
 ## 12. Local setup and deployment
@@ -400,11 +354,10 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 
 ## 14. Risks
 
-- A* latency on a 4M-node graph. Mitigation: rayon, request cache, and a CH
-  path for the default profile only if measured latency demands it.
+- Generation latency in cities (Zürich ~0.2–0.8 s). Mitigation: Q25 step 4
+  (bidirectional A* legs) if it matters.
 - OSM trail quality in remote areas. Mitigation: official share and penalties
   make it visible rather than hidden.
-- Feature-anchor ranking is subjective; weak anchors produce boring loops.
 - Horizon-profile precompute (viewshed/sun) may be heavier than estimated.
 - Cross-border loops are impossible in v1.
 - The base map depends on geo.admin.ch availability and its fair-use limits.
@@ -416,11 +369,5 @@ legs and tie-breaking are not deterministic across runs, and that is accepted.
 ## 15. Open items left to the builder
 
 - Tune the factor defaults with the drag debugger.
-- Anchor ranking function and K.
-- Cache eviction and TTL.
 - GPX metadata and waypoint naming.
 - Region pack trait boundaries and the provider registry.
-
-## 16. Milestones
-
-See `docs/milestones.md`.
