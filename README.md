@@ -1,8 +1,10 @@
 # ayoo
 
-Generates trail-running loops in Switzerland. Give it a start, a distance and what you care
-about; it returns a few distinct loops, scored against your settings, that you can drag-edit,
-share as a link and download as GPX. Rust (axum) server, SolidJS + MapLibre client.
+Generates trail-running loops in Switzerland based on multiple adjustable metrics.
+Give it a start, a distance and what you care about; it returns a few distinct loops,
+scored against your settings, that you can drag-edit, share as a link and download as GPX.
+
+![UI screenshot](assets/screenshot.webp)
 
 ## What it routes by
 
@@ -20,7 +22,7 @@ generator places turning points where your weighted costs are low and routes bet
 - **Forest**: prefer running through forest.
 - **Away from towns**: avoid villages and built-up areas.
 - **Quiet roads**: avoid busy road classes.
-- **Avoid areas**: circles you place on the map (long-press or right-click) and resize.
+- **Avoid/prefer areas**: circles you place on the map (long-press or right-click) and resize.
 
 **Planned**
 
