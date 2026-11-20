@@ -158,6 +158,8 @@ pub struct HotEdge {
     pub urban: u8,
     pub official_category: u8,
     pub flags: u8,
+    /// `Highway as u8` (D93).
+    pub highway: u8,
 }
 
 impl Default for EdgeAttrs {
@@ -960,6 +962,7 @@ impl Graph {
                         urban: a.urban,
                         official_category: a.official_category,
                         flags: a.flags,
+                        highway: a.highway as u8,
                     }
                 })
                 .collect()

@@ -25,11 +25,13 @@ export interface Weights {
   official: number;
   forest: number;
   urban: number;
+  /** Busy roads (D93). */
+  traffic: number;
   /** 0–1, set by the generator per route (D52); 0 for anything the user asks for. */
   climb_pressure?: number;
 }
 
-export type BreakdownKey = "climb" | "official" | "surface" | "slope" | "tech" | "forest" | "urban";
+export type BreakdownKey = "climb" | "official" | "surface" | "slope" | "tech" | "forest" | "urban" | "traffic";
 /** The cost terms; "climb" is the Elevation bar, present only with a climb target (D63). */
 export type TermKey = Exclude<BreakdownKey, "climb">;
 

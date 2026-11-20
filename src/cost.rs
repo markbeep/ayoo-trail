@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::geodesy::{closest_on_segment, haversine_m, LocalProjection};
-use crate::graph::{flags, Direction, Graph, HotEdge, LatLon, GRADE_BANDS};
+use crate::graph::{flags, Direction, Graph, Highway, HotEdge, LatLon, GRADE_BANDS};
 
 /// Slope factors for the four descent bands, steepest first (<=-25, -25..-20, -20..-15,
 /// -15..-8 %), for gentle / any / steep (D45, D53). Starting points to tune (Q17).
@@ -36,6 +36,19 @@ const TECH_FACTORS: [[f32; 5]; 3] = [
 const OFFICIAL_FACTORS: [f32; 2] = [0.7, 1.0];
 const FOREST_FACTORS: [f32; 2] = [0.9, 1.0];
 const URBAN_FACTORS: [f32; 3] = [1.0, 1.3, 2.0];
+/// Trails and minor ways, unclassified/residential, tertiary, secondary, primary (D93).
+const TRAFFIC_FACTORS: [f32; 5] = [1.0, 1.1, 1.3, 1.6, 2.0];
+
+/// `TRAFFIC_FACTORS` index for a `Highway` byte: busier road classes count more.
+pub(crate) fn traffic_class(highway: u8) -> usize {
+    match Highway::from_u8(highway) {
+        Highway::Unclassified | Highway::Residential => 1,
+        Highway::Tertiary => 2,
+        Highway::Secondary => 3,
+        Highway::Primary => 4,
+        _ => 0,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -52,6 +65,8 @@ pub struct Weights {
     pub official: f32,
     pub forest: f32,
     pub urban: f32,
+    /// Busy roads (D93).
+    pub traffic: f32,
     /// 0..1, set by the generator to chase climb: steep edge parts get cheaper (D52).
     pub climb_pressure: f32,
 }
@@ -81,6 +96,7 @@ impl Default for Weights {
             official: 1.0,
             forest: 1.0,
             urban: 1.0,
+            traffic: 1.0,
             climb_pressure: 0.0,
         }
     }
@@ -146,7 +162,9 @@ fn min_weighted(table: &[f32], w: f32) -> f64 {
 impl Profile {
     pub fn validate(&self) -> Result<(), ProfileError> {
         let w = &self.weights;
-        let ws = [w.slope, w.surface, w.tech, w.official, w.forest, w.urban];
+        let ws = [
+            w.slope, w.surface, w.tech, w.official, w.forest, w.urban, w.traffic,
+        ];
         let ok = |v: f32, r: std::ops::RangeInclusive<f32>| v.is_finite() && r.contains(&v);
         if !ws.iter().all(|&v| ok(v, 0.0..=MAX_WEIGHT))
             || !ok(w.uphill, -1.0..=1.0)
@@ -225,6 +243,7 @@ pub fn term_minima(w: &Weights) -> Breakdown {
         official: min_weighted(&OFFICIAL_FACTORS, w.official) as f32,
         forest: min_weighted(&FOREST_FACTORS, w.forest) as f32,
         urban: min_weighted(&URBAN_FACTORS, w.urban) as f32,
+        traffic: min_weighted(&TRAFFIC_FACTORS, w.traffic) as f32,
     }
 }
 
@@ -237,6 +256,7 @@ pub struct Breakdown {
     pub official: f32,
     pub forest: f32,
     pub urban: f32,
+    pub traffic: f32,
 }
 
 impl Breakdown {
@@ -248,6 +268,7 @@ impl Breakdown {
             self.official,
             self.forest,
             self.urban,
+            self.traffic,
         ]
         .iter()
         .map(|&f| f as f64)
@@ -278,6 +299,7 @@ pub struct FactorTable {
     /// By forest share 0..=100 %.
     forest: [f32; 101],
     urban: [f32; 3],
+    traffic: [f32; 5],
 }
 
 impl FactorTable {
@@ -295,6 +317,7 @@ impl FactorTable {
                 )
             }),
             urban: URBAN_FACTORS.map(|f| weighted(f, w.urban)),
+            traffic: TRAFFIC_FACTORS.map(|f| weighted(f, w.traffic)),
         }
     }
 
@@ -331,6 +354,7 @@ impl FactorTable {
             official: self.official[(a.official_category == 0) as usize],
             forest: self.forest[a.forest_pct.min(100) as usize],
             urban: self.urban[(a.urban as usize).min(2)],
+            traffic: self.traffic[traffic_class(a.highway)],
         }
     }
 }

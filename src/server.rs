@@ -200,8 +200,8 @@ fn route_json(
         // D84: how close the loop gets to the best the user's weights allow, the measure the
         // generator ranks by; a climb target adds its match as a seventh term.
         "score": match climb_target_m {
-            Some(t) => 100.0 * (stats.preference * climb_match(r.climb_m, t)).powf(1.0 / 7.0),
-            None => 100.0 * stats.preference.powf(1.0 / 6.0),
+            Some(t) => 100.0 * (stats.preference * climb_match(r.climb_m, t)).powf(1.0 / 8.0),
+            None => 100.0 * stats.preference.powf(1.0 / 7.0),
         },
         "official_share": stats.official_share,
         "breakdown": bars,
@@ -209,7 +209,7 @@ fn route_json(
         "climb_pressure": profile.weights.climb_pressure,
         "terms": route_term_steps(g, r, profile).iter().map(|(i, b)| json!({
             "i": i, "official": b.official, "surface": b.surface, "slope": b.slope,
-            "tech": b.tech, "forest": b.forest, "urban": b.urban,
+            "tech": b.tech, "forest": b.forest, "urban": b.urban, "traffic": b.traffic,
         })).collect::<Vec<_>>(),
         "cost_per_m": route_cost_per_m(g, r, profile).iter().map(|c| (c * 1e3).round() / 1e3).collect::<Vec<_>>(),
         "graph_date": utc_date(g.osm_date()),
@@ -352,6 +352,9 @@ fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value 
          "detail": format!("{forest:.0} % in forest")}),
         json!({"key": "urban", "value": value("urban"),
          "detail": format!("{} in towns, {} next to them", km(s.urban_m[2]), km(s.urban_m[1]))}),
+        json!({"key": "traffic", "value": value("traffic"),
+         "detail": format!("{} on main roads, {} on minor ones",
+             km(s.traffic_m[1..].iter().sum()), km(s.traffic_m[0]))}),
     ]);
     Value::Array(bars)
 }

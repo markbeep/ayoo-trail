@@ -139,7 +139,7 @@ async fn route_between_two_points() {
         .collect();
     assert_eq!(
         keys,
-        ["official", "surface", "slope", "tech", "forest", "urban"]
+        ["official", "surface", "slope", "tech", "forest", "urban", "traffic"]
     );
 }
 
@@ -331,7 +331,9 @@ async fn route_carries_per_stretch_term_ratios() {
             "starts must increase: {terms:?}"
         );
         prev = Some(i);
-        for k in ["official", "surface", "slope", "tech", "forest", "urban"] {
+        for k in [
+            "official", "surface", "slope", "tech", "forest", "urban", "traffic",
+        ] {
             // Each term relative to the best factor the weights allow: 1 is ideal, never below.
             assert!(t[k].as_f64().unwrap() >= 0.999, "{k} in {t}");
         }
@@ -363,10 +365,10 @@ async fn climb_target_adds_an_elevation_bar_that_counts_in_the_score() {
         (c - climb.clamp(1.0, 500.0) / climb.max(500.0)).abs() < 1e-6,
         "{c} for {climb} m of 500"
     );
-    // D84: score = 100 · (preference · climb match)^(1/7): a missed target lowers it.
+    // D84, D93: score = 100 · (preference · climb match)^(1/8): a missed target lowers it.
     let pref = b["stats"]["preference"].as_f64().unwrap();
     assert!(
-        (b["score"].as_f64().unwrap() - 100.0 * (pref * c).powf(1.0 / 7.0)).abs() < 0.05,
+        (b["score"].as_f64().unwrap() - 100.0 * (pref * c).powf(1.0 / 8.0)).abs() < 0.05,
         "{b}"
     );
     assert!(b["score"].as_f64().unwrap() < a["score"].as_f64().unwrap());
@@ -374,12 +376,12 @@ async fn climb_target_adds_an_elevation_bar_that_counts_in_the_score() {
 
 #[tokio::test]
 async fn score_is_how_close_the_loop_gets_to_the_best_the_weights_allow() {
-    // D84: 100 · preference^(1/6); preference is 1 when every meter is as good as it gets, and
+    // D84, D93: 100 · preference^(1/7); preference is 1 when every meter is as good as it gets, and
     // all weights off makes every meter ideal.
     for w in [
         json!({}),
         json!({"urban": 4.0, "official": 0.0}),
-        json!({"slope": 0.0, "surface": 0.0, "tech": 0.0, "official": 0.0, "forest": 0.0, "urban": 0.0}),
+        json!({"slope": 0.0, "surface": 0.0, "tech": 0.0, "official": 0.0, "forest": 0.0, "urban": 0.0, "traffic": 0.0}),
     ] {
         let mut body = two((LAT, 7.4), (LAT, 7.402));
         body["profile"] = json!({ "weights": w });
@@ -391,11 +393,11 @@ async fn score_is_how_close_the_loop_gets_to_the_best_the_weights_allow() {
         );
         assert!((0.0..=1.0).contains(&pref), "{pref}");
         assert!(
-            (s - 100.0 * pref.powf(1.0 / 6.0)).abs() < 0.05,
+            (s - 100.0 * pref.powf(1.0 / 7.0)).abs() < 0.05,
             "{s} for {w}: {v}"
         );
     }
     let mut off = two((LAT, 7.4), (LAT, 7.402));
-    off["profile"] = json!({"weights": {"slope": 0.0, "surface": 0.0, "tech": 0.0, "official": 0.0, "forest": 0.0, "urban": 0.0}});
+    off["profile"] = json!({"weights": {"slope": 0.0, "surface": 0.0, "tech": 0.0, "official": 0.0, "forest": 0.0, "urban": 0.0, "traffic": 0.0}});
     assert!((post(Some(graph()), off).await.1["score"].as_f64().unwrap() - 100.0).abs() < 0.05);
 }

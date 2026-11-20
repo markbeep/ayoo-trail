@@ -1,5 +1,7 @@
 use trail_calc::cost::*;
-use trail_calc::graph::{flags, Direction, EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
+use trail_calc::graph::{
+    flags, Direction, EdgeAttrs, Graph, GraphWriter, Highway, LatLon, Surface,
+};
 
 fn ll(lat: f64, lon: f64) -> LatLon {
     LatLon { lat, lon }
@@ -461,4 +463,29 @@ fn best_tech_factor_respects_the_grade_limit() {
         (best_tech_factor(&Weights::default(), 3) - 1.0).abs() < 1e-5,
         "avoiding: T1"
     );
+}
+
+#[test]
+fn busy_roads_cost_more_and_weight_zero_switches_it_off() {
+    // D93: same asphalt, a main road costs more than a residential street.
+    let road = |h: Highway| EdgeAttrs {
+        surface: Surface::Asphalt,
+        highway: h,
+        ..Default::default()
+    };
+    let cost =
+        |h: Highway, p: &Profile| edge_cost(&one_edge(1000.0, road(h)), 0, F, p).unwrap().cost;
+    let p = Profile::default();
+    let order = [
+        Highway::Path,
+        Highway::Residential,
+        Highway::Tertiary,
+        Highway::Secondary,
+        Highway::Primary,
+    ]
+    .map(|h| cost(h, &p));
+    assert!(order.windows(2).all(|w| w[0] < w[1]), "{order:?}");
+    let mut off = Profile::default();
+    off.weights.traffic = 0.0;
+    assert_eq!(cost(Highway::Primary, &off), cost(Highway::Path, &off));
 }
