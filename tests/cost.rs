@@ -489,3 +489,42 @@ fn busy_roads_cost_more_and_weight_zero_switches_it_off() {
     off.weights.traffic = 0.0;
     assert_eq!(cost(Highway::Primary, &off), cost(Highway::Path, &off));
 }
+
+#[test]
+fn prefer_marker_discounts_and_keeps_the_bound() {
+    let g = one_edge(1000.0, gravel());
+    let mut p = Profile::default();
+    let base = edge_cost(&g, 0, F, &p).unwrap();
+    let bound = p.min_cost_per_m();
+    p.exclude = vec![Exclusion {
+        lat: 46.0,
+        lon: 7.0,
+        radius_m: 100.0,
+        mode: ExclusionMode::Prefer,
+    }];
+    let c = edge_cost(&g, 0, F, &p).unwrap();
+    assert!((c.cost - base.cost * PREFER_FACTOR).abs() < 1e-6);
+    assert!(c.per_m >= p.min_cost_per_m());
+    assert!(p.min_cost_per_m() < bound);
+    // Must areas don't change the cost.
+    p.exclude[0].mode = ExclusionMode::Must;
+    assert!((edge_cost(&g, 0, F, &p).unwrap().cost - base.cost).abs() < 1e-6);
+    assert!((p.min_cost_per_m() - bound).abs() < 1e-12);
+}
+
+#[test]
+fn at_most_five_must_areas() {
+    let x = Exclusion {
+        lat: 46.0,
+        lon: 7.0,
+        radius_m: 100.0,
+        mode: ExclusionMode::Must,
+    };
+    let mut p = Profile {
+        exclude: vec![x; 5],
+        ..Profile::default()
+    };
+    assert!(p.validate().is_ok());
+    p.exclude.push(x);
+    assert_eq!(p.validate(), Err(ProfileError::BadExclusion));
+}

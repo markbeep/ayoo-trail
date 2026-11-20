@@ -21,6 +21,10 @@ const ASCENT_FACTORS: [[f32; 4]; 3] = [
 /// Cost per meter of a flat official forest trail; scores 100 (D32).
 pub const SCORE_REFERENCE: f64 = 0.63;
 pub const EXCLUSION_PENALTY: f64 = 5.0;
+/// Cost multiplier inside a soft prefer area (D97). A starting point to tune.
+pub const PREFER_FACTOR: f64 = 0.5;
+/// Most must-pass areas per request: each one is a fixed via in every seed (D97).
+pub const MAX_MUST: usize = 5;
 /// Largest weight exponent (D51).
 pub const MAX_WEIGHT: f32 = 4.0;
 /// At full climb pressure, edge parts steeper than 8 % cost this share of their slope factor.
@@ -105,8 +109,14 @@ impl Default for Weights {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ExclusionMode {
+    /// Soft avoid.
     Penalize,
+    /// Hard avoid.
     Block,
+    /// Soft prefer: cheaper inside (D97).
+    Prefer,
+    /// Hard prefer: loops must pass inside; no effect on edge cost (D97).
+    Must,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -177,7 +187,12 @@ impl Profile {
         if !(1..=6).contains(&self.max_sac) {
             return Err(ProfileError::MaxSacOutOfRange);
         }
-        if self.exclude.len() > 32 {
+        let musts = self
+            .exclude
+            .iter()
+            .filter(|x| x.mode == ExclusionMode::Must)
+            .count();
+        if self.exclude.len() > 32 || musts > MAX_MUST {
             return Err(ProfileError::BadExclusion);
         }
         for x in &self.exclude {
@@ -196,7 +211,10 @@ impl Profile {
     /// Admissible A* lower bound on cost per meter under these weights.
     pub fn min_cost_per_m(&self) -> f64 {
         // The slack absorbs f32 rounding in the slope average, keeping the bound admissible.
-        (1.0 - 1e-6) * term_minima(&self.weights).product()
+        let prefer = self.exclude.iter().any(|x| x.mode == ExclusionMode::Prefer);
+        (1.0 - 1e-6)
+            * term_minima(&self.weights).product()
+            * if prefer { PREFER_FACTOR } else { 1.0 }
     }
 }
 
@@ -419,6 +437,29 @@ fn penalized(g: &Graph, e: u32, p: &Profile) -> bool {
         .any(|x| x.mode == ExclusionMode::Penalize && touches(g, e, x))
 }
 
+fn preferred(g: &Graph, e: u32, p: &Profile) -> bool {
+    p.exclude
+        .iter()
+        .any(|x| x.mode == ExclusionMode::Prefer && touches(g, e, x))
+}
+
+/// The soft avoid/prefer multiplier for an edge.
+fn zone_factor(g: &Graph, e: u32, p: &Profile) -> f64 {
+    if p.exclude.is_empty() {
+        return 1.0;
+    }
+    let pen = if penalized(g, e, p) {
+        EXCLUSION_PENALTY
+    } else {
+        1.0
+    };
+    pen * if preferred(g, e, p) {
+        PREFER_FACTOR
+    } else {
+        1.0
+    }
+}
+
 /// Climb pressure scales the graded (non-flat) part of the slope factor by this.
 pub(crate) fn climb_discount(pressure: f32) -> f64 {
     (1.0 - CLIMB_DISCOUNT * pressure) as f64
@@ -438,11 +479,7 @@ pub(crate) fn edge_cost_split(
         return None;
     }
     let b = t.hot_breakdown(a, Direction::Forward);
-    let pen = if penalized(g, e, p) {
-        EXCLUSION_PENALTY
-    } else {
-        1.0
-    };
+    let pen = zone_factor(g, e, p);
     let rest = Breakdown { slope: 1.0, ..b }.product() * pen * a.len_cm as f64 / 100.0;
     let sum: u32 = a.grade.iter().map(|&v| v as u32).sum();
     if sum == 0 {
@@ -483,7 +520,7 @@ pub fn edge_cost_with(
     }
     let breakdown = t.breakdown(g, e, dir);
     let penalized = penalized(g, e, p);
-    let per_m = breakdown.product() * if penalized { EXCLUSION_PENALTY } else { 1.0 };
+    let per_m = breakdown.product() * zone_factor(g, e, p);
     Some(EdgeCost {
         cost: g.edge_len_m(e) * per_m,
         per_m,
