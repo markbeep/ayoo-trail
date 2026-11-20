@@ -1,5 +1,5 @@
 import type { LatLon, Route, Weights } from "./routes/types";
-import type { Zone } from "./routes/zones";
+import { zoneMode, type Zone } from "./routes/zones";
 
 export interface Health {
   status: string;
@@ -18,8 +18,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getHealth = () => call<Health>("/api/health");
 
-/** Avoid areas are always soft (D90). */
-const exclude = (zones: readonly Zone[]) => zones.map((z) => ({ ...z, mode: "penalize" as const }));
+/** Zones as server exclusions (D90, D97). */
+const exclude = (zones: readonly Zone[]) => zones.map((z) => ({ lat: z.lat, lon: z.lon, radius_m: z.radius_m, mode: zoneMode(z) }));
 
 /** `climb_target_m` adds the Elevation bar and counts it in the score (D63). */
 export const routeVia = (

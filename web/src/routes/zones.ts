@@ -1,13 +1,23 @@
-// Avoid areas (D90): circles the router penalizes. Pure helpers, no map or state.
+// Avoid and prefer areas (D90, D97): circles the router penalizes, blocks, discounts or must
+// pass. Pure helpers, no map or state.
 import type { LatLon } from "./types";
 
-export interface Zone { lat: number; lon: number; radius_m: number }
+/** `kind` and `hard` are optional so stored zones and old links stay soft avoids. */
+export interface Zone { lat: number; lon: number; radius_m: number; kind?: "avoid" | "prefer"; hard?: boolean }
+
+export type ZoneMode = "penalize" | "block" | "prefer" | "must";
+
+/** The server's `ExclusionMode` for a zone. */
+export const zoneMode = (z: Zone): ZoneMode =>
+  z.kind === "prefer" ? (z.hard ? "must" : "prefer") : z.hard ? "block" : "penalize";
 
 export const ZONE_DEFAULT_M = 300;
 export const ZONE_MIN_M = 50;
 export const ZONE_MAX_M = 5000;
 /** The server rejects more (`Profile::validate`). */
 export const MAX_ZONES = 32;
+export const MAX_MUST = 5;
+export const isMust = (z: Zone) => zoneMode(z) === "must";
 
 const M_PER_DEG_LAT = 111_320;
 

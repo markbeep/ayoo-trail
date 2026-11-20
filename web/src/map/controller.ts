@@ -2,7 +2,7 @@
 // map instance, base-map switching, overlays and route drawing.
 
 import * as maplibregl from "maplibre-gl";
-import type { StyleSpecification, GeoJSONSource, LngLatLike, FilterSpecification, LayerSpecification } from "maplibre-gl";
+import type { StyleSpecification, GeoJSONSource, LngLatLike, FilterSpecification, ExpressionSpecification, LayerSpecification } from "maplibre-gl";
 // MapLibre 6 resolves its worker relative to its own module, which breaks once
 // Vite bundles it; point it at the worker file explicitly.
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
@@ -296,10 +296,18 @@ export class MapController {
     this.map.addSource(HERE, { type: "geojson", data: EMPTY });
     this.map.addSource(ZONES, { type: "geojson", data: EMPTY });
     this.map.addSource(ZONE_HANDLES, { type: "geojson", data: EMPTY });
-    // Avoid areas sit under the routes, in the "avoided" end of the cost ramp.
+    // Areas sit under the routes: avoid in the "avoided" end of the cost ramp, prefer in the
+    // cheap end (D97). Soft edges dashed, hard edges solid and heavier.
     const avoid = c.cost[c.cost.length - 1]!;
-    this.map.addLayer({ id: "zone-fill", type: "fill", source: ZONES, paint: { "fill-color": avoid, "fill-opacity": 0.14 } });
-    this.map.addLayer({ id: "zone-line", type: "line", source: ZONES, paint: { "line-color": avoid, "line-width": 2, "line-opacity": 0.8 } });
+    const prefer = c.cost[0]!;
+    const tint: ExpressionSpecification = ["case", ["==", ["get", "kind"], "prefer"], prefer, avoid];
+    const hard: FilterSpecification = ["==", ["get", "hard"], true];
+    this.map.addLayer({ id: "zone-fill", type: "fill", source: ZONES, paint: { "fill-color": tint, "fill-opacity": ["case", hard, 0.2, 0.12] } });
+    this.map.addLayer({
+      id: "zone-line-soft", type: "line", source: ZONES, filter: ["!", hard],
+      paint: { "line-color": tint, "line-width": 2, "line-opacity": 0.8, "line-dasharray": [2, 2] },
+    });
+    this.map.addLayer({ id: "zone-line", type: "line", source: ZONES, filter: hard, paint: { "line-color": tint, "line-width": 3, "line-opacity": 0.9 } });
     const isSel: FilterSpecification = ["==", ["get", "selected"], true];
     const notSel: FilterSpecification = ["!=", ["get", "selected"], true];
     const join = { "line-join": "round", "line-cap": "round" } as const;
@@ -352,8 +360,8 @@ export class MapController {
       id: "zone-handles", type: "circle", source: ZONE_HANDLES,
       paint: {
         "circle-radius": ["case", ["get", "edge"], 5, 6.5],
-        "circle-color": ["case", ["get", "edge"], c.casing, avoid],
-        "circle-stroke-color": ["case", ["get", "edge"], avoid, c.casing],
+        "circle-color": ["case", ["get", "edge"], c.casing, tint],
+        "circle-stroke-color": ["case", ["get", "edge"], tint, c.casing],
         "circle-stroke-width": 2.5,
       },
     });
@@ -473,13 +481,15 @@ export class MapController {
   private drawZones(zones: readonly Zone[]) {
     (this.map.getSource(ZONES) as GeoJSONSource).setData({
       type: "FeatureCollection",
-      features: zones.map((z, i) => ({ type: "Feature", properties: { i }, geometry: { type: "Polygon", coordinates: [circle(z)] } })),
+      features: zones.map((z, i) => ({
+        type: "Feature", properties: { i, kind: z.kind ?? "avoid", hard: !!z.hard }, geometry: { type: "Polygon", coordinates: [circle(z)] },
+      })),
     });
     (this.map.getSource(ZONE_HANDLES) as GeoJSONSource).setData({
       type: "FeatureCollection",
       features: zones.flatMap((z, i) => [
-        { type: "Feature" as const, properties: { i, edge: false }, geometry: { type: "Point" as const, coordinates: [z.lon, z.lat] } },
-        { type: "Feature" as const, properties: { i, edge: true }, geometry: { type: "Point" as const, coordinates: edgePoint(z) } },
+        { type: "Feature" as const, properties: { i, edge: false, kind: z.kind ?? "avoid" }, geometry: { type: "Point" as const, coordinates: [z.lon, z.lat] } },
+        { type: "Feature" as const, properties: { i, edge: true, kind: z.kind ?? "avoid" }, geometry: { type: "Point" as const, coordinates: edgePoint(z) } },
       ]),
     });
   }

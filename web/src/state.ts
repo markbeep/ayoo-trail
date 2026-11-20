@@ -153,9 +153,10 @@ export function setZones(z: readonly Zone[]) {
   save({ zones: [...z] });
   settingsChanged();
 }
-export function addZone(p: LatLon) {
-  if (zones().length < MAX_ZONES) setZones([...zones(), { ...p, radius_m: ZONE_DEFAULT_M }]);
+export function addZone(p: LatLon, kind: "avoid" | "prefer" = "avoid") {
+  if (zones().length < MAX_ZONES) setZones([...zones(), { ...p, radius_m: ZONE_DEFAULT_M, kind }]);
 }
+export const toggleHard = (i: number) => setZones(zones().map((z, j) => (j === i ? { ...z, hard: !z.hard } : z)));
 export const moveZone = (i: number, p: LatLon) => setZones(zones().map((z, j) => (j === i ? { ...z, ...p } : z)));
 export const resizeZone = (i: number, m: number) => setZones(zones().map((z, j) => (j === i ? { ...z, radius_m: clampRadius(m) } : z)));
 export const removeZone = (i: number) => setZones(zones().filter((_, j) => j !== i));

@@ -1,11 +1,11 @@
 // Map context menu (D46): right-click, or long-press on phones.
 import { createEffect, createSignal, onSettled, Show } from "solid-js";
-import { CircleSlash, Copy, MapPin, Trash2 } from "@lucide/solid";
+import { CircleDot, CircleSlash, Copy, MapPin, Repeat2, Trash2 } from "@lucide/solid";
 import type { LatLon } from "../routes/types";
-import { addZone, removeZone, setStart, zones } from "../state";
-import { MAX_ZONES } from "../routes/zones";
+import { addZone, removeZone, setStart, toggleHard, zones } from "../state";
+import { isMust, MAX_MUST, MAX_ZONES } from "../routes/zones";
 
-/** `zone`: the avoid area that was long-pressed or right-clicked, if any (D90). */
+/** `zone`: the avoid or prefer area that was long-pressed or right-clicked, if any (D90, D97). */
 export interface MenuState { p: LatLon; x: number; y: number; zone?: number | undefined }
 
 export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
@@ -18,6 +18,10 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
     setCopied(false);
     el.querySelector("button")?.focus();
   }, { defer: true });
+  const zone = () => (props.menu.zone === undefined ? undefined : zones()[props.menu.zone]);
+  const full = () => zones().length >= MAX_ZONES;
+  // Making a prefer area hard adds a must-pass; the server takes at most MAX_MUST.
+  const mustFull = () => zone()?.kind === "prefer" && !zone()?.hard && zones().filter(isMust).length >= MAX_MUST;
   const coords = () => `${props.menu.p.lat.toFixed(5)}, ${props.menu.p.lon.toFixed(5)}`;
 
   onSettled(() => {
@@ -46,16 +50,27 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
         <MapPin size={16} />Start here
       </button>
       <Show
-        when={props.menu.zone === undefined}
-        fallback={
-          <button role="menuitem" onClick={() => { removeZone(props.menu.zone!); props.onClose(); }}>
-            <Trash2 size={16} />Remove avoid area
+        when={zone()}
+        fallback={<>
+          <button role="menuitem" disabled={full()} onClick={() => { addZone(props.menu.p, "avoid"); props.onClose(); }}>
+            <CircleSlash size={16} />Avoid area here
           </button>
-        }
+          <button role="menuitem" disabled={full()} onClick={() => { addZone(props.menu.p, "prefer"); props.onClose(); }}>
+            <CircleDot size={16} />Prefer area here
+          </button>
+        </>}
       >
-        <button role="menuitem" disabled={zones().length >= MAX_ZONES} onClick={() => { addZone(props.menu.p); props.onClose(); }}>
-          <CircleSlash size={16} />Avoid area here
-        </button>
+        {(z) => <>
+          <button role="menuitem" disabled={mustFull()} onClick={() => { toggleHard(props.menu.zone!); props.onClose(); }}>
+            <Repeat2 size={16} />
+            <Show when={z().hard} fallback={<>Make hard<small>{z().kind === "prefer" ? "Must pass" : "Never cross"}</small></>}>
+              Make soft<small>{z().kind === "prefer" ? "Prefer, may skip" : "Avoid, may cross"}</small>
+            </Show>
+          </button>
+          <button role="menuitem" onClick={() => { removeZone(props.menu.zone!); props.onClose(); }}>
+            <Trash2 size={16} />Remove {z().kind === "prefer" ? "prefer" : "avoid"} area
+          </button>
+        </>}
       </Show>
       <button role="menuitem" onClick={() => {
         void navigator.clipboard?.writeText(coords()).then(() => { setCopied(true); closing = setTimeout(props.onClose, 700); }, props.onClose);
