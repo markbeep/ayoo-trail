@@ -1,4 +1,5 @@
 import type { LatLon, Route, Weights } from "./routes/types";
+import type { Zone } from "./routes/zones";
 
 export interface Health {
   status: string;
@@ -17,20 +18,27 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getHealth = () => call<Health>("/api/health");
 
+/** Avoid areas are always soft (D90). */
+const exclude = (zones: readonly Zone[]) => zones.map((z) => ({ ...z, mode: "penalize" as const }));
+
 /** `climb_target_m` adds the Elevation bar and counts it in the score (D63). */
-export const routeVia = (waypoints: LatLon[], weights: Weights, max_sac: number, climb_target_m: number | null = null) =>
+export const routeVia = (
+  waypoints: LatLon[], weights: Weights, max_sac: number, climb_target_m: number | null = null, zones: readonly Zone[] = [],
+) =>
   call<Route>("/api/route", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ waypoints, profile: { weights, max_sac }, climb_target_m }),
+    body: JSON.stringify({ waypoints, profile: { weights, max_sac, exclude: exclude(zones) }, climb_target_m }),
   });
 
 /** `target_m: null` asks for as much climb as possible (D52). */
 export interface ClimbGoal { target_m: number | null; strictness: number }
 
-export const generate = (start: LatLon, distance_m: number, climb: ClimbGoal, weights: Weights, max_sac: number) =>
+export const generate = (
+  start: LatLon, distance_m: number, climb: ClimbGoal, weights: Weights, max_sac: number, zones: readonly Zone[] = [],
+) =>
   call<{ routes: Route[] }>("/api/generate", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ start, distance_m, climb, profile: { weights, max_sac } }),
+    body: JSON.stringify({ start, distance_m, climb, profile: { weights, max_sac, exclude: exclude(zones) } }),
   }).then((r) => r.routes);

@@ -12,6 +12,7 @@ import {
 import { OMT, outdoorFills, outdoorLabels, outdoorLines, type MapPalette } from "./outdoorStyle";
 import type { LatLon, Route } from "../routes/types";
 import { bounds, cumulative, legAt, nearestIndex } from "../routes/geo";
+import { circle, edgePoint, radiusTo, type Zone } from "../routes/zones";
 
 export interface RouteColors {
   selected: string;
@@ -63,6 +64,8 @@ const START = "start";
 const WAYPOINTS = "waypoints";
 const HOVER = "hover";
 const HERE = "here";
+const ZONES = "zones";
+const ZONE_HANDLES = "zone-handles";
 const EMPTY = { type: "FeatureCollection" as const, features: [] };
 const point = (p: LatLon | null) => ({
   type: "FeatureCollection" as const,
@@ -117,8 +120,9 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
 export interface MapHandlers {
   onRouteClick?: (id: string) => void;
   onMapClick?: (p: LatLon) => void;
-  /** Right-click or touch long-press: map position and screen point inside the container. */
-  onContextMenu?: (p: LatLon, at: { x: number; y: number }) => void;
+  /** Right-click or touch long-press: map position, screen point inside the container, and the
+   * avoid area under it, if any. */
+  onContextMenu?: (p: LatLon, at: { x: number; y: number }, zone?: number) => void;
   /** The map started moving (closes transient UI such as the context menu). */
   onMoveStart?: () => void;
   /** Pointer over the selected route (null when it leaves). */
@@ -127,6 +131,9 @@ export interface MapHandlers {
   onWaypointMove?: (i: number, p: LatLon) => void;
   onWaypointInsert?: (leg: number, p: LatLon) => void;
   onWaypointRemove?: (i: number) => void;
+  /** Avoid areas (D90): drag the center to move one, the edge handle to resize it. */
+  onZoneMove?: (i: number, p: LatLon) => void;
+  onZoneResize?: (i: number, radius_m: number) => void;
 }
 
 export class MapController {
@@ -139,6 +146,8 @@ export class MapController {
   private wps: LatLon[] = [];
   private drag: { i: number; insert: boolean; at: LatLon | null; from: maplibregl.Point } | null = null;
   private justDragged = false;
+  private zones: readonly Zone[] = [];
+  private zoneDrag: { i: number; edge: boolean; at: LatLon | null; from: maplibregl.Point } | null = null;
 
   constructor(
     container: HTMLElement, base: BaseMapId, overlays: readonly string[], private colors: MapColors, handlers: MapHandlers = {},
@@ -174,7 +183,12 @@ export class MapController {
       else handlers.onMapClick?.({ lat: e.lngLat.lat, lon: e.lngLat.lng });
     });
     // Listening also makes MapLibre suppress the browser menu on the canvas.
-    this.map.on("contextmenu", (e) => handlers.onContextMenu?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point));
+    this.map.on("contextmenu", (e) => {
+      const z = this.map.getLayer("zone-fill")
+        ? this.map.queryRenderedFeatures(e.point, { layers: ["zone-fill", "zone-handles"] })[0]
+        : undefined;
+      handlers.onContextMenu?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point, z ? Number(z.properties?.i) : undefined);
+    });
     this.map.on("movestart", () => handlers.onMoveStart?.());
     let overSelected = false;
     this.map.on("mousemove", (e) => {
@@ -205,6 +219,15 @@ export class MapController {
       if (f && this.drag === null && this.wps.length) begin(e, Number(f.properties?.i), false);
     };
     this.map.on("mousedown", "waypoints", onHandle);
+    const onZone = (e: maplibregl.MapMouseEvent | maplibregl.MapTouchEvent) => {
+      const f = this.map.queryRenderedFeatures(e.point, { layers: ["zone-handles"] })[0];
+      if (!f || this.drag || this.zoneDrag) return;
+      e.preventDefault();
+      this.zoneDrag = { i: Number(f.properties?.i), edge: f.properties?.edge === true, at: null, from: e.point };
+      canvas().style.cursor = "grabbing";
+    };
+    this.map.on("mousedown", "zone-handles", (e) => { if (e.originalEvent.button === 0) onZone(e); });
+    this.map.on("touchstart", "zone-handles", (e) => { if (e.points.length === 1) onZone(e); });
     this.map.on("touchstart", "waypoints", (e) => { if (e.points.length === 1) onHandle(e); });
     // shortcut: adding points by dragging the line is mouse-only, so touch panning over the route still pans; add a long-press if phones need it.
     this.map.on("mousedown", "route-hit", (e) => {
@@ -215,6 +238,12 @@ export class MapController {
       begin(e, legAt(r.geometry.coordinates, this.wps, k), true);
     });
     const move = (e: maplibregl.MapMouseEvent | maplibregl.MapTouchEvent) => {
+      const zd = this.zoneDrag;
+      if (zd && (zd.at || zd.from.dist(e.point) >= 5)) {
+        zd.at = { lat: e.lngLat.lat, lon: e.lngLat.lng };
+        this.drawZones(this.zones.map((z, j) => (j !== zd.i ? z : zoneAfter(z, zd.edge, zd.at!))));
+        return;
+      }
       // A few pixels of jitter is still a click (removes a handle).
       if (!this.drag || (!this.drag.at && this.drag.from.dist(e.point) < 5)) return;
       this.drag.at = { lat: e.lngLat.lat, lon: e.lngLat.lng };
@@ -226,6 +255,19 @@ export class MapController {
     this.map.on("mousemove", move);
     this.map.on("touchmove", move);
     const end = () => {
+      const zd = this.zoneDrag;
+      if (zd) {
+        this.zoneDrag = null;
+        canvas().style.cursor = "";
+        if (zd.at) {
+          this.justDragged = true;
+          const z = this.zones[zd.i];
+          if (z && zd.edge) h.onZoneResize?.(zd.i, zoneAfter(z, true, zd.at).radius_m);
+          else h.onZoneMove?.(zd.i, zd.at);
+        }
+        this.drawZones(this.zones);
+        return;
+      }
       const d = this.drag;
       if (!d) return;
       this.drag = null;
@@ -240,6 +282,8 @@ export class MapController {
     this.map.on("mouseup", end);
     this.map.on("touchend", end);
     this.map.on("mouseenter", "waypoints", () => (canvas().style.cursor = "grab"));
+    this.map.on("mouseenter", "zone-handles", () => (canvas().style.cursor = "grab"));
+    this.map.on("mouseleave", "zone-handles", () => { if (!this.zoneDrag) canvas().style.cursor = ""; });
     this.map.on("mouseleave", "waypoints", () => { if (!this.drag) canvas().style.cursor = ""; });
   }
 
@@ -250,6 +294,12 @@ export class MapController {
     this.map.addSource(WAYPOINTS, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     this.map.addSource(HOVER, { type: "geojson", data: EMPTY });
     this.map.addSource(HERE, { type: "geojson", data: EMPTY });
+    this.map.addSource(ZONES, { type: "geojson", data: EMPTY });
+    this.map.addSource(ZONE_HANDLES, { type: "geojson", data: EMPTY });
+    // Avoid areas sit under the routes, in the "avoided" end of the cost ramp.
+    const avoid = c.cost[c.cost.length - 1]!;
+    this.map.addLayer({ id: "zone-fill", type: "fill", source: ZONES, paint: { "fill-color": avoid, "fill-opacity": 0.14 } });
+    this.map.addLayer({ id: "zone-line", type: "line", source: ZONES, paint: { "line-color": avoid, "line-width": 2, "line-opacity": 0.8 } });
     const isSel: FilterSpecification = ["==", ["get", "selected"], true];
     const notSel: FilterSpecification = ["!=", ["get", "selected"], true];
     const join = { "line-join": "round", "line-cap": "round" } as const;
@@ -297,6 +347,15 @@ export class MapController {
     this.map.addLayer({
       id: "waypoints", type: "circle", source: WAYPOINTS,
       paint: { "circle-radius": 6, "circle-color": c.selected, "circle-stroke-color": c.casing, "circle-stroke-width": 2.5 },
+    });
+    this.map.addLayer({
+      id: "zone-handles", type: "circle", source: ZONE_HANDLES,
+      paint: {
+        "circle-radius": ["case", ["get", "edge"], 5, 6.5],
+        "circle-color": ["case", ["get", "edge"], c.casing, avoid],
+        "circle-stroke-color": ["case", ["get", "edge"], avoid, c.casing],
+        "circle-stroke-width": 2.5,
+      },
     });
     this.map.addLayer({
       id: "here", type: "circle", source: HERE,
@@ -404,6 +463,27 @@ export class MapController {
     (this.map.getSource(HERE) as GeoJSONSource).setData(point(p));
   }
 
+  /** Avoid areas (D90). */
+  async setZones(zones: readonly Zone[]) {
+    this.zones = zones;
+    await this.ready;
+    if (!this.zoneDrag) this.drawZones(zones);
+  }
+
+  private drawZones(zones: readonly Zone[]) {
+    (this.map.getSource(ZONES) as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: zones.map((z, i) => ({ type: "Feature", properties: { i }, geometry: { type: "Polygon", coordinates: [circle(z)] } })),
+    });
+    (this.map.getSource(ZONE_HANDLES) as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: zones.flatMap((z, i) => [
+        { type: "Feature" as const, properties: { i, edge: false }, geometry: { type: "Point" as const, coordinates: [z.lon, z.lat] } },
+        { type: "Feature" as const, properties: { i, edge: true }, geometry: { type: "Point" as const, coordinates: edgePoint(z) } },
+      ]),
+    });
+  }
+
   zoomIn() { this.map.zoomIn(); }
   zoomOut() { this.map.zoomOut(); }
 
@@ -425,4 +505,9 @@ export class MapController {
   }
 
   destroy() { this.map.remove(); }
+}
+
+/** A zone as it looks while its center (`edge` false) or edge handle is dragged to `p`. */
+function zoneAfter(z: Zone, edge: boolean, p: LatLon): Zone {
+  return edge ? { ...z, radius_m: radiusTo(z, p) } : { ...z, lat: p.lat, lon: p.lon };
 }

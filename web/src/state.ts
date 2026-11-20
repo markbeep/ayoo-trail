@@ -5,6 +5,7 @@ import type { BaseMapId } from "./map/basemaps";
 import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
 import type { BreakdownKey, LatLon, Route, Weights } from "./routes/types";
 import { ApiError, generate, routeVia } from "./api";
+import { clampRadius, MAX_ZONES, ZONE_DEFAULT_M, type Zone } from "./routes/zones";
 
 export type NumericWeight = Exclude<keyof Weights, "uphill" | "downhill" | "technical" | "climb_pressure">;
 
@@ -53,7 +54,7 @@ export const climbMaxM = () => Math.max(1500, Math.ceil((150 * distanceKm()) / 1
 export const DEFAULT_START: LatLon = { lat: 47.2985, lon: 9.095 };
 
 const STORE_KEY = "trail-calc:v1";
-interface Stored { start?: LatLon; startName?: string | null; baseMap?: BaseMapId; overlays?: string[] }
+interface Stored { start?: LatLon; startName?: string | null; baseMap?: BaseMapId; overlays?: string[]; zones?: Zone[] }
 function load(): Stored {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Stored; } catch { return {}; }
 }
@@ -71,6 +72,8 @@ export const [strictness, setStrictnessRaw] = createSignal(0.8);
 export const [weights, setWeights] = createSignal<Weights>({ ...DEFAULT_WEIGHTS });
 /** Hardest SAC grade a loop may use, T1–T6 (D81). */
 export const [maxSac, setMaxSacRaw] = createSignal(3);
+/** Avoid areas (D90). */
+export const [zones, setZonesRaw] = createSignal<readonly Zone[]>(Array.isArray(stored.zones) ? stored.zones.slice(0, MAX_ZONES) : []);
 export const [baseMap, setBaseMapRaw] = createSignal<BaseMapId>(stored.baseMap ?? DEFAULT_BASE_MAP);
 export const [overlays, setOverlaysRaw] = createSignal<readonly string[]>(stored.overlays ?? DEFAULT_OVERLAYS);
 export const [routes, setRoutes] = createSignal<Route[]>([]);
@@ -144,6 +147,17 @@ export function setStrictness(v: number) {
   setStrictnessRaw(v);
   settingsChanged();
 }
+export function setZones(z: readonly Zone[]) {
+  setZonesRaw(z);
+  save({ zones: [...z] });
+  settingsChanged();
+}
+export function addZone(p: LatLon) {
+  if (zones().length < MAX_ZONES) setZones([...zones(), { ...p, radius_m: ZONE_DEFAULT_M }]);
+}
+export const moveZone = (i: number, p: LatLon) => setZones(zones().map((z, j) => (j === i ? { ...z, ...p } : z)));
+export const resizeZone = (i: number, m: number) => setZones(zones().map((z, j) => (j === i ? { ...z, radius_m: clampRadius(m) } : z)));
+export const removeZone = (i: number) => setZones(zones().filter((_, j) => j !== i));
 
 /** Edited loops (D54): earlier versions per loop id for Undo; the first is the loop as generated. */
 export const [history, setHistory] = createSignal<Record<string, Route[]>>({});
@@ -157,7 +171,7 @@ export const MAX_WAYPOINTS = 20;
 const withinDistance = (m: number) => Math.abs(m - distanceKm() * 1000) / (distanceKm() * 1000) <= 0.1;
 /** Re-route a loop through its waypoints under the current weights and its own climb pressure. */
 async function reroute(r: Route, wps: LatLon[], id: string): Promise<Route> {
-  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, maxSac(), climbTargetM());
+  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, maxSac(), climbTargetM(), zones());
   return { ...next, id, climb_pressure: r.climb_pressure, distance_met: withinDistance(next.distance_m) };
 }
 const replaceRoute = (id: string, r: Route) => setRoutes((rs) => rs.map((x) => (x.id === id ? r : x)));
@@ -219,7 +233,7 @@ export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
   setErrorMsg(null);
   setPickingStart(false);
   try {
-    const rs = await generate(start(), distanceKm() * 1000, { target_m: climbTargetM(), strictness: strictness() }, weights(), maxSac());
+    const rs = await generate(start(), distanceKm() * 1000, { target_m: climbTargetM(), strictness: strictness() }, weights(), maxSac(), zones());
     if (mine !== seq) return; // a newer request superseded this one
     if (opts.keepOpen) {
       // Edited loops keep their points and re-route under the new settings; Reset goes to the fresh loop.

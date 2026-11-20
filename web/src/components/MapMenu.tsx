@@ -1,10 +1,12 @@
 // Map context menu (D46): right-click, or long-press on phones.
 import { createEffect, createSignal, onSettled, Show } from "solid-js";
-import { Copy, MapPin } from "@lucide/solid";
+import { CircleSlash, Copy, MapPin, Trash2 } from "@lucide/solid";
 import type { LatLon } from "../routes/types";
-import { setStart } from "../state";
+import { addZone, removeZone, setStart, zones } from "../state";
+import { MAX_ZONES } from "../routes/zones";
 
-export interface MenuState { p: LatLon; x: number; y: number }
+/** `zone`: the avoid area that was long-pressed or right-clicked, if any (D90). */
+export interface MenuState { p: LatLon; x: number; y: number; zone?: number | undefined }
 
 export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
   const [copied, setCopied] = createSignal(false);
@@ -35,7 +37,7 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
   // Keep the menu inside the map: open leftward/upward near the right/bottom edge.
   const style = () => ({
     left: `${props.menu.x}px`, top: `${props.menu.y}px`,
-    transform: `translate(${props.menu.x > innerWidth - 240 ? "-100%" : "0"}, ${props.menu.y > innerHeight - 140 ? "-100%" : "0"})`,
+    transform: `translate(${props.menu.x > innerWidth - 240 ? "-100%" : "0"}, ${props.menu.y > innerHeight - 190 ? "-100%" : "0"})`,
   });
 
   return (
@@ -43,6 +45,18 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
       <button role="menuitem" onClick={() => { setStart(props.menu.p); props.onClose(); }}>
         <MapPin size={16} />Start here
       </button>
+      <Show
+        when={props.menu.zone === undefined}
+        fallback={
+          <button role="menuitem" onClick={() => { removeZone(props.menu.zone!); props.onClose(); }}>
+            <Trash2 size={16} />Remove avoid area
+          </button>
+        }
+      >
+        <button role="menuitem" disabled={zones().length >= MAX_ZONES} onClick={() => { addZone(props.menu.p); props.onClose(); }}>
+          <CircleSlash size={16} />Avoid area here
+        </button>
+      </Show>
       <button role="menuitem" onClick={() => {
         void navigator.clipboard?.writeText(coords()).then(() => { setCopied(true); closing = setTimeout(props.onClose, 700); }, props.onClose);
       }}>
