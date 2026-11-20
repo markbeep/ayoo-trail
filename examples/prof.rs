@@ -7,6 +7,7 @@ use std::time::Instant;
 use trail_calc::cost::Profile;
 use trail_calc::generate::{generate, ClimbGoal, GenerateRequest};
 use trail_calc::graph::{Graph, LatLon};
+use trail_calc::route::route_stats;
 
 fn main() {
     let g = Graph::open(Path::new("data/graph.bin")).unwrap();
@@ -44,7 +45,13 @@ fn main() {
                 n = r.len();
                 loops = r
                     .iter()
-                    .map(|l| format!("{:.0}m/{:.0}up", l.route.distance_m, l.route.climb_m))
+                    .map(|l| {
+                        let pref = route_stats(&g, &l.route, &l.profile).preference;
+                        format!(
+                            "{:.0}m/{:.0}up/p{:.2}",
+                            l.route.distance_m, l.route.climb_m, pref
+                        )
+                    })
                     .collect::<Vec<_>>()
                     .join(" ");
                 best = best.min(t.elapsed().as_secs_f64() * 1e3);

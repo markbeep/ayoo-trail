@@ -71,6 +71,9 @@ thread_local! {
     static SCRATCH: RefCell<Scratch> = RefCell::new(Scratch::default());
 }
 
+/// A via's network distance from the start may miss the wanted spoke length by this share (D94).
+const SPOKE_BAND: f64 = 0.25;
+
 /// Grid cell size of the node index used to place via points.
 const CELL_M: f64 = 250.0;
 
@@ -304,9 +307,16 @@ impl<'g> Region<'g> {
 
     /// Where to put a via point near `pt` (D82): the region node within `radius_m` whose
     /// cheapest way out from the start and back costs least per meter under this climb
-    /// pressure, so the via sits where the user's preferred terrain leads. Peaks and viewpoints
-    /// don't pull it (D92). None when no reachable node is near.
-    pub(crate) fn via_near(&self, pressure: f32, pt: LatLon, radius_m: f64) -> Option<LatLon> {
+    /// pressure, so the via sits where the user's preferred terrain leads. Nodes whose path from
+    /// the start is about `spoke_m` long win, so the loop length fits sooner (D94). Peaks and
+    /// viewpoints don't pull it (D92). None when no reachable node is near.
+    pub(crate) fn via_near(
+        &self,
+        pressure: f32,
+        pt: LatLon,
+        radius_m: f64,
+        spoke_m: f64,
+    ) -> Option<LatLon> {
         let cell_ = self.trees(pressure);
         let tr = cell_.get().expect("built");
         let c = self.proj.project(pt);
@@ -320,6 +330,7 @@ impl<'g> Region<'g> {
             cell([c[0] + radius_m, c[1] + radius_m]),
         );
         let mut best = None::<(f64, u32)>;
+        let mut in_band = None::<(f64, u32)>;
         for x in lo.0..=hi.0 {
             for y in lo.1..=hi.1 {
                 for &v in self.cells.get(&(x, y)).into_iter().flatten() {
@@ -331,10 +342,14 @@ impl<'g> Region<'g> {
                     if best.is_none_or(|b| r < b.0) {
                         best = Some((r, v));
                     }
+                    let off = (tr.from_len[v as usize] as f64 - spoke_m).abs();
+                    if off <= SPOKE_BAND * spoke_m && in_band.is_none_or(|b| r < b.0) {
+                        in_band = Some((r, v));
+                    }
                 }
             }
         }
-        let (_, v) = best?;
+        let (_, v) = in_band.or(best)?;
         Some(self.g.node(self.global[v as usize]))
     }
 
@@ -606,6 +621,34 @@ mod tests {
                 }
                 from = end;
             }
+        }
+    }
+
+    #[test]
+    fn vias_prefer_nodes_about_a_spoke_away_from_the_start() {
+        // D94: in a 1 km search circle, the via's tree path from the start is within the band
+        // of the wanted spoke length whenever such a node exists.
+        let g = graph();
+        let ll = |x: f64, y: f64| LatLon {
+            lat: 46.0 + y / 111_195.0,
+            lon: 7.0 + x / (111_195.0 * 46f64.to_radians().cos()),
+        };
+        let start = g.snap(ll(0.0, 0.0)).unwrap();
+        let region = Region::new(&g, &Profile::default(), start, 5000.0);
+        let cell = region.trees(0.0);
+        let tr = cell.get().unwrap();
+        for spoke in [600.0, 1200.0, 1800.0] {
+            let v = region
+                .via_near(0.0, ll(600.0, 600.0), 1000.0, spoke)
+                .unwrap();
+            let i = (0..region.node_count())
+                .find(|&i| g.node(region.global[i]) == v)
+                .unwrap();
+            let off = (tr.from_len[i] as f64 - spoke).abs();
+            assert!(
+                off <= SPOKE_BAND * spoke,
+                "spoke {spoke}: off by {off:.0} m"
+            );
         }
     }
 }

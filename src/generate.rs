@@ -200,7 +200,7 @@ fn seed(
                 let ideal = proj.unproject([o[0] + r * b.sin(), o[1] + r * b.cos()]);
                 // D82, D92: the via goes where the user's costs are low; peaks don't pull it.
                 let pt = region
-                    .via_near(pressure, ideal, r * VIA_SEARCH)
+                    .via_near(pressure, ideal, r * VIA_SEARCH, r * DETOUR)
                     .unwrap_or(ideal);
                 g.snap_filtered(pt, VIA_SNAP_M, |e| {
                     g.edge_component(e, sac) == home && traversable(g, e, p)
