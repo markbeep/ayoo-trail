@@ -1,35 +1,55 @@
 # ayoo
 
-Navi + Lauf: generates trail-running loops in Switzerland from a start point, a distance and
-a few preferences. Rust (axum) server plus a SolidJS + MapLibre client. See
-`docs/brief.md` and `docs/design.md` for the background.
+Generates trail-running loops in Switzerland. Give it a start, a distance and what you care
+about; it returns a few distinct loops, scored against your settings, that you can drag-edit,
+share as a link and download as GPX. Rust (axum) server, SolidJS + MapLibre client.
 
-## Local Development
+## What it routes by
 
-Requirements: [mise](https://mise.jdx.dev) (installs the pinned Rust, Node and
-just from `mise.toml`), plus `curl`, `jq` and `unzip` for the data download.
+Each metric is a cost term with an importance slider (Off … Normal … Above all). The
+generator places turning points where your weighted costs are low and routes between them.
+
+**Built**
+
+- **Distance**: loops within ±10 % of the target.
+- **Elevation**: a climb target (Gentle, Hilly, Mountain or meters) and how closely to match it, or as much as possible.
+- **Gradient**: whether you like steep or gentle uphills and downhills.
+- **Surface**: avoid asphalt and paved paths.
+- **Technical terrain**: the hardest trail grade allowed (T1–T6), and whether to avoid or seek harder ones.
+- **Marked trails**: prefer official Swiss hiking trails.
+- **Forest**: prefer running through forest.
+- **Away from towns**: avoid villages and built-up areas.
+- **Quiet roads**: avoid busy road classes.
+- **Avoid areas**: circles you place on the map (long-press or right-click) and resize.
+
+**Planned**
+
+- Views (viewshed), which will also pull loops toward peaks and viewpoints.
+- Remoteness.
+- Snow cover for a date.
+- Sun and shade.
+- POIs: water, toilets, shops.
+- Webcams and photos.
+- Start reachability by public transport.
+- Popular trails.
+
+## Run it
+
+Needs [mise](https://mise.jdx.dev) (pinned Rust, Node, just), plus `curl`, `jq` and `unzip`.
 
 ```sh
-mise install                 # Rust, Node, just
-(cd web && npm ci)           # client dependencies
-
-just data demo               # download OSM, swissALTI3D tiles and Wanderwege into data/raw
-just import demo             # build data/graph.bin (demo region: Wattwil–Ziegelbrücke)
-
-just dev                     # API on :8080, client on http://localhost:5173
+mise install && (cd web && npm ci)
+just data demo      # OSM, swissALTI3D and Wanderwege into data/raw (`ch` for all of Switzerland, ~55 GB)
+just import demo    # build data/graph.bin
+just dev            # API on :8080, client on http://localhost:5173
 ```
 
-Open http://localhost:5173, pick a start inside the demo region, and press
-"Find loops".
+Other commands:
 
-- Use `ch` instead of `demo` for all of Switzerland. The download (~42k
-  elevation tiles, ~55 GB) and import take much longer. `just data` shows
-  progress and an ETA, and an interrupted run resumes where it stopped. The tile
-  list is cached in `data/raw/alti3d/.tiles-<region>.txt`; delete it to pick up
-  new survey years.
-- Without `data/graph.bin` the server still starts, but `/api/route` and
-  `/api/generate` answer 503.
-- `just check` runs fmt, clippy, the Rust tests and the client typecheck.
-- `?dev=route` in the URL turns on the click-to-route debug mode.
-- Server settings: `BIND` (default `0.0.0.0:8080`), `DATA_DIR` (default
-  `./data`), `STATIC_DIR` (default `web/dist`, used by `just build`).
+- `just check` runs fmt, clippy, the tests and the typecheck.
+- `just smoke` runs an end-to-end health, generate and route check.
+- `docker compose up` runs the import and the server as one image.
+
+Server settings: `BIND`, `DATA_DIR`, `STATIC_DIR`.
+
+Data: © swisstopo, © OpenStreetMap contributors.
