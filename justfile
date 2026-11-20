@@ -32,6 +32,10 @@ check:
     cargo test
     cd web && npm run typecheck
 
+# End-to-end smoke: health, generate and route on a local server (builds the demo graph if missing).
+smoke:
+    scripts/smoke.sh
+
 # Build data/graph.bin from data/raw (`just import ch --force` to replace an existing graph; default demo).
 import REGION="demo" *ARGS:
     cargo run --release --bin trail-calc-import -- --region {{REGION}} {{ARGS}}
