@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use rayon::prelude::*;
 
-use crate::cost::{traversable, Profile};
+use crate::cost::{traversable, ExclusionMode, Profile};
 use crate::geodesy::{haversine_m, LocalProjection};
 use crate::graph::{Graph, LatLon};
 use crate::region::Region;
@@ -28,6 +28,8 @@ const VIA_SEARCH: f64 = 0.5;
 /// Weight of a loop's preference (0–1) in its rank, against distance and climb error.
 const PREFERENCE_RANK: f64 = 1.0;
 const MAX_OVERLAP: f64 = 0.5;
+/// With hard avoids, a closest loop further off the distance than this is no loop (D97).
+const WALLED_ERR: f64 = 0.5;
 const ATTEMPTS: usize = 8;
 /// Search region radius over the target distance. A loop of length D stays within D/2 of
 /// its start; legs that leave the region fall back to the whole graph.
@@ -67,10 +69,18 @@ pub struct GeneratedRoute {
     pub profile: Profile,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum GenerateError {
     StartOffNetwork,
     StartBlocked,
+    /// A must-pass area has no trail the start can reach (D97).
+    MustPassUnreachable,
+    /// The shortest loop through the must-pass areas is this long, over the distance (D97).
+    MustPassTooFar {
+        min_m: f64,
+    },
+    /// No seed gave a loop, e.g. hard avoids cut the start off.
+    NoLoop,
 }
 
 struct Candidate {
@@ -99,14 +109,41 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
     };
     let target = req.distance_m;
     let region = Region::new(g, p, start, REGION_RADIUS * target);
+    let musts = must_passes(g, p, start)?;
+    if !musts.is_empty() {
+        let shortest = route_loop(
+            g,
+            &region,
+            p,
+            start,
+            &musts.iter().map(|m| m.1).collect::<Vec<_>>(),
+        )
+        .ok_or(GenerateError::MustPassUnreachable)?;
+        if shortest.distance_m > target * (1.0 + TOLERANCE) {
+            return Err(GenerateError::MustPassTooFar {
+                min_m: shortest.distance_m,
+            });
+        }
+    }
 
     let mut cands: Vec<Candidate> = (0..HEADINGS * SHAPES.len())
         .into_par_iter()
         .filter_map(|i| {
             let heading = (i % HEADINGS) as f64 * 360.0 / HEADINGS as f64;
-            seed(g, &region, req, start, heading, SHAPES[i / HEADINGS])
+            seed(
+                g,
+                &region,
+                req,
+                start,
+                heading,
+                SHAPES[i / HEADINGS],
+                &musts,
+            )
         })
         .collect();
+    if cands.is_empty() {
+        return Err(GenerateError::NoLoop);
+    }
     cands.sort_by(|a, b| {
         (a.err > TOLERANCE)
             .cmp(&(b.err > TOLERANCE))
@@ -117,6 +154,11 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
         cands.retain(|c| c.err <= TOLERANCE);
     } else if let Some(i) = (0..cands.len()).min_by(|&a, &b| cands[a].err.total_cmp(&cands[b].err))
     {
+        // D97: hard avoids that leave only a stub of the distance count as no loop.
+        let walled = p.exclude.iter().any(|x| x.mode == ExclusionMode::Block);
+        if walled && cands[i].err > WALLED_ERR {
+            return Err(GenerateError::NoLoop);
+        }
         cands = vec![cands.swap_remove(i)];
     }
 
@@ -165,6 +207,7 @@ fn seed(
     start: Snap,
     heading_deg: f64,
     bearings: &[f64],
+    musts: &[(f64, Snap)],
 ) -> Option<Candidate> {
     let target = req.distance_m;
     let sac = req.profile.max_sac;
@@ -205,6 +248,7 @@ fn seed(
             r *= 0.7;
             continue;
         };
+        let vias = with_musts(&vias, bearings, heading_deg, musts);
         let Some(route) = route_loop(g, region, p, start, &vias) else {
             r *= 0.7;
             continue;
@@ -254,6 +298,59 @@ fn seed(
         r *= scale;
     }
     best
+}
+
+/// Must-pass areas snapped onto a reachable trail inside them, with their bearing from the
+/// start, sorted by bearing (D97). Reachability past hard avoids is checked by the caller.
+fn must_passes(g: &Graph, p: &Profile, start: Snap) -> Result<Vec<(f64, Snap)>, GenerateError> {
+    let home = g.edge_component(start.edge, p.max_sac);
+    let mut out = Vec::new();
+    for x in p.exclude.iter().filter(|x| x.mode == ExclusionMode::Must) {
+        let c = LatLon {
+            lat: x.lat,
+            lon: x.lon,
+        };
+        let s = g
+            .snap_filtered(c, x.radius_m, |e| {
+                g.edge_component(e, p.max_sac) == home && traversable(g, e, p)
+            })
+            .ok_or(GenerateError::MustPassUnreachable)?;
+        out.push((bearing(start.pos, s.pos), s));
+    }
+    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    Ok(out)
+}
+
+/// Degrees clockwise from north, 0..360.
+fn bearing(from: LatLon, to: LatLon) -> f64 {
+    let proj = LocalProjection::new(from.lat);
+    let (a, b) = (proj.project(from), proj.project(to));
+    (b[0] - a[0])
+        .atan2(b[1] - a[1])
+        .to_degrees()
+        .rem_euclid(360.0)
+}
+
+/// The free vias and the must-pass snaps in one loop order: by bearing, starting opposite
+/// the seed heading so the free vias stay in the middle of the loop.
+fn with_musts(
+    vias: &[Snap],
+    bearings: &[f64],
+    heading_deg: f64,
+    musts: &[(f64, Snap)],
+) -> Vec<Snap> {
+    if musts.is_empty() {
+        return vias.to_vec();
+    }
+    let around = |b: f64| (b - heading_deg + 180.0).rem_euclid(360.0);
+    let mut all: Vec<(f64, Snap)> = bearings
+        .iter()
+        .map(|d| around(heading_deg + d))
+        .zip(vias.iter().copied())
+        .chain(musts.iter().map(|&(b, s)| (around(b), s)))
+        .collect();
+    all.sort_by(|a, b| a.0.total_cmp(&b.0));
+    all.into_iter().map(|(_, s)| s).collect()
 }
 
 /// The loop start → vias → start, with out-and-back spurs at dead-end vias cut.

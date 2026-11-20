@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use trail_calc::cost::Profile;
+use trail_calc::cost::{Exclusion, ExclusionMode, Profile};
 use trail_calc::generate::{generate, GenerateError, GenerateRequest, GeneratedRoute};
 use trail_calc::geodesy::haversine_m;
 use trail_calc::graph::{EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
@@ -233,5 +233,102 @@ fn loops_go_where_the_user_preferences_are_cheap() {
         east(best) >= 0.8,
         "best loop only {:.0} % on the side the user prefers",
         100.0 * east(best)
+    );
+}
+
+fn area(c: LatLon, radius_m: f32, mode: ExclusionMode) -> Exclusion {
+    Exclusion {
+        lat: c.lat,
+        lon: c.lon,
+        radius_m,
+        mode,
+    }
+}
+
+/// Closest approach of a loop to `p`, in meters.
+fn closest(g: &Graph, r: &GeneratedRoute, p: LatLon) -> f64 {
+    route_geometry(g, &r.route)
+        .into_iter()
+        .map(|(lat, lon, _)| haversine_m(LatLon { lat, lon }, p))
+        .fold(f64::INFINITY, f64::min)
+}
+
+#[test]
+fn every_loop_passes_the_must_pass_areas() {
+    let g = grid(21, 200.0);
+    let mut r = req(at(2000.0, 2000.0), 6000.0);
+    let must = at(1300.0, 2900.0);
+    r.profile.exclude = vec![area(must, 150.0, ExclusionMode::Must)];
+    let routes = generate(&g, &r).unwrap();
+    assert!(!routes.is_empty());
+    for l in &routes {
+        assert!(
+            closest(&g, l, must) <= 150.0,
+            "loop misses the must-pass area"
+        );
+        assert!(l.distance_met);
+    }
+}
+
+#[test]
+fn must_pass_too_far_for_the_distance_is_an_error() {
+    let g = grid(21, 200.0);
+    let mut r = req(at(200.0, 200.0), 4000.0);
+    r.profile.exclude = vec![area(at(3800.0, 3800.0), 100.0, ExclusionMode::Must)];
+    match generate(&g, &r) {
+        Err(GenerateError::MustPassTooFar { min_m }) => {
+            assert!((14_000.0..16_000.0).contains(&min_m), "min_m {min_m}")
+        }
+        other => panic!("expected MustPassTooFar, got {:?}", other.map(|v| v.len())),
+    }
+}
+
+#[test]
+fn must_pass_off_the_network_is_an_error() {
+    let g = grid(21, 200.0);
+    let mut r = req(at(2000.0, 2000.0), 6000.0);
+    r.profile.exclude = vec![area(at(50_000.0, 50_000.0), 100.0, ExclusionMode::Must)];
+    assert!(matches!(
+        generate(&g, &r),
+        Err(GenerateError::MustPassUnreachable)
+    ));
+}
+
+#[test]
+fn must_pass_behind_a_hard_avoid_is_an_error() {
+    let g = grid(21, 200.0);
+    let mut r = req(at(2000.0, 2000.0), 6000.0);
+    let must = at(3600.0, 3600.0);
+    r.profile.exclude = vec![
+        area(must, 100.0, ExclusionMode::Must),
+        area(must, 500.0, ExclusionMode::Block),
+    ];
+    assert!(matches!(
+        generate(&g, &r),
+        Err(GenerateError::MustPassUnreachable)
+    ));
+}
+
+#[test]
+fn hard_avoids_that_wall_in_the_start_give_no_loop() {
+    // One block circle covers the whole grid but the two edges at the start corner.
+    let g = grid(21, 200.0);
+    let mut r = req(at(0.0, 0.0), 6000.0);
+    r.profile.exclude = vec![area(at(2400.0, 2400.0), 3200.0, ExclusionMode::Block)];
+    assert!(matches!(generate(&g, &r), Err(GenerateError::NoLoop)));
+}
+
+#[test]
+fn soft_prefer_areas_pull_loops_in() {
+    let g = grid(21, 200.0);
+    let target = at(3200.0, 1000.0);
+    let mut r = req(at(2000.0, 2000.0), 6000.0);
+    let near = |r: &GenerateRequest| closest(&g, &generate(&g, r).unwrap()[0], target);
+    let before = near(&r);
+    r.profile.exclude = vec![area(target, 400.0, ExclusionMode::Prefer)];
+    let after = near(&r);
+    assert!(
+        after <= 400.0 && after < before,
+        "before {before:.0} m, after {after:.0} m"
     );
 }

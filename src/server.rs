@@ -282,9 +282,17 @@ fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
         count: b.count,
     };
     let routes = generate(g, &req).map_err(|e| {
-        unprocessable(match e {
-            GenerateError::StartOffNetwork => "no trail near the start",
-            GenerateError::StartBlocked => "start is blocked",
+        unprocessable(&match e {
+            GenerateError::StartOffNetwork => "no trail near the start".into(),
+            GenerateError::StartBlocked => "start is blocked".into(),
+            GenerateError::MustPassUnreachable => "a must-pass area has no reachable trail".into(),
+            GenerateError::MustPassTooFar { min_m } => {
+                format!(
+                    "must-pass areas need at least {:.0} km",
+                    (min_m / 1000.0).ceil()
+                )
+            }
+            GenerateError::NoLoop => "no loop fits the hard avoid areas".into(),
         })
     })?;
     if routes.is_empty() {
