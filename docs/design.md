@@ -269,6 +269,15 @@ coordinate (the step leaving it) for the color-by-cost view (D54). `waypoints` a
 route was built from, so the client can place drag handles; `generate` returns
 them with every route.
 
+Exclusion `mode` (D90, D97): `penalize` (soft avoid, cost ×5), `block` (hard
+avoid, not traversable), `prefer` (soft prefer, cost ×0.5; the A* bound drops by
+the same factor), `must` (hard prefer: a fixed via in every generated loop, at
+most 5, ignored by `/api/route`). `generate` answers `422` with "a must-pass
+area has no reachable trail", "must-pass areas need at least N km" (the shortest
+loop through them is over the distance tolerance), or "no loop fits the hard
+avoid areas" (no seed gives a loop, or with `block` areas the closest loop is
+more than 50 % off the distance).
+
 `POST /api/route` never applies the repetition penalty: a manual drag may
 legitimately produce an out-and-back. It requires 2–20 waypoints and snaps
 within 150 m, else `422`.
@@ -308,12 +317,19 @@ link (D91) reproduces the loop until the graph is rebuilt.
   waypoints. Dragging a segment midpoint inserts a new waypoint there, so a
   15 km loop can be shaped with more than two anchors. Live stats and score
   replace the card values.
-- Export: GPX download from the selected route.
-- Avoid areas (D90): long-press or right-click the map, "Avoid area here",
-  then drag the circle's center or edge. Sent as `penalize` exclusions.
-- State: Solid signals. Start, map layers and avoid areas in localStorage. A
-  share link (D91) puts the query, the selected loop and its edited points in
-  the URL hash; opening it regenerates and re-applies the edit. No router library.
+- Export: GPX download from the selected route. Checkpoints (D98) are written
+  as `<wpt>` before the track, each on the track point nearest it (within
+  100 m, else left out), in route order; COROS shows them as checkpoints.
+- Avoid and prefer areas (D90, D97): long-press or right-click the map, "Avoid
+  area here" or "Prefer area here", then drag the circle's center or edge.
+  Right-click an area for "Make hard" / "Make soft". Soft edges are dashed,
+  hard ones solid; avoid in the costly end of the cost ramp, prefer in the cheap end.
+- Checkpoints (D98): with a loop selected, "Checkpoint here" snaps one to the
+  loop. Right-click it to rename or remove it.
+- State: Solid signals. Start, map layers, areas and checkpoints in
+  localStorage. A share link (D91) puts the query, the areas (with a kind/hard
+  flag, D97), the checkpoints, the selected loop and its edited points in the
+  URL hash; opening it regenerates and re-applies the edit. No router library.
 - No SSR.
 
 ## 12. Local setup and deployment
@@ -369,5 +385,4 @@ link (D91) reproduces the loop until the graph is rebuilt.
 ## 15. Open items left to the builder
 
 - Tune the factor defaults with the drag debugger.
-- GPX metadata and waypoint naming.
 - Region pack trait boundaries and the provider registry.
