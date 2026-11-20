@@ -24,7 +24,8 @@ test("a share link round-trips", () => {
 
 test("garbage and out-of-range values are rejected", () => {
   assert.equal(decodeShare(""), null);
-  assert.equal(decodeShare("#s=not-json"), null);
+  assert.equal(decodeShare("#s=not-a-point"), null);
+  assert.ok(encodeShare(share).length < 200, encodeShare(share));
   const bad = (patch: Partial<Share>) => decodeShare(encodeShare({ ...share, ...patch }));
   assert.equal(bad({ km: 500 }), null);
   assert.equal(bad({ maxSac: 9 }), null);

@@ -21,63 +21,64 @@ export interface Share {
 }
 
 const r5 = (x: number) => Math.round(x * 1e5) / 1e5;
-const pt = (p: LatLon) => [r5(p.lat), r5(p.lon)];
+const pt = (p: LatLon) => `${r5(p.lat)},${r5(p.lon)}`;
 
-export function encodeShare(s: Share): string {
-  const v = {
-    s: pt(s.start), n: s.startName, d: s.km, c: s.climb, t: s.strictness, w: s.weights, x: s.maxSac,
-    z: s.zones.map((z) => [...pt(z), Math.round(z.radius_m)]), l: s.loop, p: s.wps?.map(pt) ?? null,
-  };
-  return `s=${encodeURIComponent(JSON.stringify(v))}`;
-}
-
-const TERMS = ["slope", "surface", "tech", "official", "forest", "urban", "traffic"] as const;
-const HILLS = ["uphill", "downhill", "technical"] as const;
+/** Weight order in `w=`; new terms go at the end so older links still parse. */
+const WEIGHTS = ["slope", "uphill", "downhill", "surface", "tech", "technical", "official", "forest", "urban", "traffic"] as const;
+const HILLS = new Set(["uphill", "downhill", "technical"]);
 const PRESETS = ["gentle", "hilly", "mountain"];
 
+/** Compact `k=v&…` hash: plain numbers and commas, no JSON, so the link stays short and readable. */
+export function encodeShare(s: Share): string {
+  const c = s.climb === "max" ? "max" : "preset" in s.climb ? s.climb.preset : String(Math.round(s.climb.m));
+  const parts = [`s=${pt(s.start)}`, `d=${s.km}`, `c=${c}`, `t=${s.strictness}`, `x=${s.maxSac}`,
+    `w=${WEIGHTS.map((k) => Math.round(s.weights[k] * 100) / 100).join(",")}`];
+  if (s.loop) parts.push(`l=${s.loop}`);
+  if (s.zones.length) parts.push(`z=${s.zones.map((z) => `${pt(z)},${Math.round(z.radius_m)}`).join(";")}`);
+  if (s.wps) parts.push(`p=${s.wps.map(pt).join(";")}`);
+  if (s.startName) parts.push(`n=${encodeURIComponent(s.startName)}`);
+  return parts.join("&");
+}
+
 const num = (v: unknown, lo: number, hi: number): number => {
-  if (typeof v !== "number" || !Number.isFinite(v) || v < lo || v > hi) throw new Error("range");
-  return v;
+  const n = typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  if (!Number.isFinite(n) || n < lo || n > hi) throw new Error("range");
+  return n;
 };
-const latLon = (v: unknown): LatLon => {
-  if (!Array.isArray(v)) throw new Error("point");
-  return { lat: num(v[0], -90, 90), lon: num(v[1], -180, 180) };
-};
-const list = (v: unknown, max: number): unknown[] => {
-  if (!Array.isArray(v) || v.length > max) throw new Error("list");
-  return v;
+const nums = (v: string) => v.split(",");
+const latLon = (a: string[]): LatLon => ({ lat: num(a[0], -90, 90), lon: num(a[1], -180, 180) });
+const list = (v: string | null, max: number): string[][] => {
+  const items = v ? v.split(";").map(nums) : [];
+  if (items.length > max) throw new Error("list");
+  return items;
 };
 
 /** The share in a URL hash, or null when there is none or it doesn't validate. */
 export function decodeShare(hash: string): Share | null {
-  const raw = new URLSearchParams(hash.replace(/^#/, "")).get("s");
-  if (!raw) return null;
+  const q = new URLSearchParams(hash.replace(/^#/, ""));
+  const start = q.get("s");
+  if (!start) return null;
   try {
-    const v = JSON.parse(raw) as Record<string, unknown>;
-    const w = (v.w ?? {}) as Record<string, unknown>;
+    const w = nums(q.get("w") ?? "");
     const weights = {} as Weights;
-    for (const k of TERMS) weights[k] = num(w[k] ?? 1, 0, 4);
-    for (const k of HILLS) weights[k] = num(w[k], -1, 1);
-    const c = v.c;
-    let climb: ShareClimb;
-    if (c === "max") climb = "max";
-    else if (c && typeof c === "object" && "preset" in c && PRESETS.includes(String(c.preset))) climb = { preset: c.preset as "hilly" };
-    else if (c && typeof c === "object" && "m" in c) climb = { m: num(c.m, 0, 20_000) };
-    else throw new Error("climb");
+    WEIGHTS.forEach((k, i) => {
+      const hill = HILLS.has(k);
+      weights[k] = w[i] === undefined || w[i] === "" ? (k === "uphill" ? 0 : hill ? -1 : 1) : num(w[i], hill ? -1 : 0, hill ? 1 : 4);
+    });
+    const c = q.get("c") ?? "";
+    const climb: ShareClimb = c === "max" ? "max" : PRESETS.includes(c) ? { preset: c as "hilly" } : { m: num(c, 0, 20_000) };
+    const name = q.get("n");
     return {
-      start: latLon(v.s),
-      startName: typeof v.n === "string" ? v.n.slice(0, 200) : null,
-      km: num(v.d, 3, 60),
+      start: latLon(nums(start)),
+      startName: name ? name.slice(0, 200) : null,
+      km: num(q.get("d"), 3, 60),
       climb,
-      strictness: num(v.t, 0, 1),
+      strictness: num(q.get("t"), 0, 1),
       weights,
-      maxSac: Math.round(num(v.x, 1, 6)),
-      zones: list(v.z ?? [], 32).map((z) => {
-        const a = list(z, 3);
-        return { ...latLon(a), radius_m: num(a[2], 50, 5000) };
-      }),
-      loop: Math.round(num(v.l ?? 0, 0, 50)),
-      wps: v.p == null ? null : list(v.p, 20).map(latLon),
+      maxSac: Math.round(num(q.get("x"), 1, 6)),
+      zones: list(q.get("z"), 32).map((a) => ({ ...latLon(a), radius_m: num(a[2], 50, 5000) })),
+      loop: Math.round(num(q.get("l") ?? "0", 0, 50)),
+      wps: q.has("p") ? list(q.get("p"), 20).map(latLon) : null,
     };
   } catch {
     return null;

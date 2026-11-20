@@ -1,6 +1,6 @@
 // App state as Solid signals. One module so components share a single source.
 
-import { createMemo, createRoot, createSignal } from "solid-js";
+import { createMemo, createRoot, createSignal, flush } from "solid-js";
 import type { BaseMapId } from "./map/basemaps";
 import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
 import type { BreakdownKey, LatLon, Route, Weights } from "./routes/types";
@@ -289,9 +289,11 @@ export async function openShared() {
   setWeights({ ...DEFAULT_WEIGHTS, ...s.weights });
   setMaxSacRaw(s.maxSac);
   setZonesRaw(s.zones);
+  flush(); // Solid 2.0 batches writes; findRoutes must read the shared values, not the stored ones
   await findRoutes();
   const id = routes()[s.loop]?.id;
   if (!id) return;
   setSelectedId(id);
+  flush();
   if (s.wps) await editWaypoints(id, s.wps);
 }
