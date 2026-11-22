@@ -9,7 +9,7 @@ const SWATCH: Record<string, string> = {
   relief: "linear-gradient(135deg,#f6f3ee 0 35%,#b9b0a6 60%,#7c726a)",
   trails: "repeating-linear-gradient(135deg,#f2efe9 0 7px,#e6b422 7px 9px,#f2efe9 9px 14px,#c8322a 14px 16px)",
   view: "linear-gradient(135deg,#28285a,#466eaa 35%,#fadc50 55%,#f58228 75%,#d72828)",
-  schweizmobil: "repeating-linear-gradient(135deg,#f2efe9 0 8px,#c8322a 8px 11px)",
+  schweizmobil: "repeating-linear-gradient(135deg,#f2efe9 0 8px,#1fae2d 8px 11px)",
   webcams: "radial-gradient(circle at 50% 50%,#1f2a33 0 30%,#ffffff 31% 42%,#dfe6ea 43%)",
   forest: "radial-gradient(circle at 30% 40%,#5f8a4c 0 30%,transparent 31%),radial-gradient(circle at 70% 65%,#5f8a4c 0 28%,#dde4cf 29%)",
 };

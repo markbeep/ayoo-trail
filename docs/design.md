@@ -258,7 +258,15 @@ validated to `0..=4`; anything outside is a `422`.
 | `POST /api/generate` | `{start, distance_m, climb?: {target_m: number \| null, strictness: 0–1}, profile, count}` | `{routes: [...]}` |
 | `POST /api/route` | `{waypoints, profile}` | `{route}` |
 | `GET /api/health` | | `{status, graph_date}` |
+| `GET /api/tiles/view/{z}/{x}/{y}` | | 256 px PNG of the 360° view overlay from `view.bin` (D100); 204 without data, 404 without `view.bin` |
+| `GET /api/webcams` | `?bbox=north,east,south,west` (sides ≤ 3°) | GeoJSON webcams from Windy, cached 5 min (D102); 503 without `WINDY_API_KEY` |
 | `GET /` | | static client |
+
+The profile's `weights.view` (default 0) adds the 360° view term. With `view.bin` loaded,
+routes carry a `view` score bar ("km with a wide view") and a `view` entry in `terms`.
+Editing a loop in the client makes an `A*` copy that keeps its own waypoints across setting
+changes; generated loops are re-picked (D101). SchweizMobil route popups call geo.admin.ch
+identify (`ch.astra.wanderland`) straight from the browser (D103).
 
 `route` = `{geometry: GeoJSON LineString with [lon, lat, z], waypoints:
 [{lat, lon}], distance_m, climb_m, descent_m, score, breakdown,

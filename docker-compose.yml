@@ -1,4 +1,5 @@
-# `docker compose up --build`: builds the graph into ./data if it is missing, then serves on :8080.
+# `docker compose up --build`: builds the graph and the 360° view scores into ./data if missing, then serves on :8080.
+# WINDY_API_KEY (optional) turns on the webcam overlay (D102).
 # REGION=demo|ch picks what the import builds; it needs `just data REGION=...` to have filled data/raw.
 services:
   import:
@@ -13,11 +14,26 @@ services:
     volumes:
       - ./data:/data
 
-  server:
+  view:
     image: trail-calc
     depends_on:
       import:
         condition: service_completed_successfully
+    entrypoint: ["/app/trail-calc-view"]
+    environment:
+      REGION: ${REGION:-demo}
+      DATA_DIR: /data
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./data:/data
+
+  server:
+    image: trail-calc
+    depends_on:
+      view:
+        condition: service_completed_successfully
+    environment:
+      WINDY_API_KEY: ${WINDY_API_KEY:-}
     ports:
       - "8080:8080"
     volumes:
