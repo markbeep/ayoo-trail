@@ -6,7 +6,7 @@ import { coord } from "../routes/format";
 import { searchPlaces, type Place } from "../search";
 import { mapController } from "./MapView";
 
-export const startLabel = () => startName() ?? coord(start());
+export const startLabel = () => { const s = start(); return startName() ?? (s ? coord(s) : "Pick a start"); };
 
 export function StartSearch() {
   const [text, setText] = createSignal<string | null>(null); // null: not editing, show the start

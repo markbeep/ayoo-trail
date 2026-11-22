@@ -3,8 +3,8 @@
 import { createMemo, createRoot, createSignal, flush } from "solid-js";
 import type { BaseMapId } from "./map/basemaps";
 import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
-import type { BreakdownKey, Checkpoint, LatLon, Route, Weights } from "./routes/types";
-import { ApiError, generate, routeVia } from "./api";
+import type { BreakdownKey, Checkpoint, LatLon, Penalties, Route, Weights } from "./routes/types";
+import { ApiError, generate, routeVia, type ClimbGoal } from "./api";
 import { clampRadius, MAX_ZONES, ZONE_DEFAULT_M, type Zone } from "./routes/zones";
 import { decodeShare, DEFAULT_PENALTIES, encodeShare, MAX_CHECKPOINTS } from "./url";
 import { nearestOnRoute } from "./routes/gpx";
@@ -54,9 +54,6 @@ export type Climb = { preset: Hilliness } | { m: number } | "max" | "off";
 export const CLIMB_STEP_M = 10;
 export const climbMaxM = () => Math.max(1500, Math.ceil((150 * distanceKm()) / 100) * 100);
 
-/** Wattwil: inside the demo graph (D34). */
-export const DEFAULT_START: LatLon = { lat: 47.2985, lon: 9.095 };
-
 const STORE_KEY = "trail-calc:v1";
 interface Stored { start?: LatLon; startName?: string | null; baseMap?: BaseMapId; overlays?: string[]; zones?: Zone[]; checkpoints?: Checkpoint[] }
 function load(): Stored {
@@ -67,15 +64,18 @@ function save(patch: Stored) {
 }
 const stored = load();
 
-export const [start, setStartRaw] = createSignal<LatLon>(stored.start ?? DEFAULT_START);
+/** No default start (D111): null until the user picks one; a stored start comes back. */
+export const [start, setStartRaw] = createSignal<LatLon | null>(stored.start ?? null);
 /** Name of a searched start (D57); null when it was picked on the map. */
-export const [startName, setStartName] = createSignal<string | null>(stored.start ? (stored.startName ?? null) : "Wattwil");
+export const [startName, setStartName] = createSignal<string | null>(stored.start ? (stored.startName ?? null) : null);
 export const [distanceKm, setDistanceKm] = createSignal(15);
 export const [climb, setClimbRaw] = createSignal<Climb>({ preset: "hilly" });
 export const [strictness, setStrictnessRaw] = createSignal(0.8);
 export const [weights, setWeights] = createSignal<Weights>({ ...DEFAULT_WEIGHTS });
 /** Hardest SAC grade a loop may use, T1–T6 (D81). */
 export const [maxSac, setMaxSacRaw] = createSignal(3);
+/** Repeat, area, stem and overlap penalties (D109). */
+export const [penalties, setPenaltiesRaw] = createSignal<Penalties>({ ...DEFAULT_PENALTIES });
 /** Avoid areas (D90). */
 export const [zones, setZonesRaw] = createSignal<readonly Zone[]>(Array.isArray(stored.zones) ? stored.zones.slice(0, MAX_ZONES) : []);
 /** GPX checkpoints (D98): kept across loops, exported when near the loop. */
@@ -115,7 +115,11 @@ export function toggleOverlay(id: string) {
   setOverlaysRaw(next);
   save({ overlays: next });
 }
-/** Target meters of climb, or null for "as much as possible". */
+/** The climb goal for `/api/generate`, or null without one ("off"). */
+export function climbGoal(): ClimbGoal | null {
+  return climb() === "off" ? null : { target_m: climbTargetM(), strictness: strictness() };
+}
+/** Target meters of climb, or null for "as much as possible" and "off". */
 export function climbTargetM(): number | null {
   const c = climb();
   if (c === "max" || c === "off") return null;
@@ -150,6 +154,20 @@ export function setWeight(k: NumericWeight, v: number) {
 }
 export function setClimb(c: Climb) {
   setClimbRaw(c);
+  settingsChanged();
+}
+export function setPenalty(k: keyof Penalties, v: number) {
+  setPenaltiesRaw((p) => ({ ...p, [k]: v }));
+  settingsChanged();
+}
+/** Clear all (D108): only the distance drives the route. */
+export function clearAll() {
+  setWeights({ slope: 0, uphill: 0, downhill: 0, surface: 0, tech: 0, technical: 0, official: 0, forest: 0, urban: 0, traffic: 0, view: 0 });
+  setClimbRaw("off");
+  setMaxSacRaw(3);
+  setPenaltiesRaw({ ...DEFAULT_PENALTIES });
+  setZonesRaw([]);
+  save({ zones: [] });
   settingsChanged();
 }
 export function setStrictness(v: number) {
@@ -196,7 +214,7 @@ export const MAX_WAYPOINTS = 20;
 const withinDistance = (m: number) => Math.abs(m - distanceKm() * 1000) / (distanceKm() * 1000) <= 0.1;
 /** Re-route a loop through its waypoints under the current weights and its own climb pressure. */
 async function reroute(r: Route, wps: LatLon[], id: string): Promise<Route> {
-  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, maxSac(), climbTargetM(), zones());
+  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, maxSac(), climbTargetM(), zones(), penalties());
   return { ...next, id, copyOf: r.copyOf, climb_pressure: r.climb_pressure, distance_met: withinDistance(next.distance_m) };
 }
 const replaceRoute = (id: string, r: Route) => setRoutes((rs) => rs.map((x) => (x.id === id ? r : x)));
@@ -266,6 +284,8 @@ export function editQuery() {
 }
 /** Generate loops with `POST /api/generate`. A live refresh keeps the query card as it is and the same loop slot selected. */
 export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
+  const from = start();
+  if (!from) return;
   const mine = ++seq;
   const slot = Math.max(0, routes().findIndex((r) => r.id === selectedId()));
   if (opts.keepOpen) setRefreshing(true);
@@ -273,7 +293,7 @@ export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
   setErrorMsg(null);
   setPickingStart(false);
   try {
-    const rs = await generate(start(), distanceKm() * 1000, { target_m: climbTargetM(), strictness: strictness() }, weights(), maxSac(), zones());
+    const rs = await generate(from, distanceKm() * 1000, climbGoal(), weights(), maxSac(), zones(), penalties());
     if (mine !== seq) return; // a newer request superseded this one
     let all = rs;
     if (opts.keepOpen) {
@@ -302,9 +322,9 @@ export function shareLink(): string {
   // A copy is shared as its original's slot plus the copy's points; opening the link recreates the copy.
   const i = Math.max(0, routes().findIndex((x) => x.id === (r?.copyOf ?? r?.id)));
   const hash = encodeShare({
-    start: start(), km: distanceKm(), climb: climb(), strictness: strictness(),
+    start: start()!, km: distanceKm(), climb: climb(), strictness: strictness(),
     weights: weights(), maxSac: maxSac(), zones: [...zones()], checkpoints: [...checkpoints()], loop: i,
-    wps: r?.copyOf ? r.waypoints : null, penalties: DEFAULT_PENALTIES,
+    wps: r?.copyOf ? r.waypoints : null, penalties: penalties(),
   });
   return `${location.origin}${location.pathname}#${hash}`;
 }
@@ -320,6 +340,7 @@ export async function openShared() {
   setStrictnessRaw(s.strictness);
   setWeights({ ...DEFAULT_WEIGHTS, ...s.weights });
   setMaxSacRaw(s.maxSac);
+  setPenaltiesRaw(s.penalties);
   setZonesRaw(s.zones);
   setCheckpointsRaw(s.checkpoints);
   flush(); // Solid 2.0 batches writes; findRoutes must read the shared values, not the stored ones

@@ -2,6 +2,7 @@ import { createEffect, createSignal, onSettled, Show, untrack } from "solid-js";
 import { MapMenu, type MenuState } from "./MapMenu";
 import { DEV_ROUTE, addWaypoint, devHealth, devWaypoints } from "../dev/routeDebug";
 import { MapController } from "../map/controller";
+import { getHealth } from "../api";
 import { nearestIndex } from "../routes/geo";
 import type { LatLon } from "../routes/types";
 import {
@@ -71,7 +72,10 @@ export function MapView(props: { padding: () => { left: number; right: number; t
       },
     });
     ctl = mapController = c;
-    c.flyTo(untrack(start), 12);
+    const s0 = untrack(start);
+    // No default start (D111): show the whole graph until one is picked.
+    if (s0) c.flyTo(s0, 12);
+    else void getHealth().then((h) => h.bbox && c.fitBounds(h.bbox, props.padding())).catch(() => {});
     if (DEV_ROUTE) {
       void devHealth().then((b) => b && c.fitBounds(b, props.padding()));
       void c.setWaypoints(untrack(devWaypoints));

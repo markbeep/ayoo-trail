@@ -1,4 +1,4 @@
-import type { LatLon, Route, Weights } from "./routes/types";
+import type { LatLon, Penalties, Route, Weights } from "./routes/types";
 import { zoneMode, type Zone } from "./routes/zones";
 
 export interface Health {
@@ -23,22 +23,22 @@ const exclude = (zones: readonly Zone[]) => zones.map((z) => ({ lat: z.lat, lon:
 
 /** `climb_target_m` adds the Elevation bar and counts it in the score (D63). */
 export const routeVia = (
-  waypoints: LatLon[], weights: Weights, max_sac: number, climb_target_m: number | null = null, zones: readonly Zone[] = [],
+  waypoints: LatLon[], weights: Weights, max_sac: number, climb_target_m: number | null, zones: readonly Zone[], penalties: Penalties,
 ) =>
   call<Route>("/api/route", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ waypoints, profile: { weights, max_sac, exclude: exclude(zones) }, climb_target_m }),
+    body: JSON.stringify({ waypoints, profile: { weights, max_sac, exclude: exclude(zones), ...penalties }, climb_target_m }),
   });
 
 /** `target_m: null` asks for as much climb as possible (D52). */
 export interface ClimbGoal { target_m: number | null; strictness: number }
 
 export const generate = (
-  start: LatLon, distance_m: number, climb: ClimbGoal, weights: Weights, max_sac: number, zones: readonly Zone[] = [],
+  start: LatLon, distance_m: number, climb: ClimbGoal | null, weights: Weights, max_sac: number, zones: readonly Zone[], penalties: Penalties,
 ) =>
   call<{ routes: Route[] }>("/api/generate", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ start, distance_m, climb, profile: { weights, max_sac, exclude: exclude(zones) } }),
+    body: JSON.stringify({ start, distance_m, climb, profile: { weights, max_sac, exclude: exclude(zones), ...penalties } }),
   }).then((r) => r.routes);

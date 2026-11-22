@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { MapPin, Search, LoaderCircle } from "@lucide/solid";
 import {
-  DISTANCE_PRESETS_KM, climbLabel, distanceKm, editQuery, findRoutes, queryOpen, setDistanceKm, status, errorMsg,
+  DISTANCE_PRESETS_KM, climbLabel, start, distanceKm, editQuery, findRoutes, queryOpen, setDistanceKm, status, errorMsg,
 } from "../state";
 import { ClimbControl } from "./Controls";
 import { StartSearch, startLabel } from "./StartSearch";
@@ -38,7 +38,7 @@ export function QueryCard() {
         <h2 class="q-title">How hilly?</h2>
         <ClimbControl />
 
-        <button class="primary" onClick={() => void findRoutes()} disabled={status() === "loading"}>
+        <button class="primary" onClick={() => void findRoutes()} disabled={status() === "loading" || !start()}>
           <Show when={status() === "loading"} fallback={<><Search size={18} />Find loops</>}>
             <LoaderCircle size={18} class="spin" />Finding loops…
           </Show>
