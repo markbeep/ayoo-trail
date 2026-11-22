@@ -40,3 +40,10 @@ export function word(t: Term, w: number): "avoid" | "off" | "prefer" {
   if (Math.abs(w) < 0.005) return "off";
   return multiplierOf(t, w) > 1 ? "avoid" : "prefer";
 }
+
+/** A typed number with its unit or sign glyph ("500 m", "−1.00"); null when there are no digits. */
+export function parseNumber(s: string): number | null {
+  const v = s.replace(/−/g, "-").replace(/[^\d.eE+-]/g, "");
+  const n = /\d/.test(v) ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+}

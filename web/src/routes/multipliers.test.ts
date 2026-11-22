@@ -1,7 +1,7 @@
 // Run with `node --test web/src/routes/multipliers.test.ts`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { KEY, multiplierOf, parseMultiplier, scrub, weightOf, word, type Term } from "./multipliers.ts";
+import { KEY, multiplierOf, parseMultiplier, parseNumber, scrub, weightOf, word, type Term } from "./multipliers.ts";
 
 const near = (a: number, b: number, rel = 0.01) => assert.ok(Math.abs(a - b) <= Math.abs(b) * rel, `${a} vs ${b}`);
 
@@ -34,4 +34,11 @@ test("words say what a weight does", () => {
   assert.equal(word("surface", 1), "avoid");
   assert.equal(word("surface", -1), "prefer");
   assert.equal(word("view", 0), "off");
+});
+
+test("typed numbers keep their units out and refuse text without digits", () => {
+  for (const s of ["", "abc", "m", "x", " "]) assert.equal(parseNumber(s), null, s);
+  assert.equal(parseNumber("500 m"), 500);
+  assert.equal(parseNumber("−1.00"), -1);
+  assert.equal(parseNumber("0.8"), 0.8);
 });

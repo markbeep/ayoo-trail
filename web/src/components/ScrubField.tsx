@@ -1,7 +1,7 @@
 // A number field you drag left/right to change, like Photoshop's (D106). A click without a drag
 // types a value; arrow keys step. It commits once per gesture, so a live refresh (D55) runs once.
 import { createSignal, Show } from "solid-js";
-import { scrub, type ScrubOpts } from "../routes/multipliers";
+import { parseNumber, scrub, type ScrubOpts } from "../routes/multipliers";
 
 /** Arrow keys move like a 10 px drag. */
 const KEY_PX = 10;
@@ -63,7 +63,7 @@ export function ScrubField(props: {
         onBlur={(e) => {
           const el = e.currentTarget;
           if (!el.dataset.cancel) {
-            const x = (props.parse ?? ((s: string) => { const n = Number(s.replace(/[^\d.eE+-]/g, "")); return Number.isFinite(n) && s.trim() !== "" ? n : null; }))(el.value);
+            const x = (props.parse ?? parseNumber)(el.value);
             if (x !== null) commit(x); // invalid input reverts
           }
           setEditing(false);

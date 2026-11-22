@@ -397,6 +397,10 @@ fn order_musts(
 /// The free vias inserted into start → `order` → start where each adds the least straight-line
 /// detour.
 fn insert_vias(start: Snap, order: &[Snap], vias: &[Snap]) -> Vec<Snap> {
+    // Without must-pass points the seed's own (clockwise) order stands: loop direction matters.
+    if order.is_empty() {
+        return vias.to_vec();
+    }
     let mut out = order.to_vec();
     for &v in vias {
         let at = |i: usize| {
@@ -504,4 +508,25 @@ fn coverage(g: &Graph, r: &Route) -> HashMap<u32, f64> {
         *m.entry(s.edge).or_insert(0.0) += s.fraction() * g.edge_len_m(s.edge);
     }
     m
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn snap(lat: f64, lon: f64) -> Snap {
+        Snap {
+            edge: 0,
+            t: 0.0,
+            pos: LatLon { lat, lon },
+            dist_m: 0.0,
+        }
+    }
+
+    #[test]
+    fn without_must_passes_the_seed_via_order_stays() {
+        let start = snap(46.0, 7.0);
+        let vias = [snap(46.01, 7.0), snap(46.0, 7.01)];
+        assert_eq!(insert_vias(start, &[], &vias), vias.to_vec());
+    }
 }
