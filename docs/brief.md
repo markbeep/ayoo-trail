@@ -116,7 +116,7 @@ Grouped as the owner described them. None of this is scoped or prioritized yet.
 
 | Feature | Notes |
 |---|---|
-| Weight sliders | Per layer. |
+| Weight sliders | Per layer. Built as typed multipliers with avoid/prefer (D106). |
 | Exclusion markers | Point plus radius ("I've already run here"), lowers the score nearby. Built as avoid/prefer areas, soft or hard (D90, D97). |
 | Drag-to-edit | Move route points, with live score/cost (gpx.studio-like). |
 

@@ -166,8 +166,8 @@ DEM to the runtime; it costs 2 bytes per vertex.
 Every edge gets `cost = length_m * product(factors)` for the direction of
 travel. The same function serves routing, generation scoring and drag editing.
 
-Proposed defaults (all exposed as sliders; these are starting points, tuned via
-the drag debugger):
+Defaults (each term is one typed multiplier in the settings table, D106; these
+are starting points, tuned via the drag debugger):
 
 | Factor | Default |
 |---|---|
@@ -178,7 +178,8 @@ the drag debugger):
 | Forest | 0.9 |
 | Urban | inside settlement 2.0, within 200 m 1.3 |
 | Quiet roads | unclassified/residential 1.1, tertiary 1.3, secondary 1.6, primary 2.0, everything else 1.0 (D93) |
-| Exclusion marker | multiply by 5, or block if the marker is set to block |
+| Exclusion marker | soft avoid ×`avoid_factor` (default 5), soft prefer ×`prefer_factor` (default 0.5), or block (D109) |
+| Repeat | edges the loop already used ×`repeat` (default 5, 0.01–1000, D109) |
 
 Missing surface tags are inferred from the highway type (D31): roads →
 asphalt, tracks from `tracktype` (grade1 paved … grade5 grass, none → gravel),
@@ -187,8 +188,16 @@ paths and footways stay unknown. Inferred values carry a flag.
 Hard filters, applied before costing: sac above the profile maximum, motorway
 and trunk always, access restrictions, exclusion markers configured to block.
 
-A weight `w ∈ [0, 4]` raises a factor to `factor^w` (D51): 0 disables the
-term, 1 is the table value, 4 lets one term dominate. Powers stay positive, so
+A weight `w` raises a factor to `factor^w` (D51, D106): 0 disables the term, 1
+is the table value. Surface, official, forest, urban, traffic and view take
+`w ∈ [−100, 100]`, so a negative weight flips avoid into prefer; slope and tech
+take `[0, 100]` (their direction comes from `uphill`/`downhill`/`technical`).
+The client shows each weight as the multiplier it gives the term's key class
+(asphalt 2.0, marked 0.7, full forest 0.9, town 2.0, busy road 2.0, wide view
+0.7, steepest band 2.5, T4+ 1.4), clamped to ×0.001–×1000. The A* bound is the
+product of each term's smallest weighted factor, times `min(1, repeat)` and
+`prefer_factor` when a prefer area exists, so it stays admissible for negative
+weights and a repeat penalty below 1. Powers stay positive, so
 no setting produces a non-positive edge cost. The `slope` weight ("Counts" in
 the Hills panel) scales the uphill and downhill factors together;
 `uphill`/`downhill` run −1 gentle … 0 any … +1 steep and blend the band tables
@@ -218,14 +227,21 @@ As built (D39, D52, D70, D82–D87, D92, D94):
    whose way out from the start and back is cheapest per meter under the user's
    weights, preferring nodes whose network distance from the start is within
    ±25 % of the wanted spoke (D94). Peaks and viewpoints don't pull it (D92).
-4. **Legs.** A* through the vias with a repetition penalty (×5 for edges
-   already used, except within 500 m of the start); dead-end spurs are cut.
+4. **Legs.** A* through the vias with a repetition penalty (`repeat`, default
+   ×5, for edges already used, except within `stem_m`, default 500 m, of the
+   start); dead-end spurs at free vias are cut.
+   **Must-pass areas** (D110, up to 10) are ordered by the cheapest loop through
+   them (exact Held-Karp over the leg costs). When that loop alone fits the
+   distance, it is the only result and has no free vias; otherwise the free
+   vias are inserted where they add the least detour. An out-and-back to a
+   must-pass point (a summit) is kept, and the way straight back pays no repeat
+   penalty.
 5. **Tuning.** Up to 8 attempts per seed rescale the radius by target/actual and
    bisect the climb pressure in `[0, strictness]` until distance is within
    ±10 % and climb within the strictness tolerance (±15 % … ±3 %).
 6. **Pick.** Rank by distance error, climb error and preference. Only loops
    within ±10 % are kept; when none fits, the single closest one is returned
-   flagged `distance_met: false`. Dedup at 0.5 shared distance; up to `count`
+   flagged `distance_met: false`. Dedup at `max_overlap` (default 0.5) shared distance; up to `count`
    loops, best score first (D79).
 
 `Route` is a list of steps `{edge, from_t, to_t}`. A route can start and end
@@ -280,7 +296,9 @@ them with every route.
 Exclusion `mode` (D90, D97): `penalize` (soft avoid, cost ×5), `block` (hard
 avoid, not traversable), `prefer` (soft prefer, cost ×0.5; the A* bound drops by
 the same factor), `must` (hard prefer: a fixed via in every generated loop, at
-most 5, ignored by `/api/route`). `generate` answers `422` with "a must-pass
+most 10, ignored by `/api/route`). `profile` also carries the penalties
+`repeat`, `avoid_factor`, `prefer_factor`, `stem_m` and `max_overlap` (D109),
+each defaulting to the old constant. `climb: null` means no climb goal. `generate` answers `422` with "a must-pass
 area has no reachable trail", "must-pass areas need at least N km" (the shortest
 loop through them is over the distance tolerance), or "no loop fits the hard
 avoid areas" (no seed gives a loop, or with `block` areas the closest loop is
@@ -295,12 +313,18 @@ link (D91) reproduces the loop until the graph is rebuilt.
 
 ## 11. Frontend
 
-- Left panel: start (last used, or click the map), distance, "How hilly?"
-  (Gentle/Hilly/Mountain/Max quick picks over a meter slider and a "Stick to
-  it" strictness slider, D52/D56), one button. Weight sliders live in each
-  score bar's Adjust panel (D56); changes regenerate live (D55).
-- Presets follow the distance (30/60/90 m per km); a slider value is fixed
+- Left panel (Kursbuch look, D114): start (searched, picked on the map, or the
+  last one used; no default, D111), distance, Find loops; the loops as timetable
+  rows; then one settings table (D106, D107): a multiplier per term, the hill and
+  technical shapes, hardest trail, climb goal (Off/Gentle/Hilly/Mountain/Max,
+  meters, strictness) and the penalties. Every number is a scrub field: drag
+  left/right (log scale for multipliers, Shift ×10), click to type, arrow keys
+  step; it commits on release and changes regenerate live (D55). "Clear all"
+  (D108) leaves only the distance. Score bars on the route card are read-only.
+- Presets follow the distance (30/60/90 m per km); a typed target is fixed
   meters; Max asks for as much climb as possible.
+- A "must-pass areas need at least N km" error offers "Use N km".
+- Home-screen install (D113): apple-touch-icon and a manifest, no service worker.
 - The selected loop is drag-editable with Undo/Reset and an optional
   color-by-cost view (D54).
 - Base map: swisstopo WMTS fetched directly by the browser from
