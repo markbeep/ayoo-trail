@@ -63,6 +63,8 @@ export interface Route {
   /** From coordinate `i` on, each term relative to its best possible value (1 = ideal), D61. */
   terms: ({ i: number } & Record<TermKey, number>)[];
   graph_date: string | null;
+  /** Set on an edited copy (D101): the id of the generated loop it was made from. */
+  copyOf?: string;
 }
 
 /** A named GPX checkpoint the user placed on the route (D98). */

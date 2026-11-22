@@ -9,8 +9,8 @@ import { RouteTiles } from "./components/RouteTiles";
 import { LayersCard } from "./components/LayersCard";
 import { attachSheetDrag, setSnap, snap, snapHeight, SNAPS } from "./components/Sheet";
 import { narrow } from "./layout";
-import { openShared, pickingStart, routes, selected, selectedId, status } from "./state";
-import { loopName } from "./routes/format";
+import { openShared, pickingStart, routes, selected, status } from "./state";
+import { loopLabel } from "./routes/copies";
 
 function Brand() {
   return (
@@ -85,8 +85,6 @@ export function App() {
   createEffect(pickingStart, (p) => { if (p) setSnap("peek"); }, { defer: true });
   createEffect(narrow, (n) => { setLayersOpen(!n); }, { defer: true });
 
-  const selectedIndex = () => routes().findIndex((r) => r.id === selectedId());
-
   return (
     <div class={["app", { narrow: narrow() }]}>
       <MapView padding={padding} />
@@ -110,7 +108,7 @@ export function App() {
           <Show when={selected()}>{(r) => (
             <>
               <Show when={narrow()}><RouteTiles routes={routes()} /></Show>
-              <RouteCard route={r()} name={loopName(selectedIndex())} />
+              <RouteCard route={r()} label={loopLabel(routes(), r())} />
               <Show when={!narrow()}><RouteTiles routes={routes()} /></Show>
             </>
           )}</Show>

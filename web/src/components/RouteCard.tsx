@@ -1,8 +1,8 @@
 import { createSignal, For, Show } from "solid-js";
-import { Check, Download, Link, LoaderCircle, RefreshCw, RotateCcw, TriangleAlert, Undo2 } from "@lucide/solid";
+import { Check, Download, Link, LoaderCircle, RefreshCw, Trash2, TriangleAlert, Undo2 } from "@lucide/solid";
 import type { BreakdownKey, Route } from "../routes/types";
 import {
-  FACTORS, checkpoints, costView, editError, findRoutes, hoverIndex, isEdited, refreshing, resetEdit, setCostView, shareLink, stale, undoEdit,
+  FACTORS, checkpoints, costView, editError, findRoutes, deleteCopy, hoverIndex, refreshing, setCostView, shareLink, stale, undoEdit,
 } from "../state";
 import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
@@ -14,7 +14,8 @@ import { ElevationProfile } from "./ElevationProfile";
 /** Plain words for each color of the cost ramp, best first. */
 const PREFERENCE = ["preferred", "good", "fine", "avoided", "strongly avoided"];
 
-export function RouteCard(props: { route: Route; name: string }) {
+export function RouteCard(props: { route: Route; label: { name: string; star: string } }) {
+  const name = () => props.label.name + props.label.star;
   const [open, setOpen] = createSignal<BreakdownKey | null>(null);
   const [copied, setCopied] = createSignal(false);
   const share = () => void navigator.clipboard?.writeText(shareLink()).then(() => {
@@ -39,14 +40,14 @@ export function RouteCard(props: { route: Route; name: string }) {
     return ts[lo]!;
   };
   return (
-    <section class={["card route-card", { refreshing: refreshing() }]} aria-busy={`${refreshing()}`} aria-label={`${props.name}, score ${score(r().score)}`}>
+    <section class={["card route-card", { refreshing: refreshing() }]} aria-busy={`${refreshing()}`} aria-label={`${name()}, score ${score(r().score)}`}>
       <header class="rc-head">
-        <h2>{props.name}</h2>
-        <button class="icon-btn" aria-label={`Download ${props.name} as GPX`} title="Download GPX"
-          onClick={() => downloadGpx(r(), props.name, `${props.name} · ${km(r().distance_m)}`, checkpoints())}>
+        <h2>{props.label.name}<Show when={props.label.star}><sup>{props.label.star}</sup></Show></h2>
+        <button class="icon-btn" aria-label={`Download ${name()} as GPX`} title="Download GPX"
+          onClick={() => downloadGpx(r(), name(), `${name()} · ${km(r().distance_m)}`, checkpoints())}>
           <Download size={18} />
         </button>
-        <button class="icon-btn" aria-label={copied() ? "Link copied" : `Copy a link to ${props.name}`} title={copied() ? "Copied" : "Copy link"} onClick={share}>
+        <button class="icon-btn" aria-label={copied() ? "Link copied" : `Copy a link to ${name()}`} title={copied() ? "Copied" : "Copy link"} onClick={share}>
           <Show when={copied()} fallback={<Link size={18} />}><Check size={18} /></Show>
         </button>
         <span class="score" title="Score out of 100">{score(r().score)}</span>
@@ -58,13 +59,13 @@ export function RouteCard(props: { route: Route; name: string }) {
 
       <ElevationProfile route={r()} />
 
-      <Show when={isEdited(r().id)} fallback={
+      <Show when={r().copyOf} fallback={
         <p class="hint edit-hint">{narrow() ? "Drag a point on the map to move it, tap it to remove it." : "Drag a point to move it, drag the line to add one, click a point to remove it."}</p>
       }>
         <div class="edited">
           <span>Edited</span>
           <button class="link-btn" onClick={() => undoEdit(r().id)}><Undo2 size={14} />Undo</button>
-          <button class="link-btn" onClick={() => resetEdit(r().id)}><RotateCcw size={14} />Reset</button>
+          <button class="link-btn" onClick={() => deleteCopy(r().id)}><Trash2 size={14} />Delete</button>
         </div>
       </Show>
       <Show when={editError()}>{(m) => <p class="query-error" role="alert">{m()}</p>}</Show>

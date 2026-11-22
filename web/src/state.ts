@@ -8,6 +8,7 @@ import { ApiError, generate, routeVia } from "./api";
 import { clampRadius, MAX_ZONES, ZONE_DEFAULT_M, type Zone } from "./routes/zones";
 import { decodeShare, encodeShare, MAX_CHECKPOINTS } from "./url";
 import { nearestOnRoute } from "./routes/gpx";
+import { copyId, mergeCopies } from "./routes/copies";
 
 export type NumericWeight = Exclude<keyof Weights, "uphill" | "downhill" | "technical" | "climb_pressure">;
 
@@ -182,9 +183,8 @@ export const renameCheckpoint = (i: number, name: string) =>
   setCheckpoints(checkpoints().map((c, j) => (j === i ? { ...c, name: name.slice(0, 40) } : c)));
 export const removeCheckpoint = (i: number) => setCheckpoints(checkpoints().filter((_, j) => j !== i));
 
-/** Edited loops (D54): earlier versions per loop id for Undo; the first is the loop as generated. */
+/** Edited copies (D101): earlier versions per copy id for Undo. */
 export const [history, setHistory] = createSignal<Record<string, Route[]>>({});
-export const isEdited = (id: string) => (history()[id]?.length ?? 0) > 0;
 export const [editError, setEditError] = createSignal<string | null>(null);
 /** Color the selected route by cost per meter (D54). */
 export const [costView, setCostView] = createSignal(false);
@@ -195,22 +195,34 @@ const withinDistance = (m: number) => Math.abs(m - distanceKm() * 1000) / (dista
 /** Re-route a loop through its waypoints under the current weights and its own climb pressure. */
 async function reroute(r: Route, wps: LatLon[], id: string): Promise<Route> {
   const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, maxSac(), climbTargetM(), zones());
-  return { ...next, id, climb_pressure: r.climb_pressure, distance_met: withinDistance(next.distance_m) };
+  return { ...next, id, copyOf: r.copyOf, climb_pressure: r.climb_pressure, distance_met: withinDistance(next.distance_m) };
 }
 const replaceRoute = (id: string, r: Route) => setRoutes((rs) => rs.map((x) => (x.id === id ? r : x)));
 
 let editSeq = 0;
-/** Replace a loop's waypoints and re-route it; the old version goes on its undo stack. */
+/** Edit a loop's waypoints (D101): a generated loop gets a new copy, a copy changes in place with Undo. */
 export async function editWaypoints(id: string, wps: LatLon[]) {
   const r = routes().find((x) => x.id === id);
   if (!r || wps.length > MAX_WAYPOINTS) return;
   const mine = ++editSeq;
   setRefreshing(true);
   try {
-    const next = await reroute(r, wps, id);
-    if (mine !== editSeq) return;
-    setHistory((h) => ({ ...h, [id]: [...(h[id] ?? []), r] }));
-    replaceRoute(id, next);
+    if (r.copyOf) {
+      const next = await reroute(r, wps, id);
+      if (mine !== editSeq) return;
+      setHistory((h) => ({ ...h, [id]: [...(h[id] ?? []), r] }));
+      replaceRoute(id, next);
+    } else {
+      const cid = copyId(id);
+      const next = { ...(await reroute(r, wps, cid)), copyOf: id };
+      if (mine !== editSeq) return;
+      setRoutes((rs) => {
+        // after the original and its earlier copies
+        const i = rs.length - [...rs].reverse().findIndex((x) => x.id === id || x.copyOf === id);
+        return [...rs.slice(0, i), next, ...rs.slice(i)];
+      });
+      setSelectedId(cid);
+    }
     setEditError(null);
   } catch (e) {
     if (mine !== editSeq) return;
@@ -218,18 +230,21 @@ export async function editWaypoints(id: string, wps: LatLon[]) {
   }
   setRefreshing(false);
 }
+/** Undo the copy's last edit; undoing its first edit deletes the copy. */
 export function undoEdit(id: string) {
   const h = history()[id];
-  if (!h?.length) return;
+  if (!h?.length) return deleteCopy(id);
   replaceRoute(id, h[h.length - 1]!);
   setHistory((x) => ({ ...x, [id]: h.slice(0, -1) }));
   setEditError(null);
 }
-export function resetEdit(id: string) {
-  const first = history()[id]?.[0];
-  if (!first) return;
-  replaceRoute(id, first);
-  setHistory((x) => ({ ...x, [id]: [] }));
+/** Remove an edited copy and go back to the loop it was made from. */
+export function deleteCopy(id: string) {
+  const r = routes().find((x) => x.id === id);
+  if (!r?.copyOf) return;
+  setRoutes((rs) => rs.filter((x) => x.id !== id));
+  setHistory(({ [id]: _, ...rest }) => rest);
+  if (selectedId() === id) setSelectedId(routes().some((x) => x.id === r.copyOf) ? r.copyOf : (routes()[0]?.id ?? null));
   setEditError(null);
 }
 
@@ -258,23 +273,16 @@ export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
   try {
     const rs = await generate(start(), distanceKm() * 1000, { target_m: climbTargetM(), strictness: strictness() }, weights(), maxSac(), zones());
     if (mine !== seq) return; // a newer request superseded this one
+    let all = rs;
     if (opts.keepOpen) {
-      // Edited loops keep their points and re-route under the new settings; Reset goes to the fresh loop.
-      const h = history();
-      const kept = await Promise.all(rs.map(async (fresh) => {
-        const old = routes().find((x) => x.id === fresh.id);
-        if (!old || !h[fresh.id]?.length) return fresh;
-        return reroute(fresh, old.waypoints, fresh.id).catch(() => fresh);
-      }));
+      // Generated loops are re-picked; edited copies keep their points and re-route under the new settings (D101).
+      const copies = await Promise.all(routes().filter((x) => x.copyOf).map((c) => reroute(c, c.waypoints, c.id).catch(() => c)));
       if (mine !== seq) return;
-      setHistory((x) => Object.fromEntries(Object.entries(x).map(([id, v]) => {
-        const fresh = rs.find((r) => r.id === id);
-        return [id, fresh && v.length ? [fresh] : []];
-      })));
-      rs.splice(0, rs.length, ...kept);
+      all = mergeCopies(rs, copies);
     } else setHistory({});
-    setRoutes(rs);
-    setSelectedId(rs[opts.keepOpen ? Math.min(slot, rs.length - 1) : 0]?.id ?? null);
+    setRoutes(all);
+    const keep = opts.keepOpen && all.some((r) => r.id === selectedId());
+    setSelectedId(keep ? selectedId() : (all[opts.keepOpen ? Math.min(slot, all.length - 1) : 0]?.id ?? null));
     setStale(false);
     setStatus("idle");
     if (!opts.keepOpen) setQueryOpen(false);
@@ -288,12 +296,13 @@ export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
 
 /** A link that reopens this query, the selected loop and its edits (D91). */
 export function shareLink(): string {
-  const i = Math.max(0, routes().findIndex((r) => r.id === selectedId()));
-  const r = routes()[i];
+  const r = selected();
+  // A copy is shared as its original's slot plus the copy's points; opening the link recreates the copy.
+  const i = Math.max(0, routes().findIndex((x) => x.id === (r?.copyOf ?? r?.id)));
   const hash = encodeShare({
     start: start(), km: distanceKm(), climb: climb(), strictness: strictness(),
     weights: weights(), maxSac: maxSac(), zones: [...zones()], checkpoints: [...checkpoints()], loop: i,
-    wps: r && isEdited(r.id) ? r.waypoints : null,
+    wps: r?.copyOf ? r.waypoints : null,
   });
   return `${location.origin}${location.pathname}#${hash}`;
 }
