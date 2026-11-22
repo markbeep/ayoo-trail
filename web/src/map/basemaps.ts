@@ -75,7 +75,6 @@ export const TRAILS_SOURCE: RasterSource = {
 
 /** Planned overlays, listed so the panel already has its future shape. Not selectable. */
 export const LATER_OVERLAYS = [
-  { id: "snow", label: "Snow depth" },
   { id: "popular", label: "Popular trails" },
   { id: "steepness", label: "Path steepness" },
   { id: "view", label: "360° view" },

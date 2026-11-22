@@ -20,7 +20,7 @@ drag one point to adjust it, export the GPX.
 - Trustworthy: official-trail share shown per route, weak-data segments
   penalized and visible.
 - Quick path minimal, power controls available but collapsed.
-- Layers are additive: adding viewshed, snow or POIs later must not reshape the
+- Layers are additive: adding viewshed or POIs later must not reshape the
   core.
 - One image, one compose file; runs locally and deploys to Kubernetes.
 
@@ -32,7 +32,7 @@ drag one point to adjust it, export the GPX.
 - Live public-transport routing at request time.
 - Mobile app, PWA/offline support, turn-by-turn navigation (D23).
 - Coverage outside Switzerland, including cross-border loops.
-- Viewshed, snow, sun/shade, POIs, webcams, photos, elevation-profile matching
+- Viewshed, sun/shade, POIs, webcams, photos, elevation-profile matching
   in the first usable version.
 
 ## 4. Anti-goals
@@ -109,7 +109,7 @@ Only the import adapters know about a country. An import is driven by a
 `RegionPack`:
 
 - boundary (bbox or polygon), OSM extract, DEM source;
-- optional providers: official trails, land cover, settlements, snow, POIs.
+- optional providers: official trails, land cover, settlements, POIs.
 
 Providers are traits (`OfficialTrails`, `LandCover`, ...). A missing provider
 leaves its factor neutral and the UI hides the corresponding claim (outside

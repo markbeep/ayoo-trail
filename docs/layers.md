@@ -81,18 +81,25 @@ License conclusions checked on this date:
 
 ## Viewshed and horizon profiles
 
-- **Source**: DHM25 only.
-- **Key idea**: precompute a **horizon profile per grid cell** — the elevation
-  angle of the skyline in N azimuth bins (32–64). One raycast per cell per bin.
-- **Derivation**: 100–200 m grid over Switzerland (~4.1M cells at 100 m, ~1M at
-  200 m). Store as `u8` degrees per bin. Viewshed score = mean horizon distance
-  or mean elevation angle; ridges and peaks stand out, valleys are dark.
+- **Source**: swissALTI3D (already imported for elevation), resampled.
+- **Key idea**: precompute a **horizon per grid cell**: in each of 32 azimuths,
+  march a ray (earth curvature and refraction included, capped at 60 km) and
+  keep the distance to the skyline, the point of maximum elevation angle.
+- **Derivation**: 100 m LV95 grid over the region. Viewshed score = mean of the
+  log-scaled skyline distances, stored as one `u8` per cell in `data/view.bin`
+  ("how far you see", D100). Ridges and peaks stand out, valleys are dark.
+- **Use (D100)**: a map overlay (`/api/tiles/view/{z}/{x}/{y}.png`, red =
+  excellent), and a cost term `view` (default weight 0) sampled per edge at
+  server start, so no graph re-import. With the weight up, vias also lean to
+  high-view nodes.
+- **Caveat**: no DEM outside CH, so rays leaving the country read as open.
+  This is a shortcut until regions grow.
 - **Reuse**: the same profile answers sun/shade for any date and time by
   comparing the sun altitude with the horizon angle at the sun azimuth. One
   precompute, two layers.
 - **Cost**: the heaviest offline job in the project; estimate hours on a
   multicore laptop at 100 m, minutes at 200 m. Mark as estimate.
-- **Status**: later (overlay and score).
+- **Status**: in progress (overlay and score).
 
 ## Sun and shade
 
@@ -103,16 +110,6 @@ License conclusions checked on this date:
   for the requested time.
 - **Status**: later.
 
-## Snow
-
-- **Source**: SLF station measurements (CC BY 4.0), historical and live.
-- **Derivation**: station snow depth + elevation/aspect correction, interpolated
-  to the DEM. Present as an estimate with a wide band, never as fact.
-- **Caveat**: station density is sparse in some ranges and interpolation across
-  ridges is unreliable. Sentinel-2 snow cover is the better source but adds a
-  satellite pipeline and cloud handling.
-- **Status**: later, and explicitly an estimate.
-
 ## POIs
 
 - **Source**: OSM nodes (`amenity=drinking_water|toilets|supermarket|...`).
@@ -122,11 +119,17 @@ License conclusions checked on this date:
 
 ## Webcams and photos
 
-- **Source**: unclear. Public webcam networks (cantonal, Roundshot) have
-  varying APIs and terms; hikr.org photos are user-uploaded with mixed
-  licenses; SchweizMobil has photos of official routes.
-- **Derivation**: link-out rather than embedding unless licensing is clear.
-- **Status**: later; needs its own license investigation.
+- **Webcams (D102)**: Windy Webcams API v3, free tier, key in
+  `WINDY_API_KEY`. The server proxies `GET /api/webcams?bbox=` (the key stays
+  private) and caches for 5 minutes, because free image URLs expire after about
+  10 minutes. On the map: pins at zoom ≥ 10. A pin opens a popup with the preview
+  image (not stretched) and a link to the Windy page, with the "Webcams
+  provided by windy.com" credit.
+- **SchweizMobil routes (D103)**: geo.admin.ch WMTS `ch.astra.wanderland`
+  (hiking only). A click runs geo.admin identify (`chmobil_route_number`,
+  `chmobil_title`) and lists the routes, each linking to its schweizmobil.ch page.
+- **Hikr**: no API; deferred (Q27).
+- **Status**: in progress.
 
 ## Elevation-profile matching
 
@@ -144,5 +147,4 @@ License conclusions checked on this date:
 | Official trail join | graph attribute | yearly | minutes |
 | Land cover raster | PMTiles + graph attribute | yearly | minutes |
 | Reachability from home | station table + raster | on demand | minutes |
-| Horizon profiles | `horizon.bin` / PMTiles | once, DEM changes | hours (estimate) |
-| Snow | raster | daily/seasonal | minutes |
+| Horizon / view score | `view.bin` | once, DEM changes | minutes–hours (estimate) |

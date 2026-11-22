@@ -46,8 +46,9 @@ official-trail share honestly instead of hiding weak data.
 - Default base map is an own-styled OSM vector map (Europe-wide, colors follow
   the UI); swisstopo Topo and Satellite are alternates (D40).
 - Everything else is a toggleable overlay on any base map: relief, marked
-  trails, forest now; snow, popular trails, path steepness, 360° view and
-  sun/shade later (D41, D42).
+  trails, forest now; 360° view, webcams and SchweizMobil routes next
+  (D100–D103); popular trails, path steepness and sun/shade later (D41, D42).
+  Snow is dropped (D99).
 - Output goes to GPX, then to a sports watch (e.g. Coros).
 
 ## Capabilities and Constraints
