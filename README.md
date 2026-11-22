@@ -1,5 +1,9 @@
 # ayoo
 
+> [!NOTE]
+> This project is very much in its prototyping stage: it's a place to test ideas.
+> Expect features, data formats and behaviour to change without notice.
+
 Generates trail-running loops in Switzerland based on multiple adjustable metrics.
 Give it a start, a distance and what you care about; it returns a few distinct loops,
 scored against your settings, that you can drag-edit, share as a link and download as GPX.
