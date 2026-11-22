@@ -73,13 +73,11 @@ export function App() {
     open();
     window.addEventListener("hashchange", open);
     attachSheetDrag(handle, panel);
-    // Typing on a phone (D105): open the sheet fully (it sits above the keyboard, capped to what's
-    // visible) and bring the field into view once the keyboard has settled.
+    // Typing on a phone (D105): open the sheet fully so the field sits near the top of the screen,
+    // above the keyboard. Android shrinks the page for the keyboard (index.html interactive-widget);
+    // iOS doesn't, but a field near the top stays visible without Safari scrolling the page.
     const onFocus = (e: FocusEvent) => {
-      const el = e.target as Element;
-      if (!untrack(narrow) || !el.matches(TYPING)) return;
-      setSnap("full");
-      setTimeout(() => el.scrollIntoView({ block: "nearest" }), 400);
+      if (untrack(narrow) && (e.target as Element).matches(TYPING)) setSnap("full");
     };
     panel.addEventListener("focusin", onFocus);
     return () => {
