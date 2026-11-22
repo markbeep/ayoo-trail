@@ -332,3 +332,21 @@ fn soft_prefer_areas_pull_loops_in() {
         "before {before:.0} m, after {after:.0} m"
     );
 }
+
+#[test]
+fn overlap_and_stem_come_from_the_profile() {
+    let g = grid(21, 200.0);
+    let mut r = req(at(2000.0, 2000.0), 6000.0);
+    r.profile.max_overlap = 0.0;
+    r.profile.stem_m = 0.0;
+    let routes = generate(&g, &r).unwrap();
+    let cov: Vec<_> = routes.iter().map(|x| coverage(&g, x)).collect();
+    for i in 0..routes.len() {
+        for j in (i + 1)..routes.len() {
+            assert!(
+                !cov[i].keys().any(|e| cov[j].contains_key(e)),
+                "routes {i} and {j} share an edge"
+            );
+        }
+    }
+}

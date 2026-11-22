@@ -20,14 +20,11 @@ const HEADINGS: usize = 12;
 /// Network distance over straight-line distance on trails.
 const DETOUR: f64 = 1.3;
 const VIA_SNAP_M: f32 = 500.0;
-/// Edges this close to the start may be reused without penalty (the access stem).
-const STEM_M: f64 = 500.0;
 const TOLERANCE: f64 = 0.10;
 /// Via points may move this share of the seed radius to reach cheaper terrain (D85).
 const VIA_SEARCH: f64 = 0.5;
 /// Weight of a loop's preference (0–1) in its rank, against distance and climb error.
 const PREFERENCE_RANK: f64 = 1.0;
-const MAX_OVERLAP: f64 = 0.5;
 /// With hard avoids, a closest loop further off the distance than this is no loop (D97).
 const WALLED_ERR: f64 = 0.5;
 const ATTEMPTS: usize = 8;
@@ -173,7 +170,7 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
                 .iter()
                 .filter_map(|(e, a)| kc.get(e).map(|b| a.min(*b)))
                 .sum();
-            shared / c.route.distance_m.min(k.route.distance_m).max(1.0) <= MAX_OVERLAP
+            shared / c.route.distance_m.min(k.route.distance_m).max(1.0) <= p.max_overlap
         });
         if distinct {
             kept.push((c, cov));
@@ -366,8 +363,8 @@ fn route_loop(
         .chain(std::iter::once(start))
         .collect();
     let away_from_start = |e: u32| {
-        haversine_m(g.node(g.edge_from(e)), start.pos) > STEM_M
-            || haversine_m(g.node(g.edge_to(e)), start.pos) > STEM_M
+        haversine_m(g.node(g.edge_from(e)), start.pos) > p.stem_m
+            || haversine_m(g.node(g.edge_to(e)), start.pos) > p.stem_m
     };
     let mut visited = Visited::new(g.edge_count());
     let leg = |a, b, v: &Visited| region.leg(p, a, b, v).or_else(|| route(g, p, a, b, v));

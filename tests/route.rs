@@ -461,3 +461,22 @@ fn backtracks_into_a_dead_end_are_dropped() {
     );
     assert_eq!(t.steps.len(), 2);
 }
+
+#[test]
+fn repeat_penalty_comes_from_the_profile_and_stays_exact_below_one() {
+    let g = two_path_graph();
+    let start = snap(&g, at(100.0, 0.0));
+    let end = snap(&g, at(900.0, 0.0));
+    let mut visited = empty(&g);
+    visited.insert(DETOUR_EDGE);
+    let with = |repeat: f64| Profile {
+        repeat,
+        ..Profile::default()
+    };
+    // ×1: reuse is free, so the detour wins as with nothing visited.
+    let r = route(&g, &with(1.0), start, end, &visited).unwrap();
+    assert!((r.cost - (200.0 * 2.0 + 1150.0)).abs() < 1.0, "{}", r.cost);
+    // ×0.01: the visited detour is nearly free; A* must still find the exact optimum.
+    let r = route(&g, &with(0.01), start, end, &visited).unwrap();
+    assert!((r.cost - (200.0 * 2.0 + 11.5)).abs() < 0.5, "{}", r.cost);
+}

@@ -145,6 +145,15 @@ pub struct Profile {
     pub weights: Weights,
     pub max_sac: u8,
     pub exclude: Vec<Exclusion>,
+    /// Cost multiplier on edges the loop already used (D109).
+    pub repeat: f64,
+    /// Soft avoid and soft prefer area multipliers (D97, D109).
+    pub avoid_factor: f64,
+    pub prefer_factor: f64,
+    /// Edges this close to the start may be reused without penalty (the access stem).
+    pub stem_m: f64,
+    /// Generated loops sharing more than this share of the shorter one are dropped.
+    pub max_overlap: f64,
 }
 
 impl Default for Profile {
@@ -153,6 +162,11 @@ impl Default for Profile {
             weights: Weights::default(),
             max_sac: 3,
             exclude: Vec::new(),
+            repeat: crate::route::REPEAT_PENALTY,
+            avoid_factor: EXCLUSION_PENALTY,
+            prefer_factor: PREFER_FACTOR,
+            stem_m: 500.0,
+            max_overlap: 0.5,
         }
     }
 }
@@ -165,6 +179,8 @@ pub enum ProfileError {
     WeightOutOfRange,
     #[error("max_sac must be between 1 and 6")]
     MaxSacOutOfRange,
+    #[error("repeat 0.01-1000, avoid_factor 1-1000, prefer_factor 0.001-1, stem_m 0-5000, max_overlap 0-1")]
+    PenaltyOutOfRange,
     #[error("exclusion needs finite lat/lon and a radius in (0, 50000] m")]
     BadExclusion,
 }
@@ -194,6 +210,15 @@ impl Profile {
             || !ok(w.climb_pressure, 0.0..=1.0)
         {
             return Err(ProfileError::WeightOutOfRange);
+        }
+        let in_range = |v: f64, lo: f64, hi: f64| v.is_finite() && (lo..=hi).contains(&v);
+        if !(in_range(self.repeat, 0.01, 1000.0)
+            && in_range(self.avoid_factor, 1.0, 1000.0)
+            && in_range(self.prefer_factor, 0.001, 1.0)
+            && in_range(self.stem_m, 0.0, 5000.0)
+            && in_range(self.max_overlap, 0.0, 1.0))
+        {
+            return Err(ProfileError::PenaltyOutOfRange);
         }
         if !(1..=6).contains(&self.max_sac) {
             return Err(ProfileError::MaxSacOutOfRange);
@@ -225,7 +250,8 @@ impl Profile {
         let prefer = self.exclude.iter().any(|x| x.mode == ExclusionMode::Prefer);
         (1.0 - 1e-6)
             * term_minima(&self.weights).product()
-            * if prefer { PREFER_FACTOR } else { 1.0 }
+            * if prefer { self.prefer_factor } else { 1.0 }
+            * self.repeat.min(1.0)
     }
 }
 
@@ -479,12 +505,12 @@ fn zone_factor(g: &Graph, e: u32, p: &Profile) -> f64 {
         return 1.0;
     }
     let pen = if penalized(g, e, p) {
-        EXCLUSION_PENALTY
+        p.avoid_factor
     } else {
         1.0
     };
     pen * if preferred(g, e, p) {
-        PREFER_FACTOR
+        p.prefer_factor
     } else {
         1.0
     }

@@ -14,6 +14,7 @@ use crate::geodesy::{gain_loss, haversine_m, polyline_length_m, LocalProjection}
 use crate::graph::{flags, Direction, Graph, LatLon, FLAT_BAND, GRADE_BANDS};
 use crate::snap::Snap;
 
+/// Default for `Profile::repeat`.
 pub const REPEAT_PENALTY: f64 = 5.0;
 
 /// One traversed piece of an edge. from_t < to_t = forward along the edge, from_t > to_t = backward.
@@ -97,7 +98,7 @@ fn key(x: f64) -> u64 {
     x.max(0.0).to_bits()
 }
 
-/// Forward A* between two snaps. Edges in `visited` cost ×REPEAT_PENALTY. None if unreachable
+/// Forward A* between two snaps. Edges in `visited` cost ×`p.repeat`. None if unreachable
 /// or if a snapped edge is not traversable under the profile.
 pub fn route(g: &Graph, p: &Profile, start: Snap, end: Snap, visited: &Visited) -> Option<Route> {
     let m = g.edge_count() as u32;
@@ -108,11 +109,7 @@ pub fn route(g: &Graph, p: &Profile, start: Snap, end: Snap, visited: &Visited) 
     let table = FactorTable::new(&p.weights);
     let plain = p.exclude.is_empty();
     let full = |e: u32, dir: Direction| {
-        let pen = if visited.contains(e) {
-            REPEAT_PENALTY
-        } else {
-            1.0
-        };
+        let pen = if visited.contains(e) { p.repeat } else { 1.0 };
         if !plain {
             return edge_cost_with(g, e, dir, p, &table).map(|c| c.cost * pen);
         }

@@ -112,6 +112,7 @@ fn check_profile(profile: &Profile) -> Result<(), ApiError> {
             ProfileError::WeightOutOfRange => "weight out of range",
             ProfileError::MaxSacOutOfRange => "max_sac out of range",
             ProfileError::BadExclusion => "bad exclusion",
+            ProfileError::PenaltyOutOfRange => "penalty out of range",
         })
     })
 }

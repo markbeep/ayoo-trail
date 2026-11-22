@@ -369,6 +369,7 @@ fn min_cost_per_m_is_a_lower_bound() {
             weights,
             max_sac: 6,
             exclude: vec![],
+            ..Profile::default()
         };
         let lb = p.min_cost_per_m();
         assert!(lb > 0.0);
@@ -643,4 +644,79 @@ fn min_cost_per_m_stays_admissible_for_negative_weights() {
             }
         }
     }
+}
+
+#[test]
+fn penalties_default_to_todays_constants() {
+    let p = Profile::default();
+    assert_eq!(
+        (
+            p.repeat,
+            p.avoid_factor,
+            p.prefer_factor,
+            p.stem_m,
+            p.max_overlap
+        ),
+        (5.0, 5.0, 0.5, 500.0, 0.5)
+    );
+    assert_eq!(serde_json::from_str::<Profile>("{}").unwrap(), p);
+}
+
+#[test]
+fn penalties_validate() {
+    let ok = |p: Profile| p.validate();
+    let d = Profile::default;
+    let bad = Err(ProfileError::PenaltyOutOfRange);
+    for (lo, hi, set) in [
+        (
+            0.01,
+            1000.0,
+            (|p: &mut Profile, v| p.repeat = v) as fn(&mut Profile, f64),
+        ),
+        (1.0, 1000.0, |p, v| p.avoid_factor = v),
+        (0.001, 1.0, |p, v| p.prefer_factor = v),
+        (0.0, 5000.0, |p, v| p.stem_m = v),
+        (0.0, 1.0, |p, v| p.max_overlap = v),
+    ] {
+        for (v, good) in [
+            (lo, true),
+            (hi, true),
+            (lo * 0.5 - 0.01, false),
+            (hi * 1.01, false),
+            (f64::NAN, false),
+        ] {
+            let mut p = d();
+            set(&mut p, v);
+            assert_eq!(ok(p.clone()).is_ok(), good, "{v} in {lo}..{hi}");
+            if !good {
+                assert_eq!(ok(p), bad);
+            }
+        }
+    }
+}
+
+#[test]
+fn area_factors_come_from_the_profile() {
+    let g = one_edge(1000.0, gravel());
+    let base = edge_cost(&g, 0, F, &Profile::default()).unwrap();
+    let area = |mode| Exclusion {
+        lat: 46.0,
+        lon: 7.0,
+        radius_m: 100.0,
+        mode,
+    };
+    let p = Profile {
+        avoid_factor: 20.0,
+        exclude: vec![area(ExclusionMode::Penalize)],
+        ..Profile::default()
+    };
+    assert!((edge_cost(&g, 0, F, &p).unwrap().cost - base.cost * 20.0).abs() < 1e-6);
+    let p = Profile {
+        prefer_factor: 0.1,
+        exclude: vec![area(ExclusionMode::Prefer)],
+        ..Profile::default()
+    };
+    let c = edge_cost(&g, 0, F, &p).unwrap();
+    assert!((c.cost - base.cost * 0.1).abs() < 1e-6);
+    assert!(c.per_m >= p.min_cost_per_m());
 }

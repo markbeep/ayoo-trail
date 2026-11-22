@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::cost::{climb_discount, edge_cost_split, node_view_factor, FactorTable, Profile};
 use crate::geodesy::LocalProjection;
 use crate::graph::{Direction, Graph, LatLon};
-use crate::route::{assemble, Route, RouteStep, Visited, REPEAT_PENALTY};
+use crate::route::{assemble, Route, RouteStep, Visited};
 use crate::snap::Snap;
 
 /// One directed hop out of a region node: the far node, the edge, and both directions'
@@ -375,7 +375,7 @@ impl<'g> Region<'g> {
         let (s_c, e_c) = (self.edge_costs(from.edge)?, self.edge_costs(end.edge)?);
         let pen = |e: u32| {
             if visited.contains(e) {
-                REPEAT_PENALTY
+                p.repeat
             } else {
                 1.0
             }
@@ -431,14 +431,16 @@ impl<'g> Region<'g> {
         }
 
         let h_per_m = p.min_cost_per_m() * 0.99;
+        let landmark = p.repeat.min(1.0);
         let goal = self.proj.project(end.pos);
         let h = |v: u32| {
             let q = self.xy[v as usize];
             let line = (q[0] - goal[0]).hypot(q[1] - goal[1]) * h_per_m;
             // The start as landmark: d(v, end) ≥ d(start, end) − d(start, v) and
-            // ≥ d(v, start) − d(end, start). Penalties only raise costs, so both hold.
-            line.max(f_end - tr.from[v as usize])
-                .max(tr.to[v as usize] - t_end)
+            // ≥ d(v, start) − d(end, start). Penalties only raise costs, so both hold; a repeat
+            // penalty below 1 lowers them by at most that factor (D109).
+            line.max((f_end - tr.from[v as usize]) * landmark)
+                .max((tr.to[v as usize] - t_end) * landmark)
         };
 
         SCRATCH.with_borrow_mut(|s| {
