@@ -3,7 +3,6 @@ import { MapPin, Search, LoaderCircle } from "@lucide/solid";
 import {
   DISTANCE_PRESETS_KM, climbLabel, start, distanceKm, editQuery, findRoutes, queryOpen, setDistanceKm, status, errorMsg,
 } from "../state";
-import { ClimbControl } from "./Controls";
 import { StartSearch, startLabel } from "./StartSearch";
 
 export function QueryCard() {
@@ -35,10 +34,7 @@ export function QueryCard() {
           </label>
         </div>
 
-        <h2 class="q-title">How hilly?</h2>
-        <ClimbControl />
-
-        <button class="primary" onClick={() => void findRoutes()} disabled={status() === "loading" || !start()}>
+        <button class="primary" onClick={() => void findRoutes()} disabled={status() === "loading" || !start()} aria-busy={`${status() === "loading"}`}>
           <Show when={status() === "loading"} fallback={<><Search size={18} />Find loops</>}>
             <LoaderCircle size={18} class="spin" />Finding loops…
           </Show>

@@ -5,6 +5,8 @@ export interface Health {
   status: string;
   graph_date: string | null;
   bbox: { min_lat: number; min_lon: number; max_lat: number; max_lon: number } | null;
+  /** The server has 360° view scores (D100). */
+  view: boolean;
 }
 
 export class ApiError extends Error {}

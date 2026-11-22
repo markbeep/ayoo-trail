@@ -3,6 +3,7 @@ import { Layers, Plus, Minus, X, LocateFixed, LoaderCircle } from "@lucide/solid
 import { MapView, mapController } from "./components/MapView";
 import { DevRouteCard } from "./components/DevRouteCard";
 import { DEV_ROUTE } from "./dev/routeDebug";
+import { SettingsCard } from "./components/SettingsCard";
 import { QueryCard } from "./components/QueryCard";
 import { RouteCard } from "./components/RouteCard";
 import { RouteTiles } from "./components/RouteTiles";
@@ -132,6 +133,7 @@ export function App() {
           <Show when={!narrow()}><Brand /></Show>
           <Show when={DEV_ROUTE}><DevRouteCard /></Show>
           <QueryCard />
+          <SettingsCard />
           <Show when={selected()}>{(r) => (
             <>
               <Show when={narrow()}><RouteTiles routes={routes()} /></Show>

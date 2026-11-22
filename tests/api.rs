@@ -111,6 +111,7 @@ async fn health_reports_graph_date_and_bbox() {
     assert_eq!(v["status"], "ok");
     assert_eq!(v["graph_date"], "2023-11-14");
     assert!((v["bbox"]["min_lon"].as_f64().unwrap() - 7.4).abs() < 1e-6);
+    assert_eq!(v["view"], false, "the test graph has no view scores");
     assert!((v["bbox"]["max_lat"].as_f64().unwrap() - 46.95).abs() < 1e-6);
 }
 

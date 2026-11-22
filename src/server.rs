@@ -68,6 +68,7 @@ async fn health(State(g): State<Shared>) -> Json<Value> {
         "status": "ok",
         "graph_date": g.as_ref().map(|g| utc_date(g.osm_date())),
         "bbox": g.as_ref().map(|g| g.bbox()),
+        "view": g.as_ref().is_some_and(|g| g.has_view()),
     }))
 }
 

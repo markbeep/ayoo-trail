@@ -22,31 +22,17 @@ export const DISTANCE_PRESETS_KM = [10, 15, 21] as const;
 
 export const DEFAULT_WEIGHTS: Weights = { slope: 1, uphill: 0, downhill: -1, surface: 1, tech: 1, technical: -1, official: 1, forest: 1, urban: 1, traffic: 1, view: 0 };
 
-/** Slider position 0–1 ↔ weight exponent 0–4, so the default (1) sits mid-track (D51). */
-export const MAX_WEIGHT = 4;
-export const weightAt = (t: number) => MAX_WEIGHT * t * t;
-export const positionOf = (w: number) => Math.sqrt(w / MAX_WEIGHT);
-/** Plain-language strength for a weight. */
-export function strength(w: number) {
-  if (w === 0) return "Off";
-  if (w < 0.5) return "A little";
-  if (w < 1.6) return "Normal";
-  if (w < 3) return "A lot";
-  return "Above all";
-}
-
-/** How each score term maps to a weight, and how it's asked in plain language. Wording under Q23.
- * Elevation has no weight: its Adjust panel holds the climb controls (D63). */
-export const FACTORS: Record<BreakdownKey, { label: string; question: string; weight?: NumericWeight }> = {
-  climb: { label: "Elevation", question: "How much climb do you want, and how closely should loops match it?" },
-  official: { label: "Marked trails", weight: "official", question: "How much should marked hiking trails count?" },
-  surface: { label: "Surface", weight: "surface", question: "How much should asphalt and paved paths be avoided?" },
-  slope: { label: "Gradient", weight: "slope", question: "How steep do you like your climbs and descents? This is about steepness, not how much you climb." },
-  tech: { label: "Technical terrain", weight: "tech", question: "How hard may trails get, and do you want technical ones?" },
-  forest: { label: "Forest", weight: "forest", question: "How much do you want to run through forest?" },
-  urban: { label: "Away from towns", weight: "urban", question: "How much should villages and towns be avoided?" },
-  traffic: { label: "Quiet roads", weight: "traffic", question: "How much should busy roads be avoided?" },
-  view: { label: "Views", weight: "view", question: "How much do you want wide views from ridges and peaks?" },
+/** Score bar labels. */
+export const FACTORS: Record<BreakdownKey, { label: string }> = {
+  climb: { label: "Elevation" },
+  official: { label: "Marked trails" },
+  surface: { label: "Surface" },
+  slope: { label: "Gradient" },
+  tech: { label: "Technical terrain" },
+  forest: { label: "Forest" },
+  urban: { label: "Away from towns" },
+  traffic: { label: "Quiet roads" },
+  view: { label: "Views" },
 };
 
 /** Climb: a preset follows the distance, meters are fixed, "max" asks for as much as possible (D52). */
