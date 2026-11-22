@@ -1,0 +1,735 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-22T19:22:58+00:00",
+  "title": "Design System: ayoo",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#fbfbf8",
+        "tonalRamp": [
+          "#4b4b4a",
+          "#7e7e7c",
+          "#b0b0ae",
+          "#e2e2df",
+          "#fcfcf9",
+          "#fdfdfb",
+          "#fefefd",
+          "#fffffe"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Ink",
+        "canonical": "#141414",
+        "tonalRamp": [
+          "#060606",
+          "#0a0a0a",
+          "#0e0e0e",
+          "#121212",
+          "#434343",
+          "#7e7e7e",
+          "#b8b8b8",
+          "#e8e8e8"
+        ]
+      },
+      "well": {
+        "role": "neutral",
+        "displayName": "Stone Well",
+        "canonical": "#efefea",
+        "tonalRamp": [
+          "#484846",
+          "#787875",
+          "#a7a7a4",
+          "#d7d7d3",
+          "#f2f2ee",
+          "#f6f6f3",
+          "#fafaf9",
+          "#fdfdfd"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "#e6e5df",
+        "tonalRamp": [
+          "#454543",
+          "#737270",
+          "#a1a09c",
+          "#cfcec9",
+          "#ebeae5",
+          "#f1f1ed",
+          "#f8f7f5",
+          "#fcfcfc"
+        ]
+      },
+      "ground-deep": {
+        "role": "neutral",
+        "displayName": "Deep Ground",
+        "canonical": "#e4e4dd",
+        "tonalRamp": [
+          "#444442",
+          "#72726e",
+          "#a0a09b",
+          "#cdcdc7",
+          "#e9e9e4",
+          "#f0f0ec",
+          "#f7f7f5",
+          "#fcfcfc"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "#5b5b56",
+        "tonalRamp": [
+          "#1b1b1a",
+          "#2e2e2b",
+          "#40403c",
+          "#52524d",
+          "#7c7c78",
+          "#a5a5a2",
+          "#cececc",
+          "#efefee"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#dcdcd6",
+        "tonalRamp": [
+          "#424240",
+          "#6e6e6b",
+          "#9a9a96",
+          "#c6c6c1",
+          "#e3e3de",
+          "#ecece8",
+          "#f4f4f3",
+          "#fcfcfb"
+        ]
+      },
+      "signal": {
+        "role": "primary",
+        "displayName": "Signal Red",
+        "canonical": "#d5281b",
+        "tonalRamp": [
+          "#400c08",
+          "#6a140e",
+          "#951c13",
+          "#c02418",
+          "#dd5349",
+          "#e88982",
+          "#f2bebb",
+          "#fbeae8"
+        ]
+      },
+      "signal-deep": {
+        "role": "primary",
+        "displayName": "Deep Signal",
+        "canonical": "#a91d12",
+        "tonalRamp": [
+          "#330905",
+          "#540e09",
+          "#76140d",
+          "#981a10",
+          "#ba4a41",
+          "#d0837d",
+          "#e5bbb8",
+          "#f6e8e7"
+        ]
+      },
+      "avoid": {
+        "role": "semantic",
+        "displayName": "Avoid Red",
+        "canonical": "#a3231a",
+        "tonalRamp": [
+          "#310a08",
+          "#52120d",
+          "#721812",
+          "#932017",
+          "#b54f48",
+          "#cc8681",
+          "#e3bdba",
+          "#f6e9e8"
+        ]
+      },
+      "prefer": {
+        "role": "semantic",
+        "displayName": "Prefer Green",
+        "canonical": "#1f6b3a",
+        "tonalRamp": [
+          "#092011",
+          "#10361d",
+          "#164b29",
+          "#1c6034",
+          "#4c8961",
+          "#84ae93",
+          "#bcd3c4",
+          "#e9f0eb"
+        ]
+      },
+      "warn": {
+        "role": "semantic",
+        "displayName": "Warn Amber",
+        "canonical": "#8a4b0c",
+        "tonalRamp": [
+          "#291604",
+          "#452606",
+          "#613408",
+          "#7c440b",
+          "#a16f3d",
+          "#bf9c79",
+          "#dcc9b6",
+          "#f3ede7"
+        ]
+      },
+      "warn-wash": {
+        "role": "semantic",
+        "displayName": "Warn Wash",
+        "canonical": "#f7ecdd",
+        "tonalRamp": [
+          "#4a4742",
+          "#7c766e",
+          "#ada59b",
+          "#ded4c7",
+          "#f9f0e4",
+          "#fbf5ec",
+          "#fdf9f5",
+          "#fefdfc"
+        ]
+      },
+      "route-active": {
+        "role": "semantic",
+        "displayName": "Active Route",
+        "canonical": "#d5281b",
+        "tonalRamp": [
+          "#400c08",
+          "#6a140e",
+          "#951c13",
+          "#c02418",
+          "#dd5349",
+          "#e88982",
+          "#f2bebb",
+          "#fbeae8"
+        ]
+      },
+      "route-candidate": {
+        "role": "semantic",
+        "displayName": "Route Candidate",
+        "canonical": "#5c5c58",
+        "tonalRamp": [
+          "#1c1c1a",
+          "#2e2e2c",
+          "#40403e",
+          "#53534f",
+          "#7d7d79",
+          "#a5a5a3",
+          "#cececd",
+          "#efefee"
+        ]
+      },
+      "route-casing": {
+        "role": "semantic",
+        "displayName": "Route Casing",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#4c4c4c",
+          "#808080",
+          "#b2b2b2",
+          "#e6e6e6",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "here": {
+        "role": "semantic",
+        "displayName": "Location Blue",
+        "canonical": "#1a8cff",
+        "tonalRamp": [
+          "#082a4c",
+          "#0d4680",
+          "#1262b2",
+          "#177ee6",
+          "#48a3ff",
+          "#81c0ff",
+          "#badcff",
+          "#e8f4ff"
+        ]
+      },
+      "cost-1": {
+        "role": "map",
+        "displayName": "Cost 1",
+        "canonical": "#2f8a57",
+        "tonalRamp": [
+          "#0e291a",
+          "#18452c",
+          "#21613d",
+          "#2a7c4e",
+          "#59a179",
+          "#8dbfa3",
+          "#c1dccd",
+          "#eaf3ee"
+        ]
+      },
+      "cost-2": {
+        "role": "map",
+        "displayName": "Cost 2",
+        "canonical": "#9bb53a",
+        "tonalRamp": [
+          "#2e3611",
+          "#4e5a1d",
+          "#6c7f29",
+          "#8ca334",
+          "#afc461",
+          "#c8d693",
+          "#e1e9c4",
+          "#f5f8eb"
+        ]
+      },
+      "cost-3": {
+        "role": "map",
+        "displayName": "Cost 3",
+        "canonical": "#e0a92a",
+        "tonalRamp": [
+          "#43330d",
+          "#705415",
+          "#9d761d",
+          "#ca9826",
+          "#e6ba55",
+          "#eed08a",
+          "#f6e5bf",
+          "#fcf6ea"
+        ]
+      },
+      "cost-4": {
+        "role": "map",
+        "displayName": "Cost 4",
+        "canonical": "#d9661f",
+        "tonalRamp": [
+          "#411f09",
+          "#6c3310",
+          "#984716",
+          "#c35c1c",
+          "#e1854c",
+          "#eaab84",
+          "#f4d1bc",
+          "#fbf0e9"
+        ]
+      },
+      "cost-5": {
+        "role": "map",
+        "displayName": "Cost 5",
+        "canonical": "#b3261e",
+        "tonalRamp": [
+          "#360b09",
+          "#5a130f",
+          "#7d1b15",
+          "#a1221b",
+          "#c2514b",
+          "#d58883",
+          "#e8bebc",
+          "#f7e9e8"
+        ]
+      },
+      "map-land": {
+        "role": "map",
+        "displayName": "Map Land",
+        "canonical": "#f2efe9",
+        "tonalRamp": [
+          "#494846",
+          "#797874",
+          "#a9a7a3",
+          "#dad7d2",
+          "#f5f2ed",
+          "#f8f6f3",
+          "#fbfaf8",
+          "#fefdfd"
+        ]
+      },
+      "map-wood": {
+        "role": "map",
+        "displayName": "Map Wood",
+        "canonical": "#dde4cf",
+        "tonalRamp": [
+          "#42443e",
+          "#6e7268",
+          "#9ba091",
+          "#c7cdba",
+          "#e4e9d9",
+          "#ecf0e5",
+          "#f5f7f1",
+          "#fcfcfa"
+        ]
+      },
+      "map-grass": {
+        "role": "map",
+        "displayName": "Map Grass",
+        "canonical": "#e9ecdc",
+        "tonalRamp": [
+          "#464742",
+          "#74766e",
+          "#a3a59a",
+          "#d2d4c6",
+          "#edf0e3",
+          "#f3f5ec",
+          "#f8f9f4",
+          "#fdfdfc"
+        ]
+      },
+      "map-rock": {
+        "role": "map",
+        "displayName": "Map Rock",
+        "canonical": "#e6e1d8",
+        "tonalRamp": [
+          "#454441",
+          "#73706c",
+          "#a19e97",
+          "#cfcac2",
+          "#ebe7e0",
+          "#f1eeea",
+          "#f8f6f3",
+          "#fcfcfb"
+        ]
+      },
+      "map-ice": {
+        "role": "map",
+        "displayName": "Map Ice",
+        "canonical": "#f5f8fa",
+        "tonalRamp": [
+          "#4a4a4b",
+          "#7a7c7d",
+          "#acaeaf",
+          "#dcdfe1",
+          "#f7f9fb",
+          "#fafbfc",
+          "#fcfdfe",
+          "#fefefe"
+        ]
+      },
+      "map-water": {
+        "role": "map",
+        "displayName": "Map Water",
+        "canonical": "#bfd4df",
+        "tonalRamp": [
+          "#394043",
+          "#606a70",
+          "#86949c",
+          "#acbfc9",
+          "#ccdde5",
+          "#dce7ed",
+          "#ecf2f5",
+          "#f9fbfc"
+        ]
+      },
+      "map-road": {
+        "role": "map",
+        "displayName": "Map Road",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#4c4c4c",
+          "#808080",
+          "#b2b2b2",
+          "#e6e6e6",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "map-road-casing": {
+        "role": "map",
+        "displayName": "Map Road Casing",
+        "canonical": "#d9d1c4",
+        "tonalRamp": [
+          "#413f3b",
+          "#6c6862",
+          "#989289",
+          "#c3bcb0",
+          "#e1dad0",
+          "#eae6df",
+          "#f4f1ed",
+          "#fbfaf9"
+        ]
+      },
+      "map-path": {
+        "role": "map",
+        "displayName": "Map Path",
+        "canonical": "#8c7158",
+        "tonalRamp": [
+          "#2a221a",
+          "#46382c",
+          "#624f3e",
+          "#7e664f",
+          "#a38d79",
+          "#c0b1a3",
+          "#dcd4cd",
+          "#f4f1ee"
+        ]
+      },
+      "map-label": {
+        "role": "map",
+        "displayName": "Map Label",
+        "canonical": "#4d4652",
+        "tonalRamp": [
+          "#171519",
+          "#262329",
+          "#363139",
+          "#453f4a",
+          "#716b75",
+          "#9d99a0",
+          "#cac8cb",
+          "#edecee"
+        ]
+      },
+      "map-halo": {
+        "role": "map",
+        "displayName": "Map Halo",
+        "canonical": "#f2efe9",
+        "tonalRamp": [
+          "#494846",
+          "#797874",
+          "#a9a7a3",
+          "#dad7d2",
+          "#f5f2ed",
+          "#f8f6f3",
+          "#fbfaf8",
+          "#fefdfd"
+        ]
+      },
+      "map-shade": {
+        "role": "map",
+        "displayName": "Map Shade",
+        "canonical": "#3b342f",
+        "tonalRamp": [
+          "#12100e",
+          "#1e1a18",
+          "#292421",
+          "#352f2a",
+          "#625d59",
+          "#938f8d",
+          "#c4c2c1",
+          "#ebebea"
+        ]
+      },
+      "map-forest": {
+        "role": "map",
+        "displayName": "Map Forest",
+        "canonical": "#5f8a4c",
+        "tonalRamp": [
+          "#1c2917",
+          "#304526",
+          "#426135",
+          "#567c44",
+          "#7fa170",
+          "#a7bf9d",
+          "#cfdcc9",
+          "#eff3ed"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "Header bar and primary button label."
+      },
+      "figure-lead": {
+        "displayName": "Figure lead",
+        "purpose": "Selected loop's score."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Route card loop name."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section heads."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base text, tabular figures on."
+      },
+      "row": {
+        "displayName": "Row",
+        "purpose": "Table rows, segments, chips, menu items (600-800)."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Hints, notes, axis labels, muted."
+      },
+      "column-head": {
+        "displayName": "Column head",
+        "purpose": "Archivo Narrow column heads and cell labels, muted."
+      }
+    },
+    "shadows": [
+      {
+        "name": "swatch-inset",
+        "value": "inset 0 0 0 1px rgb(20 20 20 / .15)",
+        "purpose": "Edge on basemap and overlay swatches."
+      },
+      {
+        "name": "swatch-selected",
+        "value": "0 0 0 1px var(--paper), 0 0 0 3px var(--ink)",
+        "purpose": "Selected basemap ring."
+      },
+      {
+        "name": "profile-dot-halo",
+        "value": "0 0 0 2px var(--paper)",
+        "purpose": "Halo around the elevation-profile point."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(.2,.8,.2,1)",
+        "purpose": "Sheet snaps (.38s), bar fills (.5s), switch knob (.15s)."
+      },
+      {
+        "name": "state-fast",
+        "value": ".12s-.15s",
+        "purpose": "Background and border colour changes on hover/selection."
+      },
+      {
+        "name": "refresh-fade",
+        "value": "opacity .2s to .35",
+        "purpose": "Figures about to be replaced by a live refresh (D75)."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "all durations .01ms",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "760px",
+        "purpose": "Panel becomes bottom sheet; max-width query."
+      },
+      {
+        "name": "coarse-pointer",
+        "value": "pointer: coarse",
+        "purpose": "Inputs to 16px so iOS does not zoom."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Find loops: the one signal-red action; unavailable state when no start is set.",
+      "html": "<div style=\"display:grid;gap:8px;width:240px\"><button class=\"ds-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg>Find loops</button><button class=\"ds-primary\" disabled>Find loops</button></div>",
+      "css": ".ds-primary{font-family:Archivo,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:38px;border:0;border-radius:0;background:var(--signal,#d5281b);color:#fff;font-weight:800;font-size:15px;cursor:pointer;transition:background-color .15s}.ds-primary:hover,.ds-primary:active{background:var(--signal-deep,#a91d12)}.ds-primary:focus-visible{outline:2px solid #141414;outline-offset:1px}.ds-primary:disabled{cursor:not-allowed;background:#efefea;color:#5b5b56;border:1px solid #dcdcd6}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "chip",
+      "refersTo": "segment",
+      "description": "Distance presets and climb choice: equal cells in an ink frame, on = inverted.",
+      "html": "<div class=\"ds-seg\"><button>10</button><button class=\"on\">15</button><button>21</button><button>30</button></div>",
+      "css": ".ds-seg{display:flex;width:240px;border:1px solid #141414}.ds-seg>button{font-family:Archivo,system-ui,sans-serif;flex:1;min-height:30px;border:0;background:none;font-weight:700;font-size:13px;color:#141414;cursor:pointer;transition:background-color .12s,color .12s}.ds-seg>*+*{border-left:1px solid #dcdcd6}.ds-seg>button:hover{background:#efefea}.ds-seg>button.on{background:#141414;color:#fbfbf8}.ds-seg>button:focus-visible{outline:2px solid #141414;outline-offset:1px}"
+    },
+    {
+      "name": "Loops Table",
+      "kind": "custom",
+      "refersTo": "loop-row",
+      "description": "Timetable rows with visible column rules; the selected loop is inverted.",
+      "html": "<div class=\"ds-tiles\"><div class=\"ds-head\"><span>Loop</span><span>km</span><span>↑ m</span><span>score</span></div><button class=\"ds-tile on\"><b>Loop A</b><span>15.0</span><span>910</span><b class=\"sc\">93</b></button><button class=\"ds-tile\"><b>Loop B</b><span>14.9</span><span>935</span><b class=\"sc\">92</b></button></div>",
+      "css": ".ds-tiles{display:grid;width:380px;background:#fbfbf8;border-bottom:1px solid #141414;font-variant-numeric:tabular-nums}.ds-head,.ds-tile{font-family:Archivo,system-ui,sans-serif;display:grid;grid-template-columns:1fr 64px 64px 52px;min-height:28px;padding:0 12px;text-align:left;border:0;color:#141414}.ds-head>*,.ds-tile>*{display:flex;align-items:center}.ds-head>*:not(:first-child),.ds-tile>*:not(:first-child){justify-content:flex-end;padding-right:6px;border-left:1px solid #dcdcd6}.ds-head{font-family:'Archivo Narrow',Archivo,system-ui,sans-serif;min-height:22px;font-weight:700;font-size:12px;color:#5b5b56;background:#efefea;border-bottom:1px solid #141414}.ds-tile{background:#fbfbf8;font-size:13px;font-weight:600;border-bottom:1px solid #dcdcd6;cursor:pointer}.ds-tile b{font-weight:800}.ds-tile:hover{background:#efefea}.ds-tile.on{background:#141414;color:#fbfbf8}.ds-tile.on>*:not(:first-child){border-left-color:#3a3a38}.ds-tile.on .sc{color:#ff6a5c}.ds-tile:focus-visible{outline:2px solid #141414;outline-offset:1px}"
+    },
+    {
+      "name": "Settings Row with Scrub Field",
+      "kind": "input",
+      "refersTo": "scrub-field",
+      "description": "Term, acts-on, a drag-or-type multiplier on a stone well, and the effect word.",
+      "html": "<div class=\"ds-set\"><div class=\"ds-group\">Preferences <span>below ×1 prefers, above avoids</span></div><div class=\"ds-row\"><span class=\"l\">Surface</span><span class=\"o\">asphalt</span><span><span class=\"ds-scrub\" tabindex=\"0\">×2</span></span><span class=\"n avoid\">avoid</span></div><div class=\"ds-row\"><span class=\"l\">Forest</span><span class=\"o\">full forest</span><span><span class=\"ds-scrub\" tabindex=\"0\">×0.9</span></span><span class=\"n prefer\">prefer</span></div></div>",
+      "css": ".ds-set{font-family:Archivo,system-ui,sans-serif;width:380px;background:#fbfbf8;color:#141414;font-variant-numeric:tabular-nums}.ds-group{display:flex;gap:8px;align-items:baseline;font-size:12px;font-weight:800;padding:3px 12px 2px;background:#efefea;border-bottom:1px solid #141414}.ds-group span{font-family:'Archivo Narrow',Archivo,system-ui,sans-serif;font-weight:400;color:#5b5b56}.ds-row{display:grid;grid-template-columns:104px 1fr 84px 52px;min-height:28px;font-size:13px;padding:0 12px;border-bottom:1px solid #dcdcd6}.ds-row>*{display:flex;align-items:center;min-width:0}.ds-row>*+*{border-left:1px solid #dcdcd6;padding-left:6px}.ds-row .l{font-weight:700}.ds-row .o{color:#5b5b56}.ds-row .n{justify-content:flex-end;font-weight:600;font-size:12px}.avoid{color:#a3231a}.prefer{color:#1f6b3a}.ds-scrub{display:inline-block;width:100%;padding:2px 6px;text-align:right;font-weight:800;background:#efefea;border:1px solid transparent;cursor:ew-resize;user-select:none}.ds-scrub:hover{border-color:#141414}.ds-scrub:focus-visible{outline:2px solid #141414;outline-offset:-2px}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "description": "Stone-well text field; focus turns paper with an ink border, caret signal red.",
+      "html": "<label class=\"ds-field\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M20 10c0 5-8 12-8 12s-8-7-8-12a8 8 0 0 1 16 0Z\"/><circle cx=\"12\" cy=\"10\" r=\"3\"/></svg><input placeholder=\"Pick a start\"></label>",
+      "css": ".ds-field{font-family:Archivo,system-ui,sans-serif;display:flex;align-items:center;gap:8px;width:280px;min-height:34px;padding:0 8px;background:#efefea;border:1px solid #dcdcd6;color:#5b5b56;transition:background-color .15s,border-color .15s}.ds-field:hover{border-color:#141414}.ds-field:focus-within{background:#fbfbf8;border-color:#141414;color:#141414}.ds-field input{flex:1;min-width:0;height:32px;border:0;background:transparent;font:inherit;font-weight:700;color:#141414;caret-color:#d5281b;outline:none}.ds-field input::placeholder{color:#5b5b56;font-weight:500}"
+    },
+    {
+      "name": "Map Tool Button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "36px paper square with an ink border; zoom pair shares a border.",
+      "html": "<div style=\"display:flex;flex-direction:column\"><button class=\"ds-tool\" aria-label=\"Zoom in\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M5 12h14M12 5v14\"/></svg></button><button class=\"ds-tool\" aria-label=\"Zoom out\" style=\"border-top:0\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M5 12h14\"/></svg></button></div>",
+      "css": ".ds-tool{width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:#fbfbf8;border:1px solid #141414;border-radius:0;color:#141414;cursor:pointer}.ds-tool:hover{background:#efefea}.ds-tool:focus-visible{outline:2px solid #141414;outline-offset:1px}"
+    },
+    {
+      "name": "Overlay Switch Row",
+      "kind": "custom",
+      "description": "Layers-card row: swatch, label, square ink switch.",
+      "html": "<div class=\"ds-layers\"><div class=\"ds-lt\">Overlays</div><button class=\"ds-layer active\"><i class=\"sw\" style=\"background:#dde4cf\"></i>Forest<span class=\"ds-switch\"></span></button><button class=\"ds-layer\"><i class=\"sw\" style=\"background:#bfd4df\"></i>360° view<span class=\"ds-switch\"></span></button></div>",
+      "css": ".ds-layers{font-family:Archivo,system-ui,sans-serif;width:220px;padding:8px 10px;background:#fbfbf8;border:1px solid #141414;color:#141414}.ds-lt{font-family:'Archivo Narrow',Archivo,system-ui,sans-serif;font-size:12px;font-weight:700;color:#5b5b56;padding-bottom:2px;margin-bottom:2px;border-bottom:1px solid #141414}.ds-layer{font-family:Archivo,system-ui,sans-serif;width:100%;display:flex;align-items:center;gap:8px;min-height:30px;border:0;background:none;font-weight:600;font-size:13px;color:#141414;cursor:pointer;text-align:left}.ds-layer:hover{background:#efefea}.ds-layer:focus-visible{outline:2px solid #141414;outline-offset:1px}.sw{width:22px;height:16px;flex:none;box-shadow:inset 0 0 0 1px rgb(20 20 20/.15)}.ds-switch{margin-left:auto;position:relative;width:28px;height:16px;border:1px solid #141414;background:#fbfbf8;transition:background-color .12s}.ds-switch::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;background:#141414;transition:transform .15s cubic-bezier(.2,.8,.2,1),background-color .12s}.ds-layer.active .ds-switch{background:#141414}.ds-layer.active .ds-switch::after{transform:translateX(12px);background:#fbfbf8}"
+    },
+    {
+      "name": "Header Bar",
+      "kind": "nav",
+      "description": "Ink bar with the paper wordmark and the red trail mark.",
+      "html": "<div class=\"ds-brand\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 32 32\"><path d=\"M5 24c4-9 7-13 11-13s6 6 11 3\" fill=\"none\" stroke=\"#d5281b\" stroke-width=\"3.5\"/><rect x=\"2.5\" y=\"21.5\" width=\"5\" height=\"5\" fill=\"#fbfbf8\"/></svg>ayoo</div>",
+      "css": ".ds-brand{font-family:Archivo,system-ui,sans-serif;display:flex;align-items:center;gap:8px;width:380px;height:36px;padding:0 12px;background:#141414;color:#fbfbf8;font-weight:800;font-size:15px;letter-spacing:-0.01em}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Kursbuch",
+    "overview": "**Creative North Star: \"The Kursbuch\"**\n\nThe planner reads like a Swiss printed timetable. Loops and settings are rows in strict columns, figures are tabular, and structure is drawn with ink and hairline rules rather than with boxes floating over the map. One paper column, 400px wide, sits flush against the left edge at full height; the map fills everything else. On a phone the same column becomes the bottom sheet with a square top edge.\n\nDensity is the point. Rows are 28px, cell padding is 6px, section padding is 10–12px. The system is monochrome (one warm-grey neutral scale from paper to ink) and spends colour only where it carries meaning: signal red for the active loop and the one primary action, dark red and green for the words \"avoid\" and \"prefer\", amber for warnings, and the map's own palette underneath. It replaces the D43 rounded-card consumer look (D114); rounded floating cards with soft shadows and roomy padding are the confirmed anti-reference.",
+    "keyCharacteristics": [
+      "One flush paper column, ruled into sections by 1px ink lines.",
+      "Visible column rules: 1px hairlines between every column of a table row.",
+      "Square corners everywhere; no shadows on UI surfaces.",
+      "Ink is the pressable colour; the selected state is inverted (ink ground, paper text).",
+      "Signal red is rare: the active loop on the map, its score, the primary button, the caret.",
+      "State is shown by line form (a dashed rule for stale results), not by hue."
+    ],
+    "rules": [
+      {
+        "name": "The Signal Rule",
+        "body": "Red marks exactly one thing per screen: the active loop (its map line and score) and the action that produces loops. Never use signal red for a heading, a link, a decoration or a second button.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink-Is-Pressable Rule",
+        "body": "Buttons, segments, toggles and fields are drawn in ink. Selected means inverted: ink ground, paper text.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every figure is tabular (`font-variant-numeric: tabular-nums` on body) and right-aligned in its column.",
+        "section": "typography"
+      },
+      {
+        "name": "The Narrow Head Rule",
+        "body": "Archivo Narrow is for column heads and cell labels only. Never set body copy, buttons or values in it.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ruled Not Floated Rule",
+        "body": "Separate things with a 1px rule, not with a shadow, gap or card. A section ends with an ink line.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put new controls in the 400px column as ruled rows on the 28px rhythm with visible column rules.",
+      "Do draw pressable things in ink and show selection by inverting to ink with paper text.",
+      "Do separate sections with a 1px ink rule and rows with a 1px hairline.",
+      "Do set column heads and cell labels in Archivo Narrow 700 12px, muted, sentence case.",
+      "Do show changed state by line form (dashed, solid) before reaching for a new colour.",
+      "Do keep the map palette and the cost ramp exactly as tokenised; the route must read above the map."
+    ],
+    "donts": [
+      "Don't use rounded corners, floating cards or drop shadows on UI surfaces.",
+      "Don't spend signal red on anything but the active loop and the primary action.",
+      "Don't fill rows or cells with avoid or prefer colours; they colour the effect word only.",
+      "Don't pad roomily: 12px section inset, 6px cell padding, 28px rows."
+    ]
+  }
+}
