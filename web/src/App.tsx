@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onSettled, Show, untrack } from "solid-js";
+import { createEffect, createSignal, flush, onSettled, Show, untrack } from "solid-js";
 import { Layers, Plus, Minus, X, LocateFixed, LoaderCircle } from "@lucide/solid";
 import { MapView, mapController } from "./components/MapView";
 import { DevRouteCard } from "./components/DevRouteCard";
@@ -7,7 +7,7 @@ import { QueryCard } from "./components/QueryCard";
 import { RouteCard } from "./components/RouteCard";
 import { RouteTiles } from "./components/RouteTiles";
 import { LayersCard } from "./components/LayersCard";
-import { attachSheetDrag, setSnap, snap, snapHeight, SNAPS } from "./components/Sheet";
+import { attachSheetDrag, setSnap, snap, snapHeight, SNAPS, type Snap } from "./components/Sheet";
 import { narrow, TYPING } from "./layout";
 import { openShared, pickingStart, routes, selected, status } from "./state";
 import { loopLabel } from "./routes/copies";
@@ -74,15 +74,32 @@ export function App() {
     window.addEventListener("hashchange", open);
     attachSheetDrag(handle, panel);
     // Typing on a phone (D105): open the sheet fully so the field sits near the top of the screen,
-    // above the keyboard. Android shrinks the page for the keyboard (index.html interactive-widget);
-    // iOS doesn't, but a field near the top stays visible without Safari scrolling the page.
+    // above the keyboard, and put it back where it was once typing ends. Android shrinks the page
+    // for the keyboard (index.html interactive-widget); iOS doesn't, but a field near the top stays
+    // visible without Safari scrolling the page.
+    let before: Snap | null = null;
     const onFocus = (e: FocusEvent) => {
-      if (untrack(narrow) && (e.target as Element).matches(TYPING)) setSnap("full");
+      if (!untrack(narrow) || !(e.target as Element).matches(TYPING)) return;
+      before ??= untrack(snap);
+      // Instantly, not animated: Safari picks its scroll as the keyboard opens, and a field still
+      // low mid-animation makes it scroll the page, throwing the field off the top.
+      panel.classList.add("dragging");
+      setSnap("full");
+      flush();
+      void panel.offsetHeight;
+      panel.classList.remove("dragging");
     };
+    const onBlur = () => setTimeout(() => {
+      if (before === null || document.activeElement?.matches(TYPING)) return;
+      setSnap(before);
+      before = null;
+    }, 0);
     panel.addEventListener("focusin", onFocus);
+    panel.addEventListener("focusout", onBlur);
     return () => {
       window.removeEventListener("hashchange", open);
       panel.removeEventListener("focusin", onFocus);
+      panel.removeEventListener("focusout", onBlur);
     };
   });
   // Sheet choreography: results open it halfway, picking a start lowers it.
