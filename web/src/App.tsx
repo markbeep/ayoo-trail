@@ -16,7 +16,7 @@ import { loopLabel } from "./routes/copies";
 function Brand() {
   return (
     <header class="brand">
-      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor" /><path d="M7 22c3-7 6-11 9-11s4 5 9 3" fill="none" stroke="#a7adf0" stroke-width="3" stroke-linecap="round" /><circle cx="7" cy="22" r="3" fill="#fff" /></svg>
+      <svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><path d="M4 25c4-10 8-15 12-15s6 7 12 4" fill="none" stroke="currentColor" stroke-width="4" /><rect x="1" y="22" width="6" height="6" fill="#fbfbf8" /></svg>
       <span>ayoo</span>
     </header>
   );
@@ -133,17 +133,11 @@ export function App() {
           <Show when={!narrow()}><Brand /></Show>
           <Show when={DEV_ROUTE}><DevRouteCard /></Show>
           <QueryCard />
+          <Show when={routes().length} fallback={
+            <p class="empty">Pick a start and a distance, then find loops. Every setting below is a multiplier you can drag or type.</p>
+          }><RouteTiles routes={routes()} /></Show>
           <SettingsCard />
-          <Show when={selected()}>{(r) => (
-            <>
-              <Show when={narrow()}><RouteTiles routes={routes()} /></Show>
-              <RouteCard route={r()} label={loopLabel(routes(), r())} />
-              <Show when={!narrow()}><RouteTiles routes={routes()} /></Show>
-            </>
-          )}</Show>
-          <Show when={!routes().length}>
-            <p class="empty">Pick a start, a distance and how hilly you want it. You'll get a few loops to compare.</p>
-          </Show>
+          <Show when={selected()}>{(r) => <RouteCard route={r()} label={loopLabel(routes(), r())} />}</Show>
         </div>
       </aside>
 

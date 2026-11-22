@@ -31,7 +31,7 @@ function Row(props: { label: string; on?: string; children: Element; note?: stri
       <span class="set-label">{props.label}</span>
       <span class="set-on">{props.on}</span>
       <span class="set-field">{props.children}</span>
-      <span class="set-note">{props.note}</span>
+      <span class="set-note" data-w={props.note}>{props.note}</span>
     </div>
   );
 }
