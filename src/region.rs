@@ -12,7 +12,7 @@ use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use crate::cost::{climb_discount, edge_cost_split, FactorTable, Profile};
+use crate::cost::{climb_discount, edge_cost_split, node_view_factor, FactorTable, Profile};
 use crate::geodesy::LocalProjection;
 use crate::graph::{Direction, Graph, LatLon};
 use crate::route::{assemble, Route, RouteStep, Visited, REPEAT_PENALTY};
@@ -339,6 +339,11 @@ impl<'g> Region<'g> {
                         continue;
                     }
                     let Some(r) = ratio(v as usize) else { continue };
+                    // D100: with the view weight up, the via itself leans to a viewpoint.
+                    let r = r * node_view_factor(
+                        self.g.node_view(self.global[v as usize]),
+                        &self.profile.weights,
+                    );
                     if best.is_none_or(|b| r < b.0) {
                         best = Some((r, v));
                     }
@@ -650,5 +655,59 @@ mod tests {
                 "spoke {spoke}: off by {off:.0} m"
             );
         }
+    }
+
+    #[test]
+    fn with_the_view_weight_up_the_via_goes_to_the_viewpoint() {
+        use crate::import::ch1903::{lv95_to_wgs84, wgs84_to_lv95};
+        use crate::view::ViewGrid;
+        let ll = |x: f64, y: f64| LatLon {
+            lat: 46.0 + y / 111_195.0,
+            lon: 7.0 + x / (111_195.0 * 46f64.to_radians().cos()),
+        };
+        // Low view everywhere, best view within 30 m of the node at (800, 800) m.
+        let peak = ll(800.0, 800.0);
+        let (e0, n0) = wgs84_to_lv95(ll(-500.0, 1700.0).lat, ll(-500.0, 1700.0).lon);
+        let (w, h, cell) = (110usize, 110usize, 20.0);
+        let v: Vec<u8> = (0..w * h)
+            .map(|i| {
+                let (e, n) = (
+                    e0 + ((i % w) as f64 + 0.5) * cell,
+                    n0 - ((i / w) as f64 + 0.5) * cell,
+                );
+                let (lat, lon) = lv95_to_wgs84(e, n);
+                let far = crate::geodesy::haversine_m(LatLon { lat, lon }, peak) > 30.0;
+                if far {
+                    1
+                } else {
+                    255
+                }
+            })
+            .collect();
+        let pick = |view: f32| {
+            let g = graph();
+            g.set_view(&ViewGrid {
+                e0,
+                n0,
+                cell,
+                w,
+                h,
+                v: v.clone(),
+            });
+            let mut p = Profile::default();
+            p.weights.view = view;
+            let start = g.snap(ll(0.0, 0.0)).unwrap();
+            let region = Region::new(&g, &p, start, 5000.0);
+            region.trees(0.0);
+            region
+                .via_near(0.0, ll(600.0, 600.0), 1000.0, 1600.0)
+                .unwrap()
+        };
+        let near = |a: LatLon| crate::geodesy::haversine_m(a, peak) < 1.0;
+        assert!(!near(pick(0.0)), "weight 0 should not know about the view");
+        assert!(
+            near(pick(4.0)),
+            "weight 4 should pull the via to the viewpoint"
+        );
     }
 }

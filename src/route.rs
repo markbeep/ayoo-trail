@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use crate::cost::{
     best_tech_factor, edge_cost_with, score, term_minima, traffic_class, Breakdown, FactorTable,
-    Profile, Weights,
+    Profile, Weights, WIDE_VIEW,
 };
 use crate::geodesy::{gain_loss, haversine_m, polyline_length_m, LocalProjection};
 use crate::graph::{flags, Direction, Graph, LatLon, FLAT_BAND, GRADE_BANDS};
@@ -453,6 +453,7 @@ pub fn route_term_steps(g: &Graph, r: &Route, p: &Profile) -> Vec<(usize, Breakd
             forest: rel(f.forest, best.forest),
             urban: rel(f.urban, best.urban),
             traffic: rel(f.traffic, best.traffic),
+            view: rel(f.view, best.view),
         };
         if out.last().is_none_or(|(_, prev)| *prev != b) {
             out.push((at, b));
@@ -482,6 +483,8 @@ pub struct RouteStats {
     pub urban_m: [f64; 3],
     /// Meters on unclassified/residential, tertiary, secondary and primary roads (D93).
     pub traffic_m: [f64; 4],
+    /// Meters with a view score of at least `cost::WIDE_VIEW` (D100).
+    pub wide_view_m: f64,
     pub missing_tags_m: f64,
     pub surface_inferred_m: f64,
     /// Length-weighted mean of edge_factors under `weights.unit()` (D73).
@@ -518,6 +521,7 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
         forest_m: 0.0,
         urban_m: [0.0; 3],
         traffic_m: [0.0; 4],
+        wide_view_m: 0.0,
         missing_tags_m: 0.0,
         surface_inferred_m: 0.0,
         breakdown: Breakdown::default(),
@@ -525,7 +529,7 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
         preference: 0.0,
         score: 0.0,
     };
-    let mut bd = [0.0f64; 7];
+    let mut bd = [0.0f64; 8];
     for s in &r.steps {
         let len = step_len(g, s);
         let a = g.edge_attrs(s.edge);
@@ -552,6 +556,9 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
         if let Some(c) = traffic_class(a.highway as u8).checked_sub(1) {
             st.traffic_m[c] += len;
         }
+        if g.hot_edge(s.edge).view as f32 >= 1.0 + 254.0 * WIDE_VIEW {
+            st.wide_view_m += len;
+        }
         if a.flags & flags::MISSING_TAGS != 0 {
             st.missing_tags_m += len;
         }
@@ -560,7 +567,7 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
         }
         let f = t.breakdown(g, s.edge, dir);
         for (acc, v) in bd.iter_mut().zip([
-            f.slope, f.surface, f.tech, f.official, f.forest, f.urban, f.traffic,
+            f.slope, f.surface, f.tech, f.official, f.forest, f.urban, f.traffic, f.view,
         ]) {
             *acc += len * v as f64;
         }
@@ -585,6 +592,7 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
             forest: m(4),
             urban: m(5),
             traffic: m(6),
+            view: m(7),
         };
     }
     st.score = score(st.mean_factor_default);
@@ -593,7 +601,7 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
 
 /// Each term's bar value under `p`: 1 = the best its weights and grade limit allow, measured at
 /// unit weight (D73, D81).
-pub fn term_values(st: &RouteStats, p: &Profile) -> [(&'static str, f64); 7] {
+pub fn term_values(st: &RouteStats, p: &Profile) -> [(&'static str, f64); 8] {
     let unit = p.weights.unit();
     let best = Breakdown {
         tech: best_tech_factor(&unit, p.max_sac),
@@ -615,5 +623,6 @@ pub fn term_values(st: &RouteStats, p: &Profile) -> [(&'static str, f64); 7] {
         ("forest", v(best.forest, m.forest)),
         ("urban", v(best.urban, m.urban)),
         ("traffic", v(best.traffic, m.traffic)),
+        ("view", v(best.view, m.view)),
     ]
 }

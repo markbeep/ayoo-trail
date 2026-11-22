@@ -184,7 +184,7 @@ fn route_json(
     distance_met: bool,
 ) -> Value {
     let stats = route_stats(g, r, profile);
-    let bars = breakdown(&stats, profile, climb_target_m);
+    let bars = breakdown(&stats, profile, climb_target_m, g.has_view());
     let r6 = |x: f64| (x * 1e6).round() / 1e6;
     let coordinates: Vec<_> = route_geometry(g, r)
         .into_iter()
@@ -209,7 +209,7 @@ fn route_json(
         "climb_pressure": profile.weights.climb_pressure,
         "terms": route_term_steps(g, r, profile).iter().map(|(i, b)| json!({
             "i": i, "official": b.official, "surface": b.surface, "slope": b.slope,
-            "tech": b.tech, "forest": b.forest, "urban": b.urban, "traffic": b.traffic,
+            "tech": b.tech, "forest": b.forest, "urban": b.urban, "traffic": b.traffic, "view": b.view,
         })).collect::<Vec<_>>(),
         "cost_per_m": route_cost_per_m(g, r, profile).iter().map(|c| (c * 1e3).round() / 1e3).collect::<Vec<_>>(),
         "graph_date": utc_date(g.osm_date()),
@@ -327,7 +327,8 @@ fn best_first(mut routes: Vec<Value>) -> Vec<Value> {
 }
 
 /// Per-term score items: 1 means the route hit the best factor, on the unit-weight scale (D73).
-fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value {
+/// The view bar only shows when the server has `view.bin` (D100).
+fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>, has_view: bool) -> Value {
     let vals = term_values(s, p);
     let value = |k: &str| vals.iter().find(|t| t.0 == k).map_or(0.0, |t| t.1);
     let km = |m: f64| format!("{:.1} km", m / 1000.0);
@@ -364,6 +365,10 @@ fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>) -> Value 
          "detail": format!("{} on main roads, {} on minor ones",
              km(s.traffic_m[1..].iter().sum()), km(s.traffic_m[0]))}),
     ]);
+    if has_view {
+        bars.push(json!({"key": "view", "value": value("view"),
+            "detail": format!("{} with a wide view", km(s.wide_view_m))}));
+    }
     Value::Array(bars)
 }
 

@@ -528,3 +528,31 @@ fn at_most_five_must_areas() {
     p.exclude.push(x);
     assert_eq!(p.validate(), Err(ProfileError::BadExclusion));
 }
+
+#[test]
+fn view_is_neutral_at_weight_zero_and_cheaper_with_a_better_view() {
+    use trail_calc::import::ch1903::wgs84_to_lv95;
+    use trail_calc::view::ViewGrid;
+    let (e, n) = wgs84_to_lv95(46.0, 7.0);
+    let factor = |score: u8, weight: f32| {
+        let g = one_edge(100.0, gravel());
+        // one 10 km cell around the edge
+        g.set_view(&ViewGrid {
+            e0: e - 5000.0,
+            n0: n + 5000.0,
+            cell: 10_000.0,
+            w: 1,
+            h: 1,
+            v: vec![score],
+        });
+        let w = Weights {
+            view: weight,
+            ..Weights::default()
+        };
+        edge_factors(&g, 0, F, &w).view
+    };
+    assert_eq!(factor(255, 0.0), 1.0);
+    assert_eq!(factor(0, 4.0), 1.0, "no data stays neutral");
+    assert!(factor(255, 1.0) < factor(128, 1.0) && factor(128, 1.0) < factor(1, 1.0));
+    assert_eq!(Weights::default().view, 0.0, "off by default (D100)");
+}

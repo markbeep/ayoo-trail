@@ -17,6 +17,10 @@ path = "src/bin/server.rs"
 name = "trail-calc-import"
 path = "src/bin/import.rs"
 
+[[bin]]
+name = "trail-calc-view"
+path = "src/bin/view.rs"
+
 [dependencies]
 axum = "0.8.9"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }

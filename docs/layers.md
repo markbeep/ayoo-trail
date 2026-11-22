@@ -147,4 +147,4 @@ License conclusions checked on this date:
 | Official trail join | graph attribute | yearly | minutes |
 | Land cover raster | PMTiles + graph attribute | yearly | minutes |
 | Reachability from home | station table + raster | on demand | minutes |
-| Horizon / view score | `view.bin` | once, DEM changes | minutes–hours (estimate) |
+| Horizon / view score | `view.bin` (8.7 MB) | once, DEM changes | 80 s for CH, 16 threads |

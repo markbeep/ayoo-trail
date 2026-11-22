@@ -13,3 +13,4 @@ mod region;
 pub mod route;
 pub mod server;
 pub mod snap;
+pub mod view;

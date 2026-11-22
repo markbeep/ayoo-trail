@@ -40,6 +40,10 @@ smoke:
 import REGION="demo" *ARGS:
     cargo run --release --bin trail-calc-import -- --region {{REGION}} {{ARGS}}
 
+# Build data/view.bin, the 360° view scores, from data/raw/alti3d (D100; ~80 s for ch).
+view REGION="demo" *ARGS:
+    cargo run --release --bin trail-calc-view -- --region {{REGION}} {{ARGS}}
+
 # Fetch OSM, swissALTI3D 2 m tiles and Wanderwege into data/raw (`just data REGION=demo|ch`).
 data REGION="demo":
     #!/usr/bin/env bash

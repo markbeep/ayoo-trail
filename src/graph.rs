@@ -160,6 +160,8 @@ pub struct HotEdge {
     pub flags: u8,
     /// `Highway as u8` (D93).
     pub highway: u8,
+    /// 360° view score 1..=255, 0 without `view.bin` (D100).
+    pub view: u8,
 }
 
 impl Default for EdgeAttrs {
@@ -680,6 +682,9 @@ pub struct Graph {
     /// `sac <= max_sac`, and the id of the largest component.
     components: [OnceLock<(Vec<u32>, u32)>; 7],
     hot: OnceLock<Vec<HotEdge>>,
+    /// Per edge and per node, from `view.bin` (D100); unset leaves every view at 0.
+    edge_view: OnceLock<Vec<u8>>,
+    node_view: OnceLock<Vec<u8>>,
     snap_grid: SnapGrid,
 }
 
@@ -755,6 +760,8 @@ impl Graph {
             anchors: OnceLock::new(),
             components: Default::default(),
             hot: OnceLock::new(),
+            edge_view: OnceLock::new(),
+            node_view: OnceLock::new(),
             snap_grid,
         };
         g.validate()?;
@@ -943,6 +950,47 @@ impl Graph {
         })
     }
 
+    /// Attach view scores (D100): each edge gets the mean over its vertices, each node its cell.
+    /// Call before the first `hot_edge`; later calls are ignored.
+    pub fn set_view(&self, grid: &crate::view::ViewGrid) {
+        use rayon::prelude::*;
+        let edges = (0..self.edge_count() as u32)
+            .into_par_iter()
+            .map(|e| {
+                let (mut sum, mut n) = (0u32, 0u32);
+                for (lat, lon, _) in self.edge_geometry(e) {
+                    if let Some(v) = grid.at_wgs84(lat, lon) {
+                        (sum, n) = (sum + v as u32, n + 1);
+                    }
+                }
+                if n == 0 {
+                    0
+                } else {
+                    (sum as f32 / n as f32).round() as u8
+                }
+            })
+            .collect();
+        let nodes = (0..self.node_count() as u32)
+            .into_par_iter()
+            .map(|v| {
+                let p = self.node(v);
+                grid.at_wgs84(p.lat, p.lon).unwrap_or(0)
+            })
+            .collect();
+        let _ = self.edge_view.set(edges);
+        let _ = self.node_view.set(nodes);
+    }
+
+    /// True once `set_view` attached view scores.
+    pub fn has_view(&self) -> bool {
+        self.node_view.get().is_some()
+    }
+
+    /// View score of a node's cell, 0 without data (D100).
+    pub fn node_view(&self, n: u32) -> u8 {
+        self.node_view.get().map_or(0, |v| v[n as usize])
+    }
+
     /// The edge's routing attributes in one record (~100 MB on the CH graph, built on first use).
     pub fn hot_edge(&self, e: u32) -> &HotEdge {
         &self.hot.get_or_init(|| {
@@ -963,6 +1011,7 @@ impl Graph {
                         official_category: a.official_category,
                         flags: a.flags,
                         highway: a.highway as u8,
+                        view: self.edge_view.get().map_or(0, |v| v[e as usize]),
                     }
                 })
                 .collect()

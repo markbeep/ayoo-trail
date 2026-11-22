@@ -40,6 +40,11 @@ const TECH_FACTORS: [[f32; 5]; 3] = [
 const OFFICIAL_FACTORS: [f32; 2] = [0.7, 1.0];
 const FOREST_FACTORS: [f32; 2] = [0.9, 1.0];
 const URBAN_FACTORS: [f32; 3] = [1.0, 1.3, 2.0];
+/// View factor at the best 360° view score; no view or no data is 1.0, linear in between (D100).
+/// A starting point to tune, like Q17.
+const VIEW_BEST: f32 = 0.7;
+/// View score from which a stretch counts as "a wide view" in the bar's detail (0..=1 of the range).
+pub const WIDE_VIEW: f32 = 0.7;
 /// Trails and minor ways, unclassified/residential, tertiary, secondary, primary (D93).
 const TRAFFIC_FACTORS: [f32; 5] = [1.0, 1.1, 1.3, 1.6, 2.0];
 
@@ -71,6 +76,8 @@ pub struct Weights {
     pub urban: f32,
     /// Busy roads (D93).
     pub traffic: f32,
+    /// 360° view (D100); off by default.
+    pub view: f32,
     /// 0..1, set by the generator to chase climb: steep edge parts get cheaper (D52).
     pub climb_pressure: f32,
 }
@@ -83,6 +90,7 @@ impl Weights {
             uphill: self.uphill,
             downhill: self.downhill,
             technical: self.technical,
+            view: 1.0,
             ..Weights::default()
         }
     }
@@ -101,6 +109,7 @@ impl Default for Weights {
             forest: 1.0,
             urban: 1.0,
             traffic: 1.0,
+            view: 0.0,
             climb_pressure: 0.0,
         }
     }
@@ -173,7 +182,7 @@ impl Profile {
     pub fn validate(&self) -> Result<(), ProfileError> {
         let w = &self.weights;
         let ws = [
-            w.slope, w.surface, w.tech, w.official, w.forest, w.urban, w.traffic,
+            w.slope, w.surface, w.tech, w.official, w.forest, w.urban, w.traffic, w.view,
         ];
         let ok = |v: f32, r: std::ops::RangeInclusive<f32>| v.is_finite() && r.contains(&v);
         if !ws.iter().all(|&v| ok(v, 0.0..=MAX_WEIGHT))
@@ -262,7 +271,22 @@ pub fn term_minima(w: &Weights) -> Breakdown {
         forest: min_weighted(&FOREST_FACTORS, w.forest) as f32,
         urban: min_weighted(&URBAN_FACTORS, w.urban) as f32,
         traffic: min_weighted(&TRAFFIC_FACTORS, w.traffic) as f32,
+        view: weighted(VIEW_BEST, w.view),
     }
+}
+
+/// Raw view factor of a view score (0 = no data).
+fn view_factor(v: u8) -> f32 {
+    if v == 0 {
+        1.0
+    } else {
+        1.0 - (1.0 - VIEW_BEST) * (v - 1) as f32 / 254.0
+    }
+}
+
+/// Weighted view factor of a node, for pulling vias toward views (D100).
+pub fn node_view_factor(v: u8, w: &Weights) -> f64 {
+    weighted(view_factor(v), w.view) as f64
 }
 
 /// Weighted factor per term for one edge in one direction. 1.0 = neutral.
@@ -275,6 +299,7 @@ pub struct Breakdown {
     pub forest: f32,
     pub urban: f32,
     pub traffic: f32,
+    pub view: f32,
 }
 
 impl Breakdown {
@@ -287,6 +312,7 @@ impl Breakdown {
             self.forest,
             self.urban,
             self.traffic,
+            self.view,
         ]
         .iter()
         .map(|&f| f as f64)
@@ -318,6 +344,8 @@ pub struct FactorTable {
     forest: [f32; 101],
     urban: [f32; 3],
     traffic: [f32; 5],
+    /// By view score 0..=255.
+    view: [f32; 256],
 }
 
 impl FactorTable {
@@ -336,6 +364,7 @@ impl FactorTable {
             }),
             urban: URBAN_FACTORS.map(|f| weighted(f, w.urban)),
             traffic: TRAFFIC_FACTORS.map(|f| weighted(f, w.traffic)),
+            view: std::array::from_fn(|v| weighted(view_factor(v as u8), w.view)),
         }
     }
 
@@ -373,6 +402,7 @@ impl FactorTable {
             forest: self.forest[a.forest_pct.min(100) as usize],
             urban: self.urban[(a.urban as usize).min(2)],
             traffic: self.traffic[traffic_class(a.highway)],
+            view: self.view[a.view as usize],
         }
     }
 }
