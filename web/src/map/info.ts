@@ -39,7 +39,63 @@ export async function identifySchweizMobil(p: LatLon, bounds: [number, number, n
   return [...seen.values()].sort((a, b) => a.number - b.number);
 }
 
-export const schweizMobilUrl = (n: number) => `https://schweizmobil.ch/en/hiking-in-switzerland/route-${n}`;
+/** SchweizMobil's own route-logo placements (what their map shows), LV03 points with an SVG logo each. */
+export const SCHWEIZMOBIL_LOGOS = "https://data.schweizmobil.ch/route_logos/current_prod/logos_wander_segment.geojson";
+
+/** LV03 (E, N) to WGS84 with swisstopo's approximate formulas (~1 m), enough for logo placement. */
+export function lv03ToWgs84(e: number, n: number): LatLon {
+  const y = (e - 600000) / 1e6, x = (n - 200000) / 1e6;
+  const lon = 2.6779094 + 4.728982 * y + 0.791484 * y * x + 0.1306 * y * x * x - 0.0436 * y ** 3;
+  const lat = 16.9023892 + 3.238272 * x - 0.270978 * y * y - 0.002528 * x * x - 0.0447 * y * y * x - 0.014 * x ** 3;
+  return { lat: (lat * 100) / 36, lon: (lon * 100) / 36 };
+}
+
+/** Meters per CSS pixel at zoom 0 for MapLibre's 512 px tiles, at 46.8° N (mid Switzerland). */
+const M_PER_PX_Z0 = (40075016.686 * Math.cos((46.8 * Math.PI) / 180)) / 512;
+/** SchweizMobil lists, per logo, the map resolutions (m/px) it shows at, already thinned so logos
+ * don't crowd; the coarsest one sets the zoom it appears from. */
+export function logoMinZoom(resolutions: Record<string, unknown>): number {
+  const coarsest = Math.max(...Object.keys(resolutions).map(Number).filter((r) => r > 0));
+  return Number.isFinite(coarsest) ? Math.log2(M_PER_PX_Z0 / coarsest) : Infinity;
+}
+
+interface RawLogos { features: { geometry: { coordinates: number[] }; properties: { resolutions: Record<string, unknown>; logo_svg?: string; route: number } }[] }
+export interface LogoProps { logo: string; route: number; minzoom: number }
+
+export function toLogoFeatures(raw: RawLogos) {
+  const features = raw.features.flatMap((f) => {
+    const minzoom = logoMinZoom(f.properties.resolutions);
+    const [e, n] = f.geometry.coordinates;
+    if (!f.properties.logo_svg || !Number.isFinite(minzoom) || e === undefined || n === undefined) return [];
+    const p = lv03ToWgs84(e, n);
+    return [{
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] as [number, number] },
+      properties: { logo: f.properties.logo_svg, route: f.properties.route, minzoom } satisfies LogoProps,
+    }];
+  });
+  return { type: "FeatureCollection" as const, features };
+}
+
+export async function fetchSchweizMobilLogos() {
+  const res = await fetch(SCHWEIZMOBIL_LOGOS);
+  return res.ok ? toLogoFeatures((await res.json()) as RawLogos) : null;
+}
+
+/** A logo SVG rasterized for MapLibre at `px` CSS pixels (drawn at 2×). */
+export async function loadLogo(url: string, px: number) {
+  const img = new Image(px * 2, px * 2);
+  img.crossOrigin = "anonymous";
+  img.src = url;
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = c.height = px * 2;
+  const ctx = c.getContext("2d")!;
+  ctx.drawImage(img, 0, 0, px * 2, px * 2);
+  return ctx.getImageData(0, 0, px * 2, px * 2);
+}
+
+export const schweizMobilUrl =(n: number) => `https://schweizmobil.ch/en/hiking-in-switzerland/route-${n}`;
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}, ...kids: Node[]) => {
   const e = Object.assign(document.createElement(tag), props);

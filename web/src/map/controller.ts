@@ -14,7 +14,7 @@ import type { LatLon, Route } from "../routes/types";
 import { bounds, cumulative, legAt, nearestIndex } from "../routes/geo";
 import { circle, edgePoint, radiusTo, type Zone } from "../routes/zones";
 import type { Checkpoint } from "../routes/types";
-import { fetchWebcams, identifySchweizMobil, schweizMobilPopup, webcamPopup, WEBCAM_MIN_ZOOM, WINDY_CREDIT, type WebcamProps } from "./info";
+import { fetchSchweizMobilLogos, fetchWebcams, identifySchweizMobil, loadLogo, schweizMobilPopup, webcamPopup, WEBCAM_MIN_ZOOM, WINDY_CREDIT, type WebcamProps } from "./info";
 
 export interface RouteColors {
   selected: string;
@@ -88,6 +88,7 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
     trails: { type: "raster", ...TRAILS_SOURCE },
     view: { type: "raster", ...VIEW_SOURCE },
     schweizmobil: { type: "raster", ...SCHWEIZMOBIL_SOURCE },
+    "schweizmobil-logos": { type: "geojson", data: { type: "FeatureCollection", features: [] } },
     webcams: { type: "geojson", data: { type: "FeatureCollection", features: [] }, attribution: WINDY_CREDIT },
   };
   for (const def of BASE_MAPS) if (def.raster) sources[def.id] = { type: "raster", ...def.raster };
@@ -120,6 +121,12 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
     { id: "overlay-schweizmobil", type: "raster", source: "schweizmobil", layout: { visibility: overlay("schweizmobil") } },
     ...withVis(outdoorLabels(c.palette), outdoor),
     {
+      // Route logos on the segments, as SchweizMobil places them (images load on demand).
+      id: "overlay-schweizmobil-logos", type: "symbol", source: "schweizmobil-logos",
+      filter: [">=", ["zoom"], ["get", "minzoom"]],
+      layout: { visibility: overlay("schweizmobil"), "icon-image": ["get", "logo"], "icon-padding": 4 },
+    },
+    {
       id: "overlay-webcams", type: "circle", source: "webcams", layout: { visibility: overlay("webcams") },
       paint: { "circle-radius": 6, "circle-color": c.start, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 },
     },
@@ -128,6 +135,9 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
   console.assert(OVERLAYS.every((o) => layers.some((l) => l.id === `overlay-${o.id}`)), "overlay without a layer");
   return { version: 8, glyphs: GLYPHS, sources, layers };
 }
+
+/** Route logo size in CSS pixels (SchweizMobil uses 20–28). */
+const LOGO_PX = 26;
 
 export interface MapHandlers {
   onRouteClick?: (id: string) => void;
@@ -187,6 +197,13 @@ export class MapController {
       resolve();
     }));
     this.map.on("moveend", () => void this.loadWebcams());
+    void this.ready.then(() => { if (this.visible("overlay-schweizmobil")) void this.loadLogos(); });
+    const logos = new Set<string>();
+    this.map.on("styleimagemissing", (e) => {
+      if (!e.id.startsWith("https://images.schweizmobil.ch/") || logos.has(e.id)) return;
+      logos.add(e.id);
+      void loadLogo(e.id, LOGO_PX).then((img) => { if (!this.map.hasImage(e.id)) this.map.addImage(e.id, img, { pixelRatio: 2 }); }).catch(() => {});
+    });
     this.map.on("mouseenter", "overlay-webcams", () => (this.map.getCanvas().style.cursor = "pointer"));
     this.map.on("mouseleave", "overlay-webcams", () => (this.map.getCanvas().style.cursor = ""));
 
@@ -420,9 +437,23 @@ export class MapController {
 
   setOverlay(id: string, on: boolean) {
     void this.ready.then(() => {
-      this.map.setLayoutProperty(`overlay-${id}`, "visibility", on ? "visible" : "none");
+      // An overlay may own extra layers named `overlay-<id>-…` (the SchweizMobil logos).
+      for (const l of this.map.getStyle().layers) {
+        if (l.id === `overlay-${id}` || l.id.startsWith(`overlay-${id}-`)) this.map.setLayoutProperty(l.id, "visibility", on ? "visible" : "none");
+      }
       if (id === "webcams" && on) void this.loadWebcams();
+      if (id === "schweizmobil" && on) void this.loadLogos();
     });
+  }
+
+  private logosLoaded = false;
+  /** SchweizMobil route logos, fetched once (~80 kB gzipped) the first time the overlay is on (D103). */
+  private async loadLogos() {
+    if (this.logosLoaded) return;
+    this.logosLoaded = true;
+    const fc = await fetchSchweizMobilLogos().catch(() => null);
+    if (fc) (this.map.getSource("schweizmobil-logos") as GeoJSONSource).setData(fc);
+    else this.logosLoaded = false; // try again next time it is switched on
   }
 
   private visible = (layer: string) => this.map.getLayoutProperty(layer, "visibility") === "visible";
