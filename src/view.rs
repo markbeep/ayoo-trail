@@ -54,6 +54,41 @@ impl ViewGrid {
         self.at(e, n)
     }
 
+    /// A 256 px web-mercator tile of the overlay as RGBA, or None when no pixel has data.
+    pub fn tile_rgba(&self, z: u8, x: u32, y: u32) -> Option<Vec<u8>> {
+        let n = (1u64 << z) as f64;
+        let mut out = vec![0u8; 256 * 256 * 4];
+        let mut any = false;
+        for py in 0..256 {
+            let t = (y as f64 + (py as f64 + 0.5) / 256.0) / n;
+            let lat = (std::f64::consts::PI * (1.0 - 2.0 * t))
+                .sinh()
+                .atan()
+                .to_degrees();
+            for px in 0..256 {
+                let lon = (x as f64 + (px as f64 + 0.5) / 256.0) / n * 360.0 - 180.0;
+                if let Some(v) = self.at_wgs84(lat, lon) {
+                    let i = (py * 256 + px) * 4;
+                    out[i..i + 4].copy_from_slice(&ramp(v));
+                    any = true;
+                }
+            }
+        }
+        any.then_some(out)
+    }
+
+    /// `tile_rgba` as a PNG.
+    pub fn tile_png(&self, z: u8, x: u32, y: u32) -> Option<Vec<u8>> {
+        let rgba = self.tile_rgba(z, x, y)?;
+        let mut buf = Vec::new();
+        let mut enc = png::Encoder::new(&mut buf, 256, 256);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.set_compression(png::Compression::Fast);
+        enc.write_header().ok()?.write_image_data(&rgba).ok()?;
+        Some(buf)
+    }
+
     pub fn write(&self, path: &Path) -> io::Result<()> {
         let mut f = io::BufWriter::new(std::fs::File::create(path)?);
         f.write_all(MAGIC)?;
@@ -88,6 +123,28 @@ impl ViewGrid {
             v: b[40..].to_vec(),
         })
     }
+}
+
+/// Overlay colour of a view score: dark in valleys, faint around the CH median (~93),
+/// yellow to red toward the best views (owner's step 1: red = excellent in every direction).
+/// Stops are a starting point to tune.
+fn ramp(v: u8) -> [u8; 4] {
+    const STOPS: [(f32, [f32; 4]); 5] = [
+        (0.0, [40.0, 40.0, 90.0, 150.0]),
+        (0.35, [70.0, 110.0, 170.0, 60.0]),
+        (0.55, [250.0, 220.0, 80.0, 120.0]),
+        (0.75, [245.0, 130.0, 40.0, 160.0]),
+        (0.9, [215.0, 40.0, 40.0, 190.0]),
+    ];
+    let s = (v.max(1) - 1) as f32 / 254.0;
+    let i = STOPS.iter().rposition(|st| st.0 <= s).unwrap_or(0);
+    let (a, b) = (STOPS[i], STOPS[(i + 1).min(STOPS.len() - 1)]);
+    let t = if b.0 > a.0 {
+        ((s - a.0) / (b.0 - a.0)).min(1.0)
+    } else {
+        0.0
+    };
+    std::array::from_fn(|k| (a.1[k] + (b.1[k] - a.1[k]) * t).round() as u8)
 }
 
 /// Elevation at each cell centre (NaN without data), sampled in 1 km blocks so each
@@ -208,6 +265,27 @@ mod tests {
         let v = view_scores(&z, 10, 10, CELL_M);
         assert_eq!(v[55], 0);
         assert!(v[0] > 0);
+    }
+
+    #[test]
+    fn tile_pixels_follow_the_grid_and_ramp() {
+        use crate::import::ch1903::wgs84_to_lv95;
+        // A 20 km grid around Wattwil, best view everywhere.
+        let (e, n) = wgs84_to_lv95(47.3, 9.09);
+        let g = ViewGrid {
+            e0: e - 10_000.0,
+            n0: n + 10_000.0,
+            cell: CELL_M,
+            w: 200,
+            h: 200,
+            v: vec![255; 40_000],
+        };
+        // z12 tile holding Wattwil: x = 2151, y = 1435.
+        let rgba = g.tile_rgba(12, 2151, 1435).expect("data in this tile");
+        assert!(rgba.chunks(4).any(|p| p == ramp(255)));
+        assert_eq!(ramp(255), [215, 40, 40, 190], "best views are red");
+        assert!(g.tile_rgba(12, 0, 0).is_none(), "nothing outside the grid");
+        assert_eq!(&g.tile_png(12, 2151, 1435).unwrap()[1..4], b"PNG");
     }
 
     #[test]

@@ -62,6 +62,7 @@ fn router(g: Option<Arc<Graph>>) -> axum::Router {
     app(ServerConfig {
         static_dir: std::env::temp_dir(),
         graph: g,
+        view: None,
     })
 }
 

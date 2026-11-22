@@ -9,6 +9,7 @@ fn config(static_dir: PathBuf) -> ServerConfig {
     ServerConfig {
         static_dir,
         graph: None,
+        view: None,
     }
 }
 
@@ -57,4 +58,50 @@ async fn unknown_client_path_falls_back_to_index() {
     let (status, body) = get(app(config(fixture_dist())), "/some/deep/link").await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains("<title>ayoo</title>"));
+}
+
+#[tokio::test]
+async fn view_tiles_are_png_inside_the_grid_204_outside_and_404_without_view() {
+    use std::sync::Arc;
+    use trail_calc::import::ch1903::wgs84_to_lv95;
+    use trail_calc::view::ViewGrid;
+    let (e, n) = wgs84_to_lv95(47.3, 9.09);
+    let grid = ViewGrid {
+        e0: e - 5000.0,
+        n0: n + 5000.0,
+        cell: 100.0,
+        w: 100,
+        h: 100,
+        v: vec![200; 10_000],
+    };
+    let with = || {
+        app(ServerConfig {
+            view: Some(Arc::new(grid.clone())),
+            ..config(fixture_dist())
+        })
+    };
+    let res = with()
+        .oneshot(
+            Request::get("/api/tiles/view/12/2151/1435")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()["content-type"], "image/png");
+    assert_eq!(
+        get(with(), "/api/tiles/view/12/0/0").await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        get(with(), "/api/tiles/view/12/9999/0").await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        get(app(config(fixture_dist())), "/api/tiles/view/12/2151/1435")
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
 }

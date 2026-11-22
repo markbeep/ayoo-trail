@@ -41,6 +41,7 @@ rayon = "1"
 weezl = "0.1"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 clap = { version = "4.6.8", features = ["derive", "env"] }
+png = "0.17"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

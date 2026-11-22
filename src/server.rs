@@ -4,7 +4,7 @@
 //! `static_dir`, falling back to `index.html` so client-side deep links work.
 
 use axum::extract::rejection::JsonRejection;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::{header, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -23,6 +23,7 @@ use crate::route::{
     RouteStats,
 };
 use crate::snap::{Snap, SNAP_LIMIT_M};
+use crate::view::ViewGrid;
 
 /// Runtime configuration for [`app`].
 #[derive(Clone)]
@@ -31,6 +32,8 @@ pub struct ServerConfig {
     pub static_dir: PathBuf,
     /// Shared read-only graph; `None` runs the server without routing.
     pub graph: Option<Arc<Graph>>,
+    /// 360° view scores for the overlay tiles (D100); `None` answers 404.
+    pub view: Option<Arc<ViewGrid>>,
 }
 
 type Shared = Option<Arc<Graph>>;
@@ -372,6 +375,33 @@ fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>, has_view:
     Value::Array(bars)
 }
 
+/// `GET /api/tiles/view/{z}/{x}/{y}`: the 360° view overlay as a 256 px PNG (D100). 204 where
+/// the tile has no data, so MapLibre draws nothing without an error.
+async fn view_tile(
+    State(v): State<Option<Arc<ViewGrid>>>,
+    Path((z, x, y)): Path<(u8, u32, u32)>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let Some(v) = v else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if z > 16 || x >= 1 << z || y >= 1 << z {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match tokio::task::spawn_blocking(move || v.tile_png(z, x, y)).await {
+        Ok(Some(png)) => (
+            [
+                (header::CONTENT_TYPE, "image/png"),
+                (header::CACHE_CONTROL, "public, max-age=86400"),
+            ],
+            png,
+        )
+            .into_response(),
+        Ok(None) => StatusCode::NO_CONTENT.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
 async fn api_not_found() -> StatusCode {
     StatusCode::NOT_FOUND
 }
@@ -382,8 +412,13 @@ pub fn app(config: ServerConfig) -> Router {
         .route("/health", get(health))
         .route("/route", post(route))
         .route("/generate", post(generate_loops))
-        .fallback(api_not_found)
-        .with_state(config.graph);
+        .with_state(config.graph)
+        .merge(
+            Router::new()
+                .route("/tiles/view/{z}/{x}/{y}", get(view_tile))
+                .with_state(config.view),
+        )
+        .fallback(api_not_found);
 
     let index = config.static_dir.join("index.html");
     let client = ServeDir::new(&config.static_dir).fallback(ServeFile::new(index));

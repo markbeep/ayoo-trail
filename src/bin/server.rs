@@ -64,16 +64,22 @@ async fn main() -> std::io::Result<()> {
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!(%addr, static_dir = %static_dir.display(), "trail-calc-server listening");
-    axum::serve(listener, app(ServerConfig { static_dir, graph }))
-        .with_graceful_shutdown(async {
-            // Ctrl-C locally; SIGTERM is how Docker and Kubernetes stop the container.
-            let mut term =
-                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                    .expect("install SIGTERM handler");
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {}
-                _ = term.recv() => {}
-            }
-        })
-        .await
+    axum::serve(
+        listener,
+        app(ServerConfig {
+            static_dir,
+            graph,
+            view,
+        }),
+    )
+    .with_graceful_shutdown(async {
+        // Ctrl-C locally; SIGTERM is how Docker and Kubernetes stop the container.
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("install SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = term.recv() => {}
+        }
+    })
+    .await
 }
