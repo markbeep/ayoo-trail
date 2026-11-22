@@ -46,6 +46,7 @@ export function MapView(props: { padding: () => { left: number; right: number; t
           setStart(p);
           setPickingStart(false);
         } else if (DEV_ROUTE) addWaypoint(p);
+        else void ctl?.showInfo(p);
       },
       onContextMenu: (p, at, hit) => setMenu({ p, x: at.x, y: at.y, ...hit }),
       onZoneMove: moveZone,

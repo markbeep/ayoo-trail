@@ -7,13 +7,14 @@ import type { StyleSpecification, GeoJSONSource, LngLatLike, FilterSpecification
 // Vite bundles it; point it at the worker file explicitly.
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import {
-  BASE_MAPS, GLYPHS, OPENMAPTILES, OPENMAPTILES_ATTRIBUTION, OVERLAYS, TERRAIN, TRAILS_SOURCE, VIEW_SOURCE, type BaseMapId,
+  BASE_MAPS, GLYPHS, OPENMAPTILES, OPENMAPTILES_ATTRIBUTION, OVERLAYS, SCHWEIZMOBIL_SOURCE, TERRAIN, TRAILS_SOURCE, VIEW_SOURCE, type BaseMapId,
 } from "./basemaps";
 import { OMT, outdoorFills, outdoorLabels, outdoorLines, type MapPalette } from "./outdoorStyle";
 import type { LatLon, Route } from "../routes/types";
 import { bounds, cumulative, legAt, nearestIndex } from "../routes/geo";
 import { circle, edgePoint, radiusTo, type Zone } from "../routes/zones";
 import type { Checkpoint } from "../routes/types";
+import { fetchWebcams, identifySchweizMobil, schweizMobilPopup, webcamPopup, WEBCAM_MIN_ZOOM, WINDY_CREDIT, type WebcamProps } from "./info";
 
 export interface RouteColors {
   selected: string;
@@ -86,6 +87,8 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
     terrain: { type: "raster-dem", url: TERRAIN, tileSize: 512, encoding: "terrarium" },
     trails: { type: "raster", ...TRAILS_SOURCE },
     view: { type: "raster", ...VIEW_SOURCE },
+    schweizmobil: { type: "raster", ...SCHWEIZMOBIL_SOURCE },
+    webcams: { type: "geojson", data: { type: "FeatureCollection", features: [] }, attribution: WINDY_CREDIT },
   };
   for (const def of BASE_MAPS) if (def.raster) sources[def.id] = { type: "raster", ...def.raster };
   const withVis = (ls: LayerSpecification[], v: boolean) => ls.map((l) => ({ ...l, layout: { ...l.layout, visibility: on(v) } }) as LayerSpecification);
@@ -114,7 +117,12 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
     { id: "overlay-view", type: "raster", source: "view", layout: { visibility: overlay("view") }, paint: { "raster-opacity": 0.75 } },
     ...withVis(outdoorLines(c.palette), outdoor),
     { id: "overlay-trails", type: "raster", source: "trails", layout: { visibility: overlay("trails") } },
+    { id: "overlay-schweizmobil", type: "raster", source: "schweizmobil", layout: { visibility: overlay("schweizmobil") } },
     ...withVis(outdoorLabels(c.palette), outdoor),
+    {
+      id: "overlay-webcams", type: "circle", source: "webcams", layout: { visibility: overlay("webcams") },
+      paint: { "circle-radius": 6, "circle-color": c.start, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 },
+    },
   ];
   // Every overlay in the registry must own exactly one layer here.
   console.assert(OVERLAYS.every((o) => layers.some((l) => l.id === `overlay-${o.id}`)), "overlay without a layer");
@@ -178,6 +186,9 @@ export class MapController {
       this.addRouteLayers();
       resolve();
     }));
+    this.map.on("moveend", () => void this.loadWebcams());
+    this.map.on("mouseenter", "overlay-webcams", () => (this.map.getCanvas().style.cursor = "pointer"));
+    this.map.on("mouseleave", "overlay-webcams", () => (this.map.getCanvas().style.cursor = ""));
 
     this.map.on("click", (e) => {
       if (this.justDragged) { this.justDragged = false; return; }
@@ -408,7 +419,46 @@ export class MapController {
   }
 
   setOverlay(id: string, on: boolean) {
-    void this.ready.then(() => this.map.setLayoutProperty(`overlay-${id}`, "visibility", on ? "visible" : "none"));
+    void this.ready.then(() => {
+      this.map.setLayoutProperty(`overlay-${id}`, "visibility", on ? "visible" : "none");
+      if (id === "webcams" && on) void this.loadWebcams();
+    });
+  }
+
+  private visible = (layer: string) => this.map.getLayoutProperty(layer, "visibility") === "visible";
+  private webcamSeq = 0;
+  /** Webcams for the current view, from zoom WEBCAM_MIN_ZOOM up, while that overlay is on (D102). */
+  private async loadWebcams() {
+    if (!this.map.getLayer("overlay-webcams") || !this.visible("overlay-webcams")) return;
+    const src = this.map.getSource("webcams") as GeoJSONSource;
+    if (this.map.getZoom() < WEBCAM_MIN_ZOOM) { src.setData({ type: "FeatureCollection", features: [] }); return; }
+    const b = this.map.getBounds(), mine = ++this.webcamSeq;
+    // shortcut: without a server key (503) the overlay just stays empty; hide its toggle via /api/health if that confuses people.
+    const fc = await fetchWebcams(b.getWest(), b.getSouth(), b.getEast(), b.getNorth()).catch(() => null);
+    if (fc && mine === this.webcamSeq) src.setData(fc);
+  }
+
+  private popup: maplibregl.Popup | null = null;
+  /** A plain map click (no route, no drag, not picking the start; D104): webcam or SchweizMobil info. */
+  async showInfo(p: LatLon) {
+    await this.ready;
+    this.popup?.remove();
+    const at = this.map.project([p.lon, p.lat]);
+    const open = (node: HTMLElement, where: LatLon) => {
+      this.popup = new maplibregl.Popup({ maxWidth: "320px" }).setLngLat([where.lon, where.lat]).setDOMContent(node).addTo(this.map);
+    };
+    if (this.visible("overlay-webcams")) {
+      const f = this.map.queryRenderedFeatures([[at.x - 6, at.y - 6], [at.x + 6, at.y + 6]], { layers: ["overlay-webcams"] })[0];
+      if (f) {
+        const [lon, lat] = (f.geometry as unknown as { coordinates: [number, number] }).coordinates;
+        return open(webcamPopup(f.properties as WebcamProps), { lat, lon });
+      }
+    }
+    if (this.visible("overlay-schweizmobil")) {
+      const b = this.map.getBounds(), c = this.map.getCanvas();
+      const rs = await identifySchweizMobil(p, [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], { w: c.clientWidth, h: c.clientHeight }).catch(() => []);
+      if (rs.length) open(schweizMobilPopup(rs), p);
+    }
   }
 
   async setRoutes(routes: Route[], selected: string | null) {

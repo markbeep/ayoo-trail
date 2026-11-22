@@ -10,6 +10,7 @@ fn config(static_dir: PathBuf) -> ServerConfig {
         static_dir,
         graph: None,
         view: None,
+        windy_key: None,
     }
 }
 
@@ -103,5 +104,26 @@ async fn view_tiles_are_png_inside_the_grid_204_outside_and_404_without_view() {
             .await
             .0,
         StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn webcams_without_a_key_are_503_and_bad_bboxes_422() {
+    assert_eq!(
+        get(
+            app(config(fixture_dist())),
+            "/api/webcams?bbox=47.33,9.12,47.27,9.04"
+        )
+        .await
+        .0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    let with_key = app(ServerConfig {
+        windy_key: Some("k".into()),
+        ..config(fixture_dist())
+    });
+    assert_eq!(
+        get(with_key, "/api/webcams?bbox=48,12,46,8").await.0,
+        StatusCode::UNPROCESSABLE_ENTITY
     );
 }

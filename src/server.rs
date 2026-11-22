@@ -4,7 +4,7 @@
 //! `static_dir`, falling back to `index.html` so client-side deep links work.
 
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{header, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -24,6 +24,7 @@ use crate::route::{
 };
 use crate::snap::{Snap, SNAP_LIMIT_M};
 use crate::view::ViewGrid;
+use crate::webcams::{WebcamError, Webcams};
 
 /// Runtime configuration for [`app`].
 #[derive(Clone)]
@@ -34,6 +35,8 @@ pub struct ServerConfig {
     pub graph: Option<Arc<Graph>>,
     /// 360° view scores for the overlay tiles (D100); `None` answers 404.
     pub view: Option<Arc<ViewGrid>>,
+    /// Windy Webcams API key (D102); `None` answers `/api/webcams` with 503.
+    pub windy_key: Option<String>,
 }
 
 type Shared = Option<Arc<Graph>>;
@@ -402,6 +405,33 @@ async fn view_tile(
     }
 }
 
+#[derive(Deserialize)]
+struct BboxQuery {
+    bbox: String,
+}
+
+/// `GET /api/webcams?bbox=north,east,south,west`: Windy webcams as GeoJSON (D102).
+async fn webcams(
+    State(w): State<Arc<Webcams>>,
+    Query(q): Query<BboxQuery>,
+) -> Result<Json<Value>, ApiError> {
+    match tokio::task::spawn_blocking(move || w.get(&q.bbox)).await {
+        Ok(Ok(v)) => Ok(Json(v)),
+        Ok(Err(e @ WebcamError::NoKey)) => {
+            Err(api_err(StatusCode::SERVICE_UNAVAILABLE, &e.to_string()))
+        }
+        Ok(Err(e @ WebcamError::BadBbox)) => Err(unprocessable(&e.to_string())),
+        Ok(Err(e @ WebcamError::Upstream(_))) => {
+            tracing::warn!(error = %e, "webcams");
+            Err(api_err(StatusCode::BAD_GATEWAY, "webcam provider failed"))
+        }
+        Err(_) => Err(api_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "webcam lookup failed",
+        )),
+    }
+}
+
 async fn api_not_found() -> StatusCode {
     StatusCode::NOT_FOUND
 }
@@ -417,6 +447,11 @@ pub fn app(config: ServerConfig) -> Router {
             Router::new()
                 .route("/tiles/view/{z}/{x}/{y}", get(view_tile))
                 .with_state(config.view),
+        )
+        .merge(
+            Router::new()
+                .route("/webcams", get(webcams))
+                .with_state(Arc::new(Webcams::new(config.windy_key))),
         )
         .fallback(api_not_found);
 

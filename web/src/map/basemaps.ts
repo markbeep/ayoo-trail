@@ -64,7 +64,17 @@ export const OVERLAYS: readonly OverlayDef[] = [
   { id: "trails", label: "Marked trails", defaultOn: false },
   { id: "forest", label: "Forest", defaultOn: false },
   { id: "view", label: "360° view", defaultOn: false },
+  { id: "schweizmobil", label: "SchweizMobil hiking", defaultOn: false },
+  { id: "webcams", label: "Webcams", defaultOn: false },
 ];
+
+/** SchweizMobil hiking routes (D103): ASTRA's Wanderland layer on geo.admin.ch, CH only. */
+export const SCHWEIZMOBIL_SOURCE: RasterSource = {
+  tiles: [`${WMTS}/ch.astra.wanderland/default/current/3857/{z}/{x}/{y}.png`],
+  tileSize: 256,
+  maxzoom: 18,
+  attribution: '<a href="https://schweizmobil.ch" target="_blank" rel="noopener">© SchweizMobil</a> ' + SWISSTOPO,
+};
 
 /** Our own 360° view tiles (D100), rendered by trail-calc-server from view.bin. MapLibre needs an absolute URL. */
 export const VIEW_SOURCE: RasterSource = {

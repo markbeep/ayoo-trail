@@ -70,6 +70,7 @@ async fn main() -> std::io::Result<()> {
             static_dir,
             graph,
             view,
+            windy_key: std::env::var("WINDY_API_KEY").ok(),
         }),
     )
     .with_graceful_shutdown(async {

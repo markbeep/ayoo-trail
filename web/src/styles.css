@@ -507,3 +507,11 @@ button.layer:hover .swatch { box-shadow: inset 0 0 0 1px rgb(38 34 43 / .1), 0 0
 .control-q { font-size: 13px; font-weight: 800; }
 .why-here { font-weight: 700; }
 .fill { transition: width .5s cubic-bezier(.2,.8,.2,1), background-color .15s; }
+
+/* Webcam and SchweizMobil popups (D102, D103). */
+.info-pop { display: grid; gap: 6px; font-family: var(--font); color: var(--ink); font-size: 13px; }
+.info-pop a { color: var(--accent); font-weight: 700; }
+.info-pop small { color: var(--muted); }
+.info-pop ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
+/* Natural size, only scaled down to fit: Windy's images must not be stretched. */
+.info-img { display: block; max-width: 100%; height: auto; border-radius: 6px; }
