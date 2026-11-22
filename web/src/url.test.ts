@@ -77,3 +77,8 @@ test("links without penalties get the defaults", () => {
   const d = decodeShare("#s=47.2985,9.095&d=15&c=hilly&t=0.8&x=3&w=1,0,-1,1,1,-1,1,2.5,1,0");
   assert.deepEqual(d?.penalties, { repeat: 5, avoid_factor: 5, prefer_factor: 0.5, stem_m: 500, max_overlap: 0.5 });
 });
+
+test("long must-pass loops share up to the server's 80 km", () => {
+  assert.equal(decodeShare(encodeShare({ ...share, km: 75 }))?.km, 75);
+  assert.equal(decodeShare(encodeShare({ ...share, km: 81 })), null);
+});

@@ -88,7 +88,7 @@ export function decodeShare(hash: string): Share | null {
     const climb: ShareClimb = c === "max" || c === "off" ? c : PRESETS.includes(c) ? { preset: c as "hilly" } : { m: num(c, 0, 20_000) };
     return {
       start: latLon(nums(start)),
-      km: num(q.get("d"), 3, 60),
+      km: num(q.get("d"), 3, 80),
       climb,
       strictness: num(q.get("t"), 0, 1),
       weights,

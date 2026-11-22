@@ -26,10 +26,10 @@ export function QueryCard() {
           )}</For>
           <label class={["seg-input", { on: !DISTANCE_PRESETS_KM.includes(distanceKm() as 10) }]}>
             <input
-              type="number" min="3" max="60" step="1" inputmode="numeric" aria-label="Custom distance in km"
+              type="number" min="3" max="80" step="1" inputmode="numeric" aria-label="Custom distance in km"
               placeholder="Other"
               value={DISTANCE_PRESETS_KM.includes(distanceKm() as 10) ? "" : distanceKm()}
-              onInput={(e) => { const v = Number(e.currentTarget.value); if (v >= 3 && v <= 60) setDistanceKm(v); }}
+              onInput={(e) => { const v = Number(e.currentTarget.value); if (v >= 3 && v <= 80) setDistanceKm(v); }}
             />
           </label>
         </div>
@@ -39,7 +39,17 @@ export function QueryCard() {
             <LoaderCircle size={18} class="spin" />Finding loops…
           </Show>
         </button>
-        <Show when={errorMsg()}>{(m) => <p class="query-error" role="alert">{m()}</p>}</Show>
+        <Show when={errorMsg()}>{(m) => {
+          // Matches `MustPassTooFar`'s message in src/server.rs (D110).
+          const need = () => Number(/need at least (\d+) km/.exec(m())?.[1] ?? NaN);
+          return (
+            <p class="query-error" role="alert">{m()}
+              <Show when={need() <= 80}>
+                {" "}<button class="link-btn" onClick={() => { setDistanceKm(need()); void findRoutes(); }}>Use {need()} km</button>
+              </Show>
+            </p>
+          );
+        }}</Show>
       </Show>
     </section>
   );
