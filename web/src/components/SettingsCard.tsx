@@ -46,7 +46,7 @@ function Mult(props: { k: Term & NumericWeight; label: string; min?: number }) {
   );
 }
 
-const signed = (v: number) => (v > 0 ? `+${v.toFixed(2)}` : v.toFixed(2));
+const signed = (v: number) => (v > 0 ? `+${v.toFixed(2)}` : v < 0 ? `\u2212${(-v).toFixed(2)}` : v.toFixed(2));
 const shape = (v: number, lo: string, hi: string) => (v < -0.2 ? lo : v > 0.2 ? hi : "any");
 
 function Shape(props: { k: "uphill" | "downhill" | "technical"; label: string }) {
@@ -84,6 +84,7 @@ export function SettingsCard() {
         <h2>Settings</h2>
         <button class="link-btn" onClick={clearAll} title="All costs off, no climb goal, no areas: only the distance counts">Clear all</button>
       </header>
+      <div class="set-row set-cols" aria-hidden="true"><span>Term</span><span>acts on</span><span>value</span><span>effect</span></div>
 
       <h3 class="set-group">Preferences <span>below ×1 prefers, above avoids</span></h3>
       <For each={TERMS.filter((t) => t.k !== "view" || hasView())}>{(t) => (
