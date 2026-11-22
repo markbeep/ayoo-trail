@@ -40,11 +40,14 @@ const TECH_FACTORS: [[f32; 5]; 3] = [
 const OFFICIAL_FACTORS: [f32; 2] = [0.7, 1.0];
 const FOREST_FACTORS: [f32; 2] = [0.9, 1.0];
 const URBAN_FACTORS: [f32; 3] = [1.0, 1.3, 2.0];
-/// View factor at the best 360° view score; no view or no data is 1.0, linear in between (D100).
-/// A starting point to tune, like Q17.
+/// View factor at or above `VIEW_HI`; at or below `VIEW_LO` (and without data) it is 1.0, linear
+/// in between (D100). The range spans CH's typical scores (p10 55, median 93, peaks 225–240), so
+/// the term separates valleys from ridges. Starting points to tune, like Q17.
 const VIEW_BEST: f32 = 0.7;
-/// View score from which a stretch counts as "a wide view" in the bar's detail (0..=1 of the range).
-pub const WIDE_VIEW: f32 = 0.7;
+const VIEW_LO: u8 = 60;
+const VIEW_HI: u8 = 200;
+/// View score from which a stretch counts as "a wide view" in the bar's detail (~top 8 % of CH).
+pub const WIDE_VIEW: u8 = 160;
 /// Trails and minor ways, unclassified/residential, tertiary, secondary, primary (D93).
 const TRAFFIC_FACTORS: [f32; 5] = [1.0, 1.1, 1.3, 1.6, 2.0];
 
@@ -277,11 +280,8 @@ pub fn term_minima(w: &Weights) -> Breakdown {
 
 /// Raw view factor of a view score (0 = no data).
 fn view_factor(v: u8) -> f32 {
-    if v == 0 {
-        1.0
-    } else {
-        1.0 - (1.0 - VIEW_BEST) * (v - 1) as f32 / 254.0
-    }
+    let s = (v.clamp(VIEW_LO, VIEW_HI) - VIEW_LO) as f32 / (VIEW_HI - VIEW_LO) as f32;
+    1.0 - (1.0 - VIEW_BEST) * s // v == 0 (no data) clamps to VIEW_LO: neutral
 }
 
 /// Weighted view factor of a node, for pulling vias toward views (D100).

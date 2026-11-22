@@ -20,7 +20,7 @@ export const HILLINESS: Record<Hilliness, { label: string; mPerKm: number }> = {
 };
 export const DISTANCE_PRESETS_KM = [10, 15, 21] as const;
 
-export const DEFAULT_WEIGHTS: Weights = { slope: 1, uphill: 0, downhill: -1, surface: 1, tech: 1, technical: -1, official: 1, forest: 1, urban: 1, traffic: 1 };
+export const DEFAULT_WEIGHTS: Weights = { slope: 1, uphill: 0, downhill: -1, surface: 1, tech: 1, technical: -1, official: 1, forest: 1, urban: 1, traffic: 1, view: 0 };
 
 /** Slider position 0–1 ↔ weight exponent 0–4, so the default (1) sits mid-track (D51). */
 export const MAX_WEIGHT = 4;
@@ -46,6 +46,7 @@ export const FACTORS: Record<BreakdownKey, { label: string; question: string; we
   forest: { label: "Forest", weight: "forest", question: "How much do you want to run through forest?" },
   urban: { label: "Away from towns", weight: "urban", question: "How much should villages and towns be avoided?" },
   traffic: { label: "Quiet roads", weight: "traffic", question: "How much should busy roads be avoided?" },
+  view: { label: "Views", weight: "view", question: "How much do you want wide views from ridges and peaks?" },
 };
 
 /** Climb: a preset follows the distance, meters are fixed, "max" asks for as much as possible (D52). */

@@ -8,7 +8,7 @@ const share: Share = {
   km: 15,
   climb: { preset: "hilly" },
   strictness: 0.8,
-  weights: { slope: 1, uphill: 0, downhill: -1, surface: 1, tech: 1, technical: -1, official: 1, forest: 2.5, urban: 1, traffic: 0 },
+  weights: { slope: 1, uphill: 0, downhill: -1, surface: 1, tech: 1, technical: -1, official: 1, forest: 2.5, urban: 1, traffic: 0, view: 2 },
   maxSac: 3,
   zones: [{ lat: 47.31, lon: 9.1, radius_m: 300 }],
   checkpoints: [],
@@ -52,5 +52,6 @@ test("old links without zone flags or checkpoints still parse", () => {
   const d = decodeShare("#s=47.2985,9.095&d=15&c=hilly&t=0.8&x=3&w=1,0,-1,1,1,-1,1,2.5,1,0&z=47.31,9.1,300");
   assert.deepEqual(d?.zones, [{ lat: 47.31, lon: 9.1, radius_m: 300 }]);
   assert.deepEqual(d?.checkpoints, []);
+  assert.equal(d?.weights.view, 0, "links from before the view term keep it off (D100)");
   assert.equal(decodeShare(encodeShare(share).replace("z=47.31,9.1,300", "z=47.31,9.1,300,q")), null);
 });

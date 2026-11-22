@@ -7,7 +7,7 @@ import type { StyleSpecification, GeoJSONSource, LngLatLike, FilterSpecification
 // Vite bundles it; point it at the worker file explicitly.
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import {
-  BASE_MAPS, GLYPHS, OPENMAPTILES, OPENMAPTILES_ATTRIBUTION, OVERLAYS, TERRAIN, TRAILS_SOURCE, type BaseMapId,
+  BASE_MAPS, GLYPHS, OPENMAPTILES, OPENMAPTILES_ATTRIBUTION, OVERLAYS, TERRAIN, TRAILS_SOURCE, VIEW_SOURCE, type BaseMapId,
 } from "./basemaps";
 import { OMT, outdoorFills, outdoorLabels, outdoorLines, type MapPalette } from "./outdoorStyle";
 import type { LatLon, Route } from "../routes/types";
@@ -85,6 +85,7 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
     [OMT]: { type: "vector", url: OPENMAPTILES, attribution: OPENMAPTILES_ATTRIBUTION },
     terrain: { type: "raster-dem", url: TERRAIN, tileSize: 512, encoding: "terrarium" },
     trails: { type: "raster", ...TRAILS_SOURCE },
+    view: { type: "raster", ...VIEW_SOURCE },
   };
   for (const def of BASE_MAPS) if (def.raster) sources[def.id] = { type: "raster", ...def.raster };
   const withVis = (ls: LayerSpecification[], v: boolean) => ls.map((l) => ({ ...l, layout: { ...l.layout, visibility: on(v) } }) as LayerSpecification);
@@ -110,6 +111,7 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
       filter: ["==", ["get", "class"], "wood"], layout: { visibility: overlay("forest") },
       paint: { "fill-color": c.forest, "fill-opacity": 0.45 },
     },
+    { id: "overlay-view", type: "raster", source: "view", layout: { visibility: overlay("view") }, paint: { "raster-opacity": 0.75 } },
     ...withVis(outdoorLines(c.palette), outdoor),
     { id: "overlay-trails", type: "raster", source: "trails", layout: { visibility: overlay("trails") } },
     ...withVis(outdoorLabels(c.palette), outdoor),

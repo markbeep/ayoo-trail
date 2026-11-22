@@ -63,7 +63,16 @@ export const OVERLAYS: readonly OverlayDef[] = [
   { id: "relief", label: "Relief shading", defaultOn: true },
   { id: "trails", label: "Marked trails", defaultOn: false },
   { id: "forest", label: "Forest", defaultOn: false },
+  { id: "view", label: "360° view", defaultOn: false },
 ];
+
+/** Our own 360° view tiles (D100), rendered by trail-calc-server from view.bin. MapLibre needs an absolute URL. */
+export const VIEW_SOURCE: RasterSource = {
+  tiles: [`${globalThis.location?.origin ?? ""}/api/tiles/view/{z}/{x}/{y}`],
+  tileSize: 256,
+  maxzoom: 14,
+  attribution: SWISSTOPO,
+};
 
 /** shortcut: Switzerland only (swisstopo Wanderwege); add Waymarked Trails per region once its tile terms are checked. */
 export const TRAILS_SOURCE: RasterSource = {
@@ -77,7 +86,6 @@ export const TRAILS_SOURCE: RasterSource = {
 export const LATER_OVERLAYS = [
   { id: "popular", label: "Popular trails" },
   { id: "steepness", label: "Path steepness" },
-  { id: "view", label: "360° view" },
   { id: "sun", label: "Sun & shade" },
 ] as const;
 

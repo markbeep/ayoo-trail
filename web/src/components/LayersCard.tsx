@@ -8,6 +8,7 @@ const SWATCH: Record<string, string> = {
   satellite: "linear-gradient(135deg,#55633f,#7b7a55 50%,#3d4a33)",
   relief: "linear-gradient(135deg,#f6f3ee 0 35%,#b9b0a6 60%,#7c726a)",
   trails: "repeating-linear-gradient(135deg,#f2efe9 0 7px,#e6b422 7px 9px,#f2efe9 9px 14px,#c8322a 14px 16px)",
+  view: "linear-gradient(135deg,#28285a,#466eaa 35%,#fadc50 55%,#f58228 75%,#d72828)",
   forest: "radial-gradient(circle at 30% 40%,#5f8a4c 0 30%,transparent 31%),radial-gradient(circle at 70% 65%,#5f8a4c 0 28%,#dde4cf 29%)",
 };
 

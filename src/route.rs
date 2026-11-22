@@ -556,7 +556,7 @@ pub fn route_stats(g: &Graph, r: &Route, p: &Profile) -> RouteStats {
         if let Some(c) = traffic_class(a.highway as u8).checked_sub(1) {
             st.traffic_m[c] += len;
         }
-        if g.hot_edge(s.edge).view as f32 >= 1.0 + 254.0 * WIDE_VIEW {
+        if g.hot_edge(s.edge).view >= WIDE_VIEW {
             st.wide_view_m += len;
         }
         if a.flags & flags::MISSING_TAGS != 0 {

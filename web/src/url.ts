@@ -24,7 +24,7 @@ const r5 = (x: number) => Math.round(x * 1e5) / 1e5;
 const pt = (p: LatLon) => `${r5(p.lat)},${r5(p.lon)}`;
 
 /** Weight order in `w=`; new terms go at the end so older links still parse. */
-const WEIGHTS = ["slope", "uphill", "downhill", "surface", "tech", "technical", "official", "forest", "urban", "traffic"] as const;
+const WEIGHTS = ["slope", "uphill", "downhill", "surface", "tech", "technical", "official", "forest", "urban", "traffic", "view"] as const;
 const HILLS = new Set(["uphill", "downhill", "technical"]);
 const PRESETS = ["gentle", "hilly", "mountain"];
 /** Zone flag in `z=` (D97): absent = soft avoid, as in links before it. */
@@ -71,7 +71,7 @@ export function decodeShare(hash: string): Share | null {
     const weights = {} as Weights;
     WEIGHTS.forEach((k, i) => {
       const hill = HILLS.has(k);
-      weights[k] = w[i] === undefined || w[i] === "" ? (k === "uphill" ? 0 : hill ? -1 : 1) : num(w[i], hill ? -1 : 0, hill ? 1 : 4);
+      weights[k] = w[i] === undefined || w[i] === "" ? (k === "uphill" || k === "view" ? 0 : hill ? -1 : 1) : num(w[i], hill ? -1 : 0, hill ? 1 : 4);
     });
     const c = q.get("c") ?? "";
     const climb: ShareClimb = c === "max" ? "max" : PRESETS.includes(c) ? { preset: c as "hilly" } : { m: num(c, 0, 20_000) };
