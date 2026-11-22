@@ -182,7 +182,7 @@ async fn blocked_start_is_422() {
 #[tokio::test]
 async fn bad_weight_is_422() {
     let mut body = two((LAT, 7.4), (LAT, 7.402));
-    body["profile"] = json!({"weights":{"slope":9.0}});
+    body["profile"] = json!({"weights":{"slope":101.0}});
     let (status, v) = post(Some(graph()), body).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(err(&v), "weight out of range");

@@ -392,7 +392,7 @@ fn profile_json_defaults_and_validation() {
     assert_eq!(p.max_sac, 3);
     assert!(p.validate().is_ok());
 
-    let bad: Profile = serde_json::from_str(r#"{"weights":{"official":4.5}}"#).unwrap();
+    let bad: Profile = serde_json::from_str(r#"{"weights":{"official":100.5}}"#).unwrap();
     assert_eq!(bad.validate(), Err(ProfileError::WeightOutOfRange));
     let nan = Profile {
         weights: Weights {
@@ -555,4 +555,92 @@ fn view_is_neutral_at_weight_zero_and_cheaper_with_a_better_view() {
     assert_eq!(factor(0, 4.0), 1.0, "no data stays neutral");
     assert!(factor(255, 1.0) < factor(128, 1.0) && factor(128, 1.0) < factor(1, 1.0));
     assert_eq!(Weights::default().view, 0.0, "off by default (D100)");
+}
+
+#[test]
+fn negative_weights_flip_a_preference() {
+    let mut a = gravel();
+    a.forest_pct = 100;
+    let g = one_edge(1000.0, a);
+    let cost = |forest: f32| {
+        let p = Profile {
+            weights: Weights {
+                forest,
+                ..Weights::default()
+            },
+            ..Profile::default()
+        };
+        edge_cost(&g, 0, F, &p).unwrap().cost
+    };
+    assert!(cost(-1.0) > cost(0.0));
+    assert!(cost(1.0) < cost(0.0));
+}
+
+#[test]
+fn weights_validate_in_the_wide_ranges() {
+    let check = |w: Weights| {
+        Profile {
+            weights: w,
+            ..Profile::default()
+        }
+        .validate()
+    };
+    let d = Weights::default();
+    assert!(check(Weights {
+        forest: -100.0,
+        ..d
+    })
+    .is_ok());
+    assert!(check(Weights { forest: 100.0, ..d }).is_ok());
+    assert!(check(Weights {
+        traffic: 6.64,
+        view: -3.0,
+        ..d
+    })
+    .is_ok());
+    let bad = Err(ProfileError::WeightOutOfRange);
+    assert_eq!(check(Weights { forest: 100.5, ..d }), bad);
+    assert_eq!(check(Weights { slope: -0.1, ..d }), bad);
+    assert_eq!(check(Weights { tech: -1.0, ..d }), bad);
+    assert_eq!(
+        check(Weights {
+            forest: f32::NAN,
+            ..d
+        }),
+        bad
+    );
+}
+
+#[test]
+fn min_cost_per_m_stays_admissible_for_negative_weights() {
+    for w in [-50.0f32, -1.0, 1.0, 50.0] {
+        let p = Profile {
+            weights: Weights {
+                surface: w,
+                official: w,
+                forest: w,
+                urban: w,
+                traffic: w,
+                view: w,
+                ..Weights::default()
+            },
+            ..Profile::default()
+        };
+        for (surface, official, forest, urban, highway) in [
+            (Surface::Asphalt, 0, 0, 2, Highway::Primary),
+            (Surface::Gravel, 1, 100, 0, Highway::Path),
+        ] {
+            let mut a = gravel();
+            a.surface = surface;
+            a.official_category = official;
+            a.forest_pct = forest;
+            a.urban = urban;
+            a.highway = highway;
+            let g = one_edge(1000.0, a);
+            for dir in [F, B] {
+                let c = edge_cost(&g, 0, dir, &p).unwrap();
+                assert!(c.per_m >= p.min_cost_per_m(), "w {w}");
+            }
+        }
+    }
 }

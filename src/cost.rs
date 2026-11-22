@@ -25,8 +25,8 @@ pub const EXCLUSION_PENALTY: f64 = 5.0;
 pub const PREFER_FACTOR: f64 = 0.5;
 /// Most must-pass areas per request: each one is a fixed via in every seed (D97).
 pub const MAX_MUST: usize = 5;
-/// Largest weight exponent (D51).
-pub const MAX_WEIGHT: f32 = 4.0;
+/// Largest weight exponent (D51, D106); the six plain terms may also go down to -MAX_WEIGHT.
+pub const MAX_WEIGHT: f32 = 100.0;
 /// At full climb pressure, edge parts steeper than 8 % cost this share of their slope factor.
 const CLIMB_DISCOUNT: f32 = 0.8;
 
@@ -160,7 +160,7 @@ impl Default for Profile {
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum ProfileError {
     #[error(
-        "weights must be finite: terms 0-4, uphill/downhill/technical -1-1, climb_pressure 0-1"
+        "weights must be finite: terms -100-100 (slope, tech 0-100), uphill/downhill/technical -1-1, climb_pressure 0-1"
     )]
     WeightOutOfRange,
     #[error("max_sac must be between 1 and 6")]
@@ -184,11 +184,10 @@ fn min_weighted(table: &[f32], w: f32) -> f64 {
 impl Profile {
     pub fn validate(&self) -> Result<(), ProfileError> {
         let w = &self.weights;
-        let ws = [
-            w.slope, w.surface, w.tech, w.official, w.forest, w.urban, w.traffic, w.view,
-        ];
+        let signed = [w.surface, w.official, w.forest, w.urban, w.traffic, w.view];
         let ok = |v: f32, r: std::ops::RangeInclusive<f32>| v.is_finite() && r.contains(&v);
-        if !ws.iter().all(|&v| ok(v, 0.0..=MAX_WEIGHT))
+        if !signed.iter().all(|&v| ok(v, -MAX_WEIGHT..=MAX_WEIGHT))
+            || ![w.slope, w.tech].iter().all(|&v| ok(v, 0.0..=MAX_WEIGHT))
             || !ok(w.uphill, -1.0..=1.0)
             || !ok(w.downhill, -1.0..=1.0)
             || !ok(w.technical, -1.0..=1.0)
@@ -274,7 +273,8 @@ pub fn term_minima(w: &Weights) -> Breakdown {
         forest: min_weighted(&FOREST_FACTORS, w.forest) as f32,
         urban: min_weighted(&URBAN_FACTORS, w.urban) as f32,
         traffic: min_weighted(&TRAFFIC_FACTORS, w.traffic) as f32,
-        view: weighted(VIEW_BEST, w.view),
+        // No-data cells are neutral, so a negative weight's best is 1.
+        view: weighted(VIEW_BEST, w.view).min(1.0),
     }
 }
 
