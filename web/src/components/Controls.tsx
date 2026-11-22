@@ -161,7 +161,7 @@ export function ClimbSlider() {
     if (near) return near.k === "max" ? "max" : { preset: near.k };
     return { m: Math.round(((p / 0.96) * maxM()) / CLIMB_STEP_M) * CLIMB_STEP_M };
   };
-  const word = (c: Climb) => c === "max" ? "As much as possible" : "preset" in c ? `${HILLINESS[c.preset].label}, ${HILLINESS[c.preset].mPerKm * distanceKm()} m` : `${c.m} m`;
+  const word = (c: Climb) => c === "off" ? "Any" : c === "max" ? "As much as possible" : "preset" in c ? `${HILLINESS[c.preset].label}, ${HILLINESS[c.preset].mPerKm * distanceKm()} m` : `${c.m} m`;
   return (
     <Slider
       label="Climb" value={toPos()} marks={marks()}

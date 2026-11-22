@@ -16,7 +16,7 @@ export const ZONE_MIN_M = 50;
 export const ZONE_MAX_M = 5000;
 /** The server rejects more (`Profile::validate`). */
 export const MAX_ZONES = 32;
-export const MAX_MUST = 5;
+export const MAX_MUST = 10;
 export const isMust = (z: Zone) => zoneMode(z) === "must";
 
 const M_PER_DEG_LAT = 111_320;

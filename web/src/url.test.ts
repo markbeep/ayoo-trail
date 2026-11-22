@@ -14,6 +14,7 @@ const share: Share = {
   checkpoints: [],
   loop: 2,
   wps: [{ lat: 47.2985, lon: 9.095 }, { lat: 47.31, lon: 9.12 }, { lat: 47.2985, lon: 9.095 }],
+  penalties: { repeat: 5, avoid_factor: 5, prefer_factor: 0.5, stem_m: 500, max_overlap: 0.5 },
 };
 
 test("a share link round-trips", () => {
@@ -29,7 +30,8 @@ test("garbage and out-of-range values are rejected", () => {
   const bad = (patch: Partial<Share>) => decodeShare(encodeShare({ ...share, ...patch }));
   assert.equal(bad({ km: 500 }), null);
   assert.equal(bad({ maxSac: 9 }), null);
-  assert.equal(bad({ weights: { ...share.weights, forest: 7 } }), null);
+  assert.equal(bad({ weights: { ...share.weights, forest: 101 } }), null);
+  assert.equal(bad({ weights: { ...share.weights, slope: -1 } }), null);
   assert.equal(bad({ zones: [{ lat: 47, lon: 9, radius_m: 1e6 }] }), null);
   assert.equal(bad({ zones: Array(33).fill(share.zones[0]) }), null);
 });
@@ -54,4 +56,24 @@ test("old links without zone flags or checkpoints still parse", () => {
   assert.deepEqual(d?.checkpoints, []);
   assert.equal(d?.weights.view, 0, "links from before the view term keep it off (D100)");
   assert.equal(decodeShare(encodeShare(share).replace("z=47.31,9.1,300", "z=47.31,9.1,300,q")), null);
+});
+
+test("power settings round-trip: signed weights, climb off, penalties", () => {
+  const s: Share = {
+    ...share,
+    climb: "off",
+    weights: { ...share.weights, forest: -43.71, traffic: 6.64, slope: 12 },
+    penalties: { repeat: 0.01, avoid_factor: 100, prefer_factor: 0.001, stem_m: 0, max_overlap: 1 },
+  };
+  assert.deepEqual(decodeShare(encodeShare(s)), s);
+  assert.ok(!encodeShare(share).includes("n="), "default penalties stay out of the link");
+  const bad = (p: Partial<Share["penalties"]>) => decodeShare(encodeShare({ ...share, penalties: { ...share.penalties, ...p } }));
+  assert.equal(bad({ repeat: 0.001 }), null);
+  assert.equal(bad({ avoid_factor: 0.5 }), null);
+  assert.equal(bad({ stem_m: 6000 }), null);
+});
+
+test("links without penalties get the defaults", () => {
+  const d = decodeShare("#s=47.2985,9.095&d=15&c=hilly&t=0.8&x=3&w=1,0,-1,1,1,-1,1,2.5,1,0");
+  assert.deepEqual(d?.penalties, { repeat: 5, avoid_factor: 5, prefer_factor: 0.5, stem_m: 500, max_overlap: 0.5 });
 });

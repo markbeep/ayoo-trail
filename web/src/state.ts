@@ -6,7 +6,7 @@ import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
 import type { BreakdownKey, Checkpoint, LatLon, Route, Weights } from "./routes/types";
 import { ApiError, generate, routeVia } from "./api";
 import { clampRadius, MAX_ZONES, ZONE_DEFAULT_M, type Zone } from "./routes/zones";
-import { decodeShare, encodeShare, MAX_CHECKPOINTS } from "./url";
+import { decodeShare, DEFAULT_PENALTIES, encodeShare, MAX_CHECKPOINTS } from "./url";
 import { nearestOnRoute } from "./routes/gpx";
 import { copyId, mergeCopies } from "./routes/copies";
 
@@ -50,7 +50,7 @@ export const FACTORS: Record<BreakdownKey, { label: string; question: string; we
 };
 
 /** Climb: a preset follows the distance, meters are fixed, "max" asks for as much as possible (D52). */
-export type Climb = { preset: Hilliness } | { m: number } | "max";
+export type Climb = { preset: Hilliness } | { m: number } | "max" | "off";
 export const CLIMB_STEP_M = 10;
 export const climbMaxM = () => Math.max(1500, Math.ceil((150 * distanceKm()) / 100) * 100);
 
@@ -118,12 +118,13 @@ export function toggleOverlay(id: string) {
 /** Target meters of climb, or null for "as much as possible". */
 export function climbTargetM(): number | null {
   const c = climb();
-  if (c === "max") return null;
+  if (c === "max" || c === "off") return null;
   return "preset" in c ? HILLINESS[c.preset].mPerKm * distanceKm() : c.m;
 }
 export function climbLabel() {
   const c = climb();
   if (c === "max") return "Max climb";
+  if (c === "off") return "Any climb";
   return "preset" in c ? HILLINESS[c.preset].label : `${c.m} m up`;
 }
 
@@ -303,7 +304,7 @@ export function shareLink(): string {
   const hash = encodeShare({
     start: start(), km: distanceKm(), climb: climb(), strictness: strictness(),
     weights: weights(), maxSac: maxSac(), zones: [...zones()], checkpoints: [...checkpoints()], loop: i,
-    wps: r?.copyOf ? r.waypoints : null,
+    wps: r?.copyOf ? r.waypoints : null, penalties: DEFAULT_PENALTIES,
   });
   return `${location.origin}${location.pathname}#${hash}`;
 }

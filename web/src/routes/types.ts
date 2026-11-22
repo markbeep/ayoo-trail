@@ -14,6 +14,9 @@ export interface RouteGeometry {
 
 /** Cost weights (D51): each term is `factor^w`, w in 0–4, 0 ignores it, 1 is the default.
  * `uphill`/`downhill` run −1 gentle … 0 any … +1 steep (D53). */
+/** User-set penalties (D109), sent in the profile. */
+export interface Penalties { repeat: number; avoid_factor: number; prefer_factor: number; stem_m: number; max_overlap: number }
+
 export interface Weights {
   slope: number;
   uphill: number;
