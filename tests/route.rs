@@ -453,7 +453,7 @@ fn backtracks_into_a_dead_end_are_dropped() {
         r.distance_m
     );
 
-    let t = drop_backtracks(&g, r);
+    let t = drop_backtracks(&g, r, &[]);
     assert!(
         (t.distance_m - 800.0).abs() < 5.0,
         "spur removed: {}",

@@ -107,19 +107,30 @@ pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>,
     let target = req.distance_m;
     let region = Region::new(g, p, start, REGION_RADIUS * target);
     let musts = must_passes(g, p, start)?;
+    let musts = if musts.is_empty() {
+        musts
+    } else {
+        order_musts(g, &region, p, start, &musts).ok_or(GenerateError::MustPassUnreachable)?
+    };
     if !musts.is_empty() {
-        let shortest = route_loop(
-            g,
-            &region,
-            p,
-            start,
-            &musts.iter().map(|m| m.1).collect::<Vec<_>>(),
-        )
-        .ok_or(GenerateError::MustPassUnreachable)?;
+        let shortest = route_loop(g, &region, p, start, &musts, &musts)
+            .ok_or(GenerateError::MustPassUnreachable)?;
         if shortest.distance_m > target * (1.0 + TOLERANCE) {
             return Err(GenerateError::MustPassTooFar {
                 min_m: shortest.distance_m,
             });
+        }
+        // D110: when the must-pass points alone fill the distance, they are the vias.
+        if shortest.distance_m >= target * (1.0 - TOLERANCE) {
+            return Ok(vec![GeneratedRoute {
+                distance_met: true,
+                waypoints: std::iter::once(req.start)
+                    .chain(musts.iter().map(|m| on_route(g, &shortest, m.pos)))
+                    .chain(std::iter::once(req.start))
+                    .collect(),
+                route: shortest,
+                profile: p.clone(),
+            }]);
         }
     }
 
@@ -204,7 +215,7 @@ fn seed(
     start: Snap,
     heading_deg: f64,
     bearings: &[f64],
-    musts: &[(f64, Snap)],
+    musts: &[Snap],
 ) -> Option<Candidate> {
     let target = req.distance_m;
     let sac = req.profile.max_sac;
@@ -245,8 +256,8 @@ fn seed(
             r *= 0.7;
             continue;
         };
-        let vias = with_musts(&vias, bearings, heading_deg, musts);
-        let Some(route) = route_loop(g, region, p, start, &vias) else {
+        let vias = insert_vias(start, musts, &vias);
+        let Some(route) = route_loop(g, region, p, start, &vias, musts) else {
             r *= 0.7;
             continue;
         };
@@ -297,57 +308,116 @@ fn seed(
     best
 }
 
-/// Must-pass areas snapped onto a reachable trail inside them, with their bearing from the
-/// start, sorted by bearing (D97). Reachability past hard avoids is checked by the caller.
-fn must_passes(g: &Graph, p: &Profile, start: Snap) -> Result<Vec<(f64, Snap)>, GenerateError> {
+/// Must-pass areas snapped onto a reachable trail inside them (D97). Reachability past hard
+/// avoids is checked by the caller.
+fn must_passes(g: &Graph, p: &Profile, start: Snap) -> Result<Vec<Snap>, GenerateError> {
     let home = g.edge_component(start.edge, p.max_sac);
-    let mut out = Vec::new();
-    for x in p.exclude.iter().filter(|x| x.mode == ExclusionMode::Must) {
-        let c = LatLon {
-            lat: x.lat,
-            lon: x.lon,
-        };
-        let s = g
-            .snap_filtered(c, x.radius_m, |e| {
+    p.exclude
+        .iter()
+        .filter(|x| x.mode == ExclusionMode::Must)
+        .map(|x| {
+            let c = LatLon {
+                lat: x.lat,
+                lon: x.lon,
+            };
+            g.snap_filtered(c, x.radius_m, |e| {
                 g.edge_component(e, p.max_sac) == home && traversable(g, e, p)
             })
-            .ok_or(GenerateError::MustPassUnreachable)?;
-        out.push((bearing(start.pos, s.pos), s));
-    }
-    out.sort_by(|a, b| a.0.total_cmp(&b.0));
-    Ok(out)
+            .ok_or(GenerateError::MustPassUnreachable)
+        })
+        .collect()
 }
 
-/// Degrees clockwise from north, 0..360.
-fn bearing(from: LatLon, to: LatLon) -> f64 {
-    let proj = LocalProjection::new(from.lat);
-    let (a, b) = (proj.project(from), proj.project(to));
-    (b[0] - a[0])
-        .atan2(b[1] - a[1])
-        .to_degrees()
-        .rem_euclid(360.0)
-}
-
-/// The free vias and the must-pass snaps in one loop order: by bearing, starting opposite
-/// the seed heading so the free vias stay in the middle of the loop.
-fn with_musts(
-    vias: &[Snap],
-    bearings: &[f64],
-    heading_deg: f64,
-    musts: &[(f64, Snap)],
-) -> Vec<Snap> {
-    if musts.is_empty() {
-        return vias.to_vec();
-    }
-    let around = |b: f64| (b - heading_deg + 180.0).rem_euclid(360.0);
-    let mut all: Vec<(f64, Snap)> = bearings
-        .iter()
-        .map(|d| around(heading_deg + d))
-        .zip(vias.iter().copied())
-        .chain(musts.iter().map(|&(b, s)| (around(b), s)))
+/// The must-pass points in the order of the cheapest loop start → all of them → start (D110):
+/// exact Held-Karp over the leg costs, at most `MAX_MUST` points. None if a leg is unreachable.
+fn order_musts(
+    g: &Graph,
+    region: &Region,
+    p: &Profile,
+    start: Snap,
+    musts: &[Snap],
+) -> Option<Vec<Snap>> {
+    let pts: Vec<Snap> = std::iter::once(start)
+        .chain(musts.iter().copied())
         .collect();
-    all.sort_by(|a, b| a.0.total_cmp(&b.0));
-    all.into_iter().map(|(_, s)| s).collect()
+    let empty = Visited::new(g.edge_count());
+    let leg = |a: Snap, b: Snap| {
+        region
+            .leg(p, a, b, &empty)
+            .or_else(|| route(g, p, a, b, &empty))
+            .map(|r| r.cost)
+    };
+    let n = musts.len();
+    let mut c = vec![vec![0.0; n + 1]; n + 1];
+    for i in 0..=n {
+        for j in 0..=n {
+            if i != j {
+                c[i][j] = leg(pts[i], pts[j])?;
+            }
+        }
+    }
+    // best[mask][j]: cheapest path from the start through the musts in `mask`, ending at must j.
+    let full = (1usize << n) - 1;
+    let mut best = vec![vec![(f64::INFINITY, usize::MAX); n]; full + 1];
+    for j in 0..n {
+        best[1 << j][j] = (c[0][j + 1], usize::MAX);
+    }
+    for mask in 1..=full {
+        for j in 0..n {
+            let (cost, _) = best[mask][j];
+            if mask & (1 << j) == 0 || !cost.is_finite() {
+                continue;
+            }
+            for k in 0..n {
+                if mask & (1 << k) == 0 {
+                    let next = cost + c[j + 1][k + 1];
+                    let m = mask | (1 << k);
+                    if next < best[m][k].0 {
+                        best[m][k] = (next, j);
+                    }
+                }
+            }
+        }
+    }
+    let mut j = (0..n).min_by(|&a, &b| {
+        (best[full][a].0 + c[a + 1][0]).total_cmp(&(best[full][b].0 + c[b + 1][0]))
+    })?;
+    let mut mask = full;
+    let mut order = Vec::with_capacity(n);
+    while j != usize::MAX {
+        order.push(musts[j]);
+        let prev = best[mask][j].1;
+        mask &= !(1 << j);
+        j = prev;
+    }
+    order.reverse();
+    Some(order)
+}
+
+/// The free vias inserted into start → `order` → start where each adds the least straight-line
+/// detour.
+fn insert_vias(start: Snap, order: &[Snap], vias: &[Snap]) -> Vec<Snap> {
+    let mut out = order.to_vec();
+    for &v in vias {
+        let at = |i: usize| {
+            if i == 0 || i > out.len() {
+                start.pos
+            } else {
+                out[i - 1].pos
+            }
+        };
+        let i = (0..=out.len())
+            .min_by(|&a, &b| {
+                let d = |i: usize| {
+                    haversine_m(at(i), v.pos) + haversine_m(v.pos, at(i + 1))
+                        - haversine_m(at(i), at(i + 1))
+                };
+                d(a).total_cmp(&d(b))
+            })
+            .unwrap_or(0);
+        out.insert(i, v);
+    }
+    out
 }
 
 /// The loop start → vias → start, with out-and-back spurs at dead-end vias cut.
@@ -357,6 +427,7 @@ fn route_loop(
     p: &Profile,
     start: Snap,
     vias: &[Snap],
+    musts: &[Snap],
 ) -> Option<Route> {
     let snaps: Vec<Snap> = std::iter::once(start)
         .chain(vias.iter().copied())
@@ -368,10 +439,13 @@ fn route_loop(
     };
     let mut visited = Visited::new(g.edge_count());
     let leg = |a, b, v: &Visited| region.leg(p, a, b, v).or_else(|| route(g, p, a, b, v));
-    let route = route_legs_with(g, &snaps, &mut visited, away_from_start, leg)?;
+    // D110: the way straight back from a must-pass point (a summit) is free of the repeat
+    // penalty, and its out-and-back is not cut.
+    let hold = |i: usize| i < snaps.len() - 1 && musts.contains(&snaps[i]);
+    let route = route_legs_with(g, &snaps, &mut visited, away_from_start, leg, hold)?;
     // A via point on a dead end would leave an out-and-back spur; cut it. Where the
     // network allows only out-and-backs (trimming removes most of it), keep the original.
-    let trimmed = drop_backtracks(g, route.clone());
+    let trimmed = drop_backtracks(g, route.clone(), musts);
     Some(if trimmed.distance_m >= 0.5 * route.distance_m {
         trimmed
     } else {

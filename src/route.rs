@@ -248,28 +248,45 @@ pub(crate) fn route_legs(
     visited: &mut Visited,
     mark: impl Fn(u32) -> bool,
 ) -> Option<Route> {
-    route_legs_with(g, snaps, visited, mark, |a, b, v| route(g, p, a, b, v))
+    route_legs_with(
+        g,
+        snaps,
+        visited,
+        mark,
+        |a, b, v| route(g, p, a, b, v),
+        |_| false,
+    )
 }
 
-/// `route_legs` with each leg routed by `leg(from, to, visited)`.
+/// `route_legs` with each leg routed by `leg(from, to, visited)`. When `hold(i)`, the edges of
+/// the leg ending at `snaps[i]` count as visited only from the leg after next, so the way
+/// straight back from that point (a summit) pays no repeat penalty (D110).
 pub(crate) fn route_legs_with(
     g: &Graph,
     snaps: &[Snap],
     visited: &mut Visited,
     mark: impl Fn(u32) -> bool,
     leg: impl Fn(Snap, Snap, &Visited) -> Option<Route>,
+    hold: impl Fn(usize) -> bool,
 ) -> Option<Route> {
     if snaps.len() < 2 {
         return None;
     }
     let mut steps: Vec<RouteStep> = Vec::new();
     let mut cost = 0.0;
-    for w in snaps.windows(2) {
+    let mut held: Vec<u32> = Vec::new();
+    for (i, w) in snaps.windows(2).enumerate() {
         let leg = leg(w[0], w[1], visited)?;
         cost += leg.cost;
-        for st in &leg.steps {
-            if mark(st.edge) {
-                visited.insert(st.edge);
+        for e in held.drain(..) {
+            visited.insert(e);
+        }
+        let marked = leg.steps.iter().map(|s| s.edge).filter(|&e| mark(e));
+        if hold(i + 1) {
+            held.extend(marked);
+        } else {
+            for e in marked {
+                visited.insert(e);
             }
         }
         for st in leg.steps {
@@ -290,13 +307,16 @@ pub(crate) fn route_legs_with(
 
 /// Cancels immediate out-and-backs (along an edge, then straight back along it), so a via point
 /// on a dead end does not leave a spur in a generated loop. Stack-based, so multi-edge spurs
-/// unwind fully. `cost` is kept from the input; distance, climb and descent are recomputed.
-pub fn drop_backtracks(g: &Graph, r: Route) -> Route {
+/// unwind fully. A turnaround exactly at a `keep` snap (a must-pass summit, D110) stays. `cost`
+/// is kept from the input; distance, climb and descent are recomputed.
+pub fn drop_backtracks(g: &Graph, r: Route, keep: &[Snap]) -> Route {
     let mut out: Vec<RouteStep> = Vec::with_capacity(r.steps.len());
     for st in r.steps {
+        let kept = keep.iter().any(|k| k.edge == st.edge && k.t == st.from_t);
         match out.last_mut() {
             Some(prev)
-                if prev.edge == st.edge
+                if !kept
+                    && prev.edge == st.edge
                     && prev.direction() != st.direction()
                     && prev.to_t == st.from_t =>
             {

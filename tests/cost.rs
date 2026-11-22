@@ -514,7 +514,7 @@ fn prefer_marker_discounts_and_keeps_the_bound() {
 }
 
 #[test]
-fn at_most_five_must_areas() {
+fn at_most_ten_must_areas() {
     let x = Exclusion {
         lat: 46.0,
         lon: 7.0,
@@ -522,7 +522,7 @@ fn at_most_five_must_areas() {
         mode: ExclusionMode::Must,
     };
     let mut p = Profile {
-        exclude: vec![x; 5],
+        exclude: vec![x; 10],
         ..Profile::default()
     };
     assert!(p.validate().is_ok());

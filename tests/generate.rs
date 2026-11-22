@@ -350,3 +350,128 @@ fn overlap_and_stem_come_from_the_profile() {
         }
     }
 }
+
+/// Shortest closed tour start → points (any order) → start, by Manhattan distance on a grid.
+fn best_tour(start: (f64, f64), pts: &[(f64, f64)]) -> f64 {
+    fn perms(v: Vec<usize>) -> Vec<Vec<usize>> {
+        if v.len() <= 1 {
+            return vec![v];
+        }
+        let mut out = Vec::new();
+        for i in 0..v.len() {
+            let mut rest = v.clone();
+            let x = rest.remove(i);
+            for mut p in perms(rest) {
+                p.insert(0, x);
+                out.push(p);
+            }
+        }
+        out
+    }
+    let d = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() + (a.1 - b.1).abs();
+    perms((0..pts.len()).collect())
+        .into_iter()
+        .map(|o| {
+            let mut at_ = start;
+            let mut s = 0.0;
+            for i in o {
+                s += d(at_, pts[i]);
+                at_ = pts[i];
+            }
+            s + d(at_, start)
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+#[test]
+fn must_pass_order_follows_cost_not_bearing() {
+    let g = grid(11, 100.0);
+    let pts = [
+        (1000.0, 100.0),
+        (200.0, 900.0),
+        (900.0, 900.0),
+        (300.0, 200.0),
+    ];
+    let tour = best_tour((0.0, 0.0), &pts);
+    let mut r = req(at(0.0, 0.0), tour);
+    r.profile.exclude = pts
+        .iter()
+        .map(|&(x, y)| area(at(x, y), 50.0, ExclusionMode::Must))
+        .collect();
+    let routes = generate(&g, &r).unwrap();
+    let best = &routes[0];
+    assert!(
+        best.route.distance_m <= tour * 1.02,
+        "{} vs best tour {tour}",
+        best.route.distance_m
+    );
+    assert_eq!(best.waypoints.len(), pts.len() + 2, "no free vias");
+}
+
+#[test]
+fn fitting_must_passes_are_the_only_vias() {
+    let g = grid(11, 100.0);
+    let mut r = req(at(0.0, 0.0), 2000.0);
+    r.profile.exclude = vec![area(at(500.0, 500.0), 50.0, ExclusionMode::Must)];
+    let routes = generate(&g, &r).unwrap();
+    assert_eq!(routes[0].waypoints.len(), 3);
+    assert!(closest(&g, &routes[0], at(500.0, 500.0)) < 5.0);
+}
+
+#[test]
+fn a_summit_spur_stays_on_the_loop() {
+    let n = 11;
+    let mut w = grid_writer(n, 100.0);
+    let a = EdgeAttrs {
+        length_m: 100.0,
+        surface: Surface::Gravel,
+        sac: 1,
+        ..Default::default()
+    };
+    // Node ids run x-major: (i, j) is i * n + j, so (1000, 500) is 10 * 11 + 5.
+    let mut prev = (10 * n + 5) as u32;
+    for k in 1..=3 {
+        let (p, q) = (
+            at(1000.0 + (k - 1) as f64 * 100.0, 500.0),
+            at(1000.0 + k as f64 * 100.0, 500.0),
+        );
+        let next = w.add_node(q, 500.0);
+        w.add_edge(
+            prev,
+            next,
+            a,
+            &[(p.lat, p.lon, 500.0), (q.lat, q.lon, 500.0)],
+        );
+        prev = next;
+    }
+    let g = Graph::from_bytes(w.finish()).unwrap();
+    let tip = at(1300.0, 500.0);
+    let mut r = req(at(0.0, 0.0), 3600.0);
+    r.profile.exclude = vec![area(tip, 50.0, ExclusionMode::Must)];
+    let routes = generate(&g, &r).unwrap();
+    let m = g.edge_count() as u32;
+    for l in &routes {
+        assert!(closest(&g, l, tip) < 5.0, "loop drops the summit");
+        let cov = coverage(&g, l);
+        for e in m - 3..m {
+            assert!(
+                cov.get(&e).copied().unwrap_or(0.0) >= 199.0,
+                "spur edge {e} not both ways"
+            );
+        }
+    }
+}
+
+#[test]
+fn ten_must_passes_are_allowed() {
+    let mut p = Profile {
+        exclude: (0..10)
+            .map(|i| area(at(i as f64 * 100.0, 0.0), 50.0, ExclusionMode::Must))
+            .collect(),
+        ..Profile::default()
+    };
+    assert!(p.validate().is_ok());
+    p.exclude
+        .push(area(at(0.0, 100.0), 50.0, ExclusionMode::Must));
+    assert!(p.validate().is_err());
+}

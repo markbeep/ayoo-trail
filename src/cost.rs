@@ -24,7 +24,7 @@ pub const EXCLUSION_PENALTY: f64 = 5.0;
 /// Cost multiplier inside a soft prefer area (D97). A starting point to tune.
 pub const PREFER_FACTOR: f64 = 0.5;
 /// Most must-pass areas per request: each one is a fixed via in every seed (D97).
-pub const MAX_MUST: usize = 5;
+pub const MAX_MUST: usize = 10;
 /// Largest weight exponent (D51, D106); the six plain terms may also go down to -MAX_WEIGHT.
 pub const MAX_WEIGHT: f32 = 100.0;
 /// At full climb pressure, edge parts steeper than 8 % cost this share of their slope factor.
