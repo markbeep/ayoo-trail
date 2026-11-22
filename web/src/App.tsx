@@ -8,7 +8,7 @@ import { RouteCard } from "./components/RouteCard";
 import { RouteTiles } from "./components/RouteTiles";
 import { LayersCard } from "./components/LayersCard";
 import { attachSheetDrag, setSnap, snap, snapHeight, SNAPS } from "./components/Sheet";
-import { narrow } from "./layout";
+import { narrow, TYPING } from "./layout";
 import { openShared, pickingStart, routes, selected, status } from "./state";
 import { loopLabel } from "./routes/copies";
 
@@ -73,7 +73,19 @@ export function App() {
     open();
     window.addEventListener("hashchange", open);
     attachSheetDrag(handle, panel);
-    return () => window.removeEventListener("hashchange", open);
+    // Typing on a phone (D105): open the sheet fully (it sits above the keyboard, capped to what's
+    // visible) and bring the field into view once the keyboard has settled.
+    const onFocus = (e: FocusEvent) => {
+      const el = e.target as Element;
+      if (!untrack(narrow) || !el.matches(TYPING)) return;
+      setSnap("full");
+      setTimeout(() => el.scrollIntoView({ block: "nearest" }), 400);
+    };
+    panel.addEventListener("focusin", onFocus);
+    return () => {
+      window.removeEventListener("hashchange", open);
+      panel.removeEventListener("focusin", onFocus);
+    };
   });
   // Sheet choreography: results open it halfway, picking a start lowers it.
   createEffect(status, (s, prev) => {
