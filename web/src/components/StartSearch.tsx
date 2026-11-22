@@ -75,7 +75,7 @@ export function StartSearch() {
           onFocus={(e) => { setPickingStart(false); setText(""); e.currentTarget.value = ""; }}
           onInput={(e) => query(e.currentTarget.value)}
           onKeyDown={key}
-          onBlur={() => setTimeout(close, 150)} // after a pointer pick on a result
+          onBlur={() => setTimeout(close, 150)} // after a tap on a result has picked it
         />
         <Show when={busy()}><LoaderCircle size={16} class="spin muted-icon" /></Show>
         <button class="field-btn" aria-label={pickingStart() ? "Stop picking on the map" : "Pick the start on the map"}
@@ -89,7 +89,9 @@ export function StartSearch() {
           <Show when={error()}>{(m) => <li class="start-empty" role="presentation">{m()}</li>}</Show>
           <For each={results()}>{(p, i) => (
             <li id={`start-opt-${i()}`} role="option" aria-selected={`${active() === i()}`} class={{ on: active() === i() }}
-              onPointerDown={(e) => { e.preventDefault(); pick(p); }} onPointerEnter={() => setActive(i())}>
+              // Pick on click, not pointerdown: a finger landing to scroll the list must not pick.
+              // mousedown keeps focus in the field so the list stays open until the click.
+              onMouseDown={(e) => e.preventDefault()} onClick={() => pick(p)} onPointerEnter={() => setActive(i())}>
               <span class="start-name">{p.name}</span>
               <span class="start-kind">{p.area ? `${p.kind} · ${p.area}` : p.kind}</span>
             </li>
