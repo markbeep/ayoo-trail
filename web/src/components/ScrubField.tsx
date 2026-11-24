@@ -1,6 +1,6 @@
 // A number field you drag left/right to change, like Photoshop's (D106). A click without a drag
 // types a value; arrow keys step. It commits once per gesture, so a live refresh (D55) runs once.
-import { createSignal, Show } from "solid-js";
+import { createSignal, flush, Show } from "solid-js";
 import { parseNumber, scrub, type ScrubOpts } from "../routes/multipliers";
 
 /** Arrow keys move like a 10 px drag. */
@@ -18,6 +18,9 @@ export function ScrubField(props: {
   const tidy = (x: number) => props.scale === "log" ? Number(x.toPrecision(3)) : Number((Math.round(x / props.step) * props.step).toFixed(6));
   const commit = (x: number) => { setLive(null); const t = tidy(Math.min(props.max, Math.max(props.min, x))); if (t !== props.value) props.onCommit(t); };
   let down: { x: number; v: number; moved: boolean } | null = null;
+  let input: HTMLInputElement | undefined;
+  // Focus inside the tap itself: iOS only opens the keyboard for a focus() made during a user gesture.
+  const edit = () => { setEditing(true); flush(); input?.focus(); input?.select(); };
 
   return (
     <Show when={editing()} fallback={
@@ -27,6 +30,8 @@ export function ScrubField(props: {
         aria-valuetext={props.format(v())} aria-disabled={props.disabled ? "true" : undefined}
         onPointerDown={(e) => {
           if (props.disabled || e.button !== 0) return;
+          // No follow-up mousedown: once the sheet jumps for the keyboard it lands elsewhere and steals focus.
+          e.preventDefault();
           down = { x: e.clientX, v: props.value, moved: false };
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
@@ -42,20 +47,20 @@ export function ScrubField(props: {
           const d = down;
           down = null;
           if (d.moved) commit(live() ?? d.v);
-          else setEditing(true);
+          else edit();
         }}
         onPointerCancel={() => { down = null; setLive(null); }}
         onKeyDown={(e) => {
           if (props.disabled) return;
           const dir = e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -1 : 0;
           if (dir) { e.preventDefault(); commit(scrub(props.value, dir * KEY_PX, opts(e.shiftKey))); }
-          else if (e.key === "Enter") { e.preventDefault(); setEditing(true); }
+          else if (e.key === "Enter") { e.preventDefault(); edit(); }
         }}
       >{props.format(v())}</span>
     }>
       <input
         class="scrub-input" aria-label={props.label} value={props.format(props.value)}
-        ref={(el) => queueMicrotask(() => { el.focus(); el.select(); })}
+        inputmode={props.min < 0 ? "text" : "decimal"} enterkeyhint="done" ref={(el) => { input = el; }}
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
           else if (e.key === "Escape") { e.currentTarget.dataset.cancel = "1"; e.currentTarget.blur(); }

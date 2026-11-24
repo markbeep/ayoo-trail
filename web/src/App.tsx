@@ -84,14 +84,19 @@ export function App() {
       before ??= untrack(snap);
       // Instantly, not animated: Safari picks its scroll as the keyboard opens, and a field still
       // low mid-animation makes it scroll the page, throwing the field off the top.
-      panel.classList.add("dragging");
+      panel.classList.add("dragging", "typing");
       setSnap("full");
       flush();
       void panel.offsetHeight;
       panel.classList.remove("dragging");
+      // A field deep in the settings would still sit under the keyboard: scroll it to the top of
+      // the sheet (.typing adds room below so even the last row can get there).
+      const top = (e.target as Element).getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      if (top > 56) scroller.scrollTop += top - 40;
     };
     const onBlur = () => setTimeout(() => {
       if (before === null || document.activeElement?.matches(TYPING)) return;
+      panel.classList.remove("typing");
       setSnap(before);
       before = null;
     }, 0);
@@ -134,7 +139,7 @@ export function App() {
           <Show when={DEV_ROUTE}><DevRouteCard /></Show>
           <QueryCard />
           <Show when={routes().length} fallback={
-            <p class="empty">Pick a start and a distance, then find loops. Every setting below is a multiplier you can drag or type.</p>
+            <p class="empty">Pick a start and a distance, then find loops. Open Settings to fine-tune what they favour.</p>
           }><RouteTiles routes={routes()} /></Show>
           <SettingsCard />
           <Show when={selected()}>{(r) => <RouteCard route={r()} label={loopLabel(routes(), r())} />}</Show>
