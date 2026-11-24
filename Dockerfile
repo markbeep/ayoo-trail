@@ -10,15 +10,23 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM rust:1.100.0-alpine AS rust
+FROM rust:1.100.0-alpine AS chef
 # musl-dev: the bundled SQLite (rusqlite, importer only) needs a C toolchain.
-RUN apk add --no-cache musl-dev
+RUN apk add --no-cache musl-dev && cargo install cargo-chef --locked --version 0.1.73
 WORKDIR /src
+
+FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/src/target \
-    cargo build --release --locked --bins \
+RUN cargo chef prepare --recipe-path recipe.json
+
+# Dependencies build in their own layer, so CI's layer cache (type=gha) keeps them; cache mounts don't survive CI runners.
+FROM chef AS rust
+COPY --from=planner /src/recipe.json ./
+RUN cargo chef cook --release --locked --bins --recipe-path recipe.json
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo build --release --locked --bins \
     && cp target/release/trail-calc-server target/release/trail-calc-import target/release/trail-calc-view /
 
 # Static musl binaries, no shell, runs as uid 65532.
