@@ -8,12 +8,18 @@ Generates trail-running loops in Switzerland based on multiple adjustable metric
 Give it a start, a distance and what you care about; it returns a few distinct loops,
 scored against your settings, that you can drag-edit, share as a link and download as GPX.
 
-![UI screenshot](assets/screenshot.webp)
+Enter multiple travel origins, their commute time budget, and find a cool starting location you can all reach in a reasonable time.
+![Travel time showcase](assets/travel-time.webp)
+
+Let it generate multiple routes according to your preferences. Are you somebody that likes high elevation loops or are you more on the lookout for panoramic views? See the details of how segments of a loop are graded.
+![Scoring route](assets/scoring.webp)
+
+Add areas that you prefer to pass (soft-requirement) or areas the route **must** pass (hard-requirement) and adjust the SAC hiking scale to find more challenging routes.
+![Prefer destinations](assets/prefer.webp)
 
 ## What it routes by
 
-Each metric is a cost term with an importance slider (Off … Normal … Above all). The
-generator places turning points where your weighted costs are low and routes between them.
+Each metric is a cost term determining how much it should be preferred or avoided. The generator places turning points where your weighted costs are low and routes between them.
 
 **Built**
 
@@ -28,7 +34,7 @@ generator places turning points where your weighted costs are low and routes bet
 - **Quiet roads**: avoid busy road classes.
 - **Avoid/prefer areas**: circles you place on the map (long-press or right-click) and resize.
 - **Views**: how far you see from each spot; off by default, and turning it up pulls loops toward
-  ridges and peaks. Needs `data/view.bin` (`just view`).
+  ridges and peaks.
 
 **Planned**
 
@@ -42,7 +48,7 @@ Base maps: Outdoor, Swiss topo, Satellite. Overlays: relief shading, marked trai
 Travel time is only a map layer, not a cost term: it colours where one or more travel origins
 get by public transport within their own time budgets (Saturday morning). It is dark where
 everyone gets there and light where only some do. Add an origin from the map menu
-(right-click or long-press: *Travel time from here*). Point at the map (tap on a phone) to see
+(right-click or long-press: _Travel time from here_). Point at the map (tap on a phone) to see
 each origin's time to that spot.
 
 ## Run it
@@ -69,13 +75,13 @@ Other commands:
 `just dev` needs no keys. Everything is optional and read from the environment (there is no
 `.env` loading, so export it in the shell that runs `just dev`):
 
-| Variable | Default | What it does |
-|---|---|---|
-| `WINDY_API_KEY` | unset | Turns on the Webcams overlay ([Windy Webcams API](https://api.windy.com/webcams), free tier). Without it the overlay stays empty. |
-| `DATA_DIR` | `data` | Where `graph.bin`, `view.bin` and `transit.bin` live. |
-| `BIND` | `0.0.0.0:8080` | Server address. |
-| `STATIC_DIR` | `web/dist` | Built client the server serves. |
-| `RUST_LOG` | `info` | Log filter. |
+| Variable        | Default        | What it does                                                                                                                      |
+| --------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `WINDY_API_KEY` | unset          | Turns on the Webcams overlay ([Windy Webcams API](https://api.windy.com/webcams), free tier). Without it the overlay stays empty. |
+| `DATA_DIR`      | `data`         | Where `graph.bin`, `view.bin` and `transit.bin` live.                                                                             |
+| `BIND`          | `0.0.0.0:8080` | Server address.                                                                                                                   |
+| `STATIC_DIR`    | `web/dist`     | Built client the server serves.                                                                                                   |
+| `RUST_LOG`      | `info`         | Log filter.                                                                                                                       |
 
 Optional data files, each skipped with a warning when missing: `view.bin` (Views, 360° view) and
 `transit.bin` (Travel time). The GTFS feed for `just transit` downloads without a key.
