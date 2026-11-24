@@ -10,6 +10,7 @@ fn config(static_dir: PathBuf) -> ServerConfig {
         static_dir,
         graph: None,
         view: None,
+        transit: None,
         windy_key: None,
     }
 }
@@ -126,4 +127,67 @@ async fn webcams_without_a_key_are_503_and_bad_bboxes_422() {
         get(with_key, "/api/webcams?bbox=48,12,46,8").await.0,
         StatusCode::UNPROCESSABLE_ENTITY
     );
+}
+
+async fn post_travel(
+    app: axum::Router,
+    body: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    let res = app
+        .oneshot(
+            Request::post("/api/travel")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = res.status();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    (
+        status,
+        serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null),
+    )
+}
+
+fn with_transit() -> ServerConfig {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/gtfs");
+    let t = trail_calc::transit::Transit::build(&dir, None).unwrap();
+    ServerConfig {
+        transit: Some(std::sync::Arc::new(t)),
+        ..config(fixture_dist())
+    }
+}
+
+#[tokio::test]
+async fn travel_is_503_without_transit_data() {
+    let body = serde_json::json!({"origins": [{"lat": 47.0, "lon": 8.0, "minutes": 60}]});
+    let (status, _) = post_travel(app(config(fixture_dist())), body).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn travel_rejects_bad_budgets_and_too_many_origins() {
+    let one = |m: u32| serde_json::json!({"lat": 47.0, "lon": 8.0, "minutes": m});
+    for origins in [vec![one(5)], vec![one(241)], vec![one(60); 9], vec![]] {
+        let (status, _) = post_travel(
+            app(with_transit()),
+            serde_json::json!({ "origins": origins }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+}
+
+#[tokio::test]
+async fn travel_returns_an_image_and_its_bounds() {
+    let body = serde_json::json!({"origins": [{"lat": 47.0, "lon": 8.0, "minutes": 30}]});
+    let (status, json) = post_travel(app(with_transit()), body).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json["image"]
+        .as_str()
+        .unwrap()
+        .starts_with("data:image/png;base64,"));
+    let b: Vec<f64> = serde_json::from_value(json["bounds"].clone()).unwrap();
+    assert!(b[0] < 8.0 && b[2] > 8.3 && b[1] < 47.0 && b[3] > 47.0);
 }

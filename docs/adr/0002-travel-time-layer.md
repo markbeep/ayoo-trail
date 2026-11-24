@@ -25,11 +25,15 @@ on the start, the search or routing. It supersedes the deferral in D19.
   share links.
 
 Builder's calls:
-- The Saturday is a regular one in the feed, with no `calendar_dates` exceptions
-  (so no holiday).
+- The Saturday is the feed's busiest one (the most trips), so it is never a
+  holiday. The Swiss feed has exceptions on almost every date, so "a Saturday
+  with no exceptions" didn't exist. `--date` overrides it.
 - Walking speed is 4.5 km/h in a straight line.
 - The walk from an origin to its stops is at most 15 min, and transfer walks
-  between stations are at most 400 m.
+  between stations are at most 400 m. Changing vehicles at one station takes
+  2 min.
+- Trips that run at a frequency (lifts list 60 s) are expanded to at most one
+  departure every 5 min.
 - The walk-only reach around an origin is capped at 20 min too.
 - Budgets run from 10 to 240 min, with at most 8 origins.
 - The area is drawn on 200 m cells.

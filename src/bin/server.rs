@@ -38,6 +38,22 @@ async fn main() -> std::io::Result<()> {
             None
         }
     };
+    // Optional (ADR 0002): without it the Travel time layer answers 503.
+    let transit = match trail_calc::transit::Transit::open(&data.join("transit.bin")) {
+        Ok(t) => {
+            tracing::info!(
+                stations = t.stations.len(),
+                connections = t.conns.len(),
+                date = t.date,
+                "transit loaded"
+            );
+            Some(Arc::new(t))
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "no transit.bin, running without travel times");
+            None
+        }
+    };
     let graph = if graph_path.exists() {
         let t = Instant::now();
         let g = Graph::open(&graph_path).map_err(|e| {
@@ -70,6 +86,7 @@ async fn main() -> std::io::Result<()> {
             static_dir,
             graph,
             view,
+            transit,
             windy_key: std::env::var("WINDY_API_KEY").ok(),
         }),
     )

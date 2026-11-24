@@ -23,6 +23,7 @@ use crate::route::{
     RouteStats,
 };
 use crate::snap::{Snap, SNAP_LIMIT_M};
+use crate::transit::{Transit, MAX_BUDGET_MIN, MAX_ORIGINS, MIN_BUDGET_MIN};
 use crate::view::ViewGrid;
 use crate::webcams::{WebcamError, Webcams};
 
@@ -33,8 +34,10 @@ pub struct ServerConfig {
     pub static_dir: PathBuf,
     /// Shared read-only graph; `None` runs the server without routing.
     pub graph: Option<Arc<Graph>>,
-    /// 360° view scores for the overlay tiles (D100); `None` answers 404.
+    /// 360Â° view scores for the overlay tiles (D100); `None` answers 404.
     pub view: Option<Arc<ViewGrid>>,
+    /// Saturday-morning timetable for the Travel time layer (ADR 0002); `None` answers 503.
+    pub transit: Option<Arc<Transit>>,
     /// Windy Webcams API key (D102); `None` answers `/api/webcams` with 503.
     pub windy_key: Option<String>,
 }
@@ -324,7 +327,7 @@ fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
     Ok(json!({ "routes": best_first(routes) }))
 }
 
-/// Loops ordered by score, best first, then named `loop-0`, `loop-1`… in that order (D79).
+/// Loops ordered by score, best first, then named `loop-0`, `loop-1`â¦ in that order (D79).
 fn best_first(mut routes: Vec<Value>) -> Vec<Value> {
     let score = |r: &Value| r["score"].as_f64().unwrap_or(0.0);
     routes.sort_by(|a, b| score(b).total_cmp(&score(a)));
@@ -380,7 +383,7 @@ fn breakdown(s: &RouteStats, p: &Profile, climb_target_m: Option<f64>, has_view:
     Value::Array(bars)
 }
 
-/// `GET /api/tiles/view/{z}/{x}/{y}`: the 360° view overlay as a 256 px PNG (D100). 204 where
+/// `GET /api/tiles/view/{z}/{x}/{y}`: the 360Â° view overlay as a 256 px PNG (D100). 204 where
 /// the tile has no data, so MapLibre draws nothing without an error.
 async fn view_tile(
     State(v): State<Option<Arc<ViewGrid>>>,
@@ -434,6 +437,60 @@ async fn webcams(
     }
 }
 
+#[derive(Deserialize)]
+struct TravelOrigin {
+    lat: f64,
+    lon: f64,
+    minutes: u32,
+}
+
+#[derive(Deserialize)]
+struct TravelBody {
+    origins: Vec<TravelOrigin>,
+}
+
+/// `POST /api/travel`: shared and partial reach of the travel origins as one PNG over
+/// `bounds` `[west, south, east, north]` (ADR 0002).
+async fn travel(
+    State(t): State<Option<Arc<Transit>>>,
+    body: Result<Json<TravelBody>, JsonRejection>,
+) -> Result<Json<Value>, ApiError> {
+    use base64::Engine;
+    let t = t.ok_or_else(|| api_err(StatusCode::SERVICE_UNAVAILABLE, "no transit data loaded"))?;
+    let Json(req) = body.map_err(|_| unprocessable("invalid request body"))?;
+    if req.origins.is_empty() || req.origins.len() > MAX_ORIGINS {
+        return Err(unprocessable(&format!(
+            "between 1 and {MAX_ORIGINS} travel origins"
+        )));
+    }
+    let mut origins = Vec::with_capacity(req.origins.len());
+    for o in &req.origins {
+        let p = LatLon {
+            lat: o.lat,
+            lon: o.lon,
+        };
+        if !(MIN_BUDGET_MIN..=MAX_BUDGET_MIN).contains(&o.minutes)
+            || !p.lat.is_finite()
+            || !p.lon.is_finite()
+            || p.lat.abs() > 85.0
+            || p.lon.abs() > 180.0
+        {
+            return Err(unprocessable(&format!(
+                "time budgets are {MIN_BUDGET_MIN} to {MAX_BUDGET_MIN} min, at valid coordinates"
+            )));
+        }
+        origins.push((p, o.minutes));
+    }
+    let _permit = permits().acquire().await.expect("semaphore never closed");
+    let g = tokio::task::spawn_blocking(move || t.reach_grid(&origins))
+        .await
+        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "travel time failed"))?;
+    let png = base64::engine::general_purpose::STANDARD.encode(g.png());
+    Ok(Json(
+        json!({ "bounds": g.bounds(), "image": format!("data:image/png;base64,{png}") }),
+    ))
+}
+
 async fn api_not_found() -> StatusCode {
     StatusCode::NOT_FOUND
 }
@@ -449,6 +506,11 @@ pub fn app(config: ServerConfig) -> Router {
             Router::new()
                 .route("/tiles/view/{z}/{x}/{y}", get(view_tile))
                 .with_state(config.view),
+        )
+        .merge(
+            Router::new()
+                .route("/travel", post(travel))
+                .with_state(config.transit),
         )
         .merge(
             Router::new()

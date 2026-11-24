@@ -44,6 +44,28 @@ import REGION="demo" *ARGS:
 view REGION="demo" *ARGS:
     cargo run --release --bin trail-calc-view -- --region {{REGION}} {{ARGS}}
 
+# Fetches next year's timetable if published, else this year's. After the December
+# timetable change: delete data/raw/gtfs, then `just transit --force`.
+# Build data/transit.bin for the Travel time layer from the Swiss GTFS feed (ADR 0002; ~10 s).
+transit *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    raw=data/raw
+    if [ ! -f "$raw/gtfs/stop_times.txt" ]; then
+      mkdir -p "$raw/gtfs"
+      y=$(date +%Y)
+      for year in $((y + 1)) "$y"; do
+        if curl -fL --retry 3 -o "$raw/gtfs.zip.part" "https://data.opentransportdata.swiss/en/dataset/timetable-$year-gtfs2020/permalink"; then
+          mv "$raw/gtfs.zip.part" "$raw/gtfs.zip"
+          break
+        fi
+      done
+      [ -f "$raw/gtfs.zip" ] || { echo "no GTFS feed found for $((y + 1)) or $y" >&2; exit 1; }
+      unzip -o -q -d "$raw/gtfs" "$raw/gtfs.zip"
+      rm -f "$raw/gtfs.zip"
+    fi
+    cargo run --release --bin trail-calc-transit -- {{ARGS}}
+
 # Fetch OSM, swissALTI3D 2 m tiles and Wanderwege into data/raw (`just data REGION=demo|ch`).
 data REGION="demo":
     #!/usr/bin/env bash

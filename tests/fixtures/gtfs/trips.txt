@@ -1,0 +1,7 @@
+route_id,service_id,trip_id
+R,SAT,T1
+R,SAT,T2
+R,WEEK,T3
+R,EXTRA,T4
+R,SAT,T5
+R,SAT,T6
