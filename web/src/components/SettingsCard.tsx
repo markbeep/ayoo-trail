@@ -1,14 +1,13 @@
 // Routing settings (D106, D107, D115): collapsed by default, then one collapsible group per topic,
-// each with a plain sentence on what it does. Rows say in words what a value acts on.
+// each with a plain sentence on what it does; Defaults and Clear all in the header. Rows say in words what a value acts on.
 import { createSignal, For, Show, type Element } from "solid-js";
 import { ChevronDown } from "@lucide/solid";
 import { getHealth } from "../api";
 import type { Penalties } from "../routes/types";
 import { MULT_MAX, MULT_MIN, multiplierOf, parseMultiplier, weightOf, word, type Term } from "../routes/multipliers";
-import { DEFAULT_PENALTIES } from "../url";
 import {
-  CLIMB_STEP_M, DEFAULT_WEIGHTS, HILLINESS, clearAll, climb, climbMaxM, climbTargetM, maxSac, penalties, setClimb, setHill,
-  setMaxSac, setPenalty, setStrictness, setWeight, strictness, weights, type Climb, type Hilliness, type NumericWeight,
+  CLIMB_STEP_M, HILLINESS, clearAll, climb, climbMaxM, climbTargetM, maxSac, penalties, setClimb, setHill,
+  setMaxSac, resetDefaults, setPenalty, setStrictness, setWeight, strictness, weights, type Climb, type Hilliness, type NumericWeight,
 } from "../state";
 import { ScrubField } from "./ScrubField";
 
@@ -37,12 +36,11 @@ function Row(props: { label: string; hint: string; children: Element; note?: str
   );
 }
 
-function Group(props: { title: string; sub: string; changed: number; children: Element }) {
+function Group(props: { title: string; sub: string; children: Element }) {
   return (
     <details class="set-group">
       <summary>
         <span class="set-text"><span class="set-gtitle">{props.title}</span><span class="set-hint">{props.sub}</span></span>
-        <Show when={props.changed}><span class="set-badge">{props.changed} changed</span></Show>
         <ChevronDown size={16} class="set-chev" aria-hidden="true" />
       </summary>
       {props.children}
@@ -91,50 +89,41 @@ const CLIMBS: { label: string; c: Climb }[] = [
 const sameClimb = (a: Climb, b: Climb) =>
   typeof a === "string" || typeof b === "string" ? a === b : "preset" in a && "preset" in b && a.preset === b.preset;
 
-/** How many of these weights differ from their defaults, for the group's "n changed" badge. */
-const moved = (ks: (keyof typeof DEFAULT_WEIGHTS)[]) => ks.filter((k) => weights()[k] !== DEFAULT_WEIGHTS[k]).length;
-
 export function SettingsCard() {
-  const changed = {
-    ground: () => moved(TERMS.map((t) => t.k)),
-    hills: () => moved(["uphill", "downhill", "slope"]),
-    tech: () => moved(["technical", "tech"]) + (maxSac() !== 3 ? 1 : 0),
-    climb: () => (sameClimb(climb(), { preset: "hilly" }) ? 0 : 1) + (strictness() !== 0.8 ? 1 : 0),
-    shape: () => PENALTY_ROWS.filter((p) => penalties()[p.k] !== DEFAULT_PENALTIES[p.k]).length,
-  };
-  const total = () => Object.values(changed).reduce((n, f) => n + f(), 0);
-
   return (
     <section class={["card settings", { open: open() }]} aria-label="Settings">
       <header class="set-head">
         <button class="set-toggle" aria-expanded={`${open()}`} onClick={() => setOpen(!open())}>
           <span class="set-text">
             <h2>Settings</h2>
-            <span class="set-hint">What loops prefer and avoid{total() ? ` · ${total()} changed` : ""}</span>
+            <span class="set-hint">What loops prefer and avoid</span>
           </span>
           <ChevronDown size={18} class="set-chev" aria-hidden="true" />
         </button>
         <Show when={open()}>
-          <button class="link-btn" onClick={clearAll} title="All costs off, no climb goal, no areas: only the distance counts">Clear all</button>
+          <span class="set-actions">
+            <button class="link-btn" onClick={resetDefaults} title="Every setting back to its default; map areas stay">Defaults</button>
+            <button class="link-btn" onClick={clearAll} title="All costs off, no climb goal, no areas: only the distance counts">Clear all</button>
+          </span>
         </Show>
       </header>
 
       <Show when={open()}>
         <p class="set-intro">Drag a value sideways or tap it to type. <b>×1</b> means it doesn't matter, above ×1 avoids, below ×1 seeks out.</p>
 
-        <Group title="Ground" sub="Which kinds of trail and surroundings to favour" changed={changed.ground()}>
+        <Group title="Ground" sub="Which kinds of trail and surroundings to favour">
           <For each={TERMS.filter((t) => t.k !== "view" || hasView())}>{(t) => (
             <Row label={t.label} hint={t.hint} note={word(t.k, weights()[t.k])}><Mult k={t.k} label={`${t.label}: ${t.hint}`} /></Row>
           )}</For>
         </Group>
 
-        <Group title="Hills" sub="Gentle or steep slopes, and how much that counts" changed={changed.hills()}>
+        <Group title="Hills" sub="Gentle or steep slopes, and how much that counts">
           <Row label="Uphill" hint="−1 gentle · +1 steep" note={shape(weights().uphill, "gentle", "steep")}><Shape k="uphill" label="Uphill: −1 gentle, +1 steep" /></Row>
           <Row label="Downhill" hint="−1 gentle · +1 steep" note={shape(weights().downhill, "gentle", "steep")}><Shape k="downhill" label="Downhill: −1 gentle, +1 steep" /></Row>
           <Row label="Strength" hint="How much the slope choice counts" note={weights().slope === 0 ? "off" : undefined}><Mult k="slope" label="Hills strength" min={1} /></Row>
         </Group>
 
-        <Group title="Technical" sub="How hard the trails may get (SAC grades T1–T6)" changed={changed.tech()}>
+        <Group title="Technical" sub="How hard the trails may get (SAC grades T1–T6)">
           <div class="set-row wide">
             <span class="set-text"><span class="set-label">Hardest allowed</span><span class="set-hint">T1 easy hiking … T6 difficult alpine</span></span>
             <span class="seg" role="radiogroup" aria-label="Hardest trail allowed">
@@ -147,7 +136,7 @@ export function SettingsCard() {
           <Row label="Strength" hint="How much that counts on T4+ trails" note={weights().tech === 0 ? "off" : undefined}><Mult k="tech" label="Technical strength" min={1} /></Row>
         </Group>
 
-        <Group title="Climb" sub="Total climb to aim for" changed={changed.climb()}>
+        <Group title="Climb" sub="Total climb to aim for">
           <div class="set-row wide">
             <span class="seg" role="radiogroup" aria-label="Climb goal">
               <For each={CLIMBS}>{(o) => (
@@ -169,7 +158,7 @@ export function SettingsCard() {
           </Show>
         </Group>
 
-        <Group title="Loop shape" sub="Reusing trails, your map areas, overlap between loops" changed={changed.shape()}>
+        <Group title="Loop shape" sub="Reusing trails, your map areas, overlap between loops">
           <For each={PENALTY_ROWS}>{(p) => (
             <Row label={p.label} hint={p.hint}>
               <ScrubField label={`${p.label}: ${p.hint}`} value={penalties()[p.k]} format={p.fmt} parse={p.parse}

@@ -427,7 +427,7 @@ input { caret-color: var(--signal); }
 .set-group > summary:hover { background: var(--well); }
 .set-group[open] > summary { background: var(--well); border-bottom: 1px solid var(--line); }
 .set-gtitle { font-size: 14px; font-weight: 800; }
-.set-badge { flex: none; font: 700 12px var(--font-narrow); padding: 1px 6px; background: var(--ink); color: var(--paper); }
+.set-actions { display: flex; gap: 14px; }
 
 .set-row {
   display: flex; align-items: center; gap: 12px;

@@ -156,6 +156,15 @@ export function clearAll() {
   save({ zones: [] });
   settingsChanged();
 }
+/** Reset to defaults: every setting back to how a first visit starts; map areas stay. */
+export function resetDefaults() {
+  setWeights({ ...DEFAULT_WEIGHTS });
+  setClimbRaw({ preset: "hilly" });
+  setStrictnessRaw(0.8);
+  setMaxSacRaw(3);
+  setPenaltiesRaw({ ...DEFAULT_PENALTIES });
+  settingsChanged();
+}
 export function setStrictness(v: number) {
   setStrictnessRaw(v);
   settingsChanged();
