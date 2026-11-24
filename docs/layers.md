@@ -94,21 +94,10 @@ License conclusions checked on this date:
   high-view nodes.
 - **Caveat**: no DEM outside CH, so rays leaving the country read as open.
   This is a shortcut until regions grow.
-- **Reuse**: the same profile answers sun/shade for any date and time by
-  comparing the sun altitude with the horizon angle at the sun azimuth. One
-  precompute, two layers.
 - **Cost**: the heaviest offline job in the project; estimate hours on a
   multicore laptop at 100 m, minutes at 200 m. Mark as estimate.
 - **Status**: in progress (overlay and score).
 
-## Sun and shade
-
-- **Source**: horizon profile above + solar position (standard formulas, no
-  external data).
-- **Derivation**: per query date/time, shade = sun altitude < horizon angle at
-  sun azimuth. Sample along the route; show shaded fraction and a map overlay
-  for the requested time.
-- **Status**: later.
 
 ## POIs
 

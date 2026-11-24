@@ -90,14 +90,13 @@ Grouped as the owner described them. None of this is scoped or prioritized yet.
 
 | Feature | Notes |
 |---|---|
-| Start reachability | By car or train, Chronotrains-style; possibly several candidate start locations. |
+| Start reachability | Travel time layer: public transport + walking, several travel origins with their own time budgets (ADR 0002). Not used for routing. |
 | POIs | Toilets, grocery stores, water fountains near or on the route. |
 
 ### Conditions and media
 
 | Feature | Notes |
 |---|---|
-| Sun/shade | For a given day and time. |
 | Webcams and photos | Along the route, to judge how it looks. Webcams from Windy (D102) and SchweizMobil routes (D103) as clickable map layers; hikr is open (Q27). |
 
 ### Route quality

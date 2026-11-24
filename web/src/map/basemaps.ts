@@ -95,8 +95,6 @@ export const TRAILS_SOURCE: RasterSource = {
 /** Planned overlays, listed so the panel already has its future shape. Not selectable. */
 export const LATER_OVERLAYS = [
   { id: "popular", label: "Popular trails" },
-  { id: "steepness", label: "Path steepness" },
-  { id: "sun", label: "Sun & shade" },
 ] as const;
 
 export type BaseMapId = (typeof BASE_MAPS)[number]["id"];

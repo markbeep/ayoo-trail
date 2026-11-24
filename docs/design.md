@@ -28,11 +28,11 @@ drag one point to adjust it, export the GPX.
 
 - Point-to-point, out-and-back, or multi-day routes. Loops only.
 - Accounts, multi-user, database, billing.
-- Travel-time reachability from home (deferred; any map point is a start).
-- Live public-transport routing at request time.
+- Live (real-time) public transport. The Travel time layer (ADR 0002) uses a
+  static Saturday timetable and never affects routing.
 - Mobile app, PWA/offline support, turn-by-turn navigation (D23).
 - Coverage outside Switzerland, including cross-border loops.
-- Viewshed, sun/shade, POIs, webcams, photos, elevation-profile matching
+- Viewshed, POIs, webcams, photos, elevation-profile matching
   in the first usable version.
 
 ## 4. Anti-goals
@@ -406,7 +406,7 @@ link (D91) reproduces the loop until the graph is rebuilt.
   (bidirectional A* legs) if it matters.
 - OSM trail quality in remote areas. Mitigation: official share and penalties
   make it visible rather than hidden.
-- Horizon-profile precompute (viewshed/sun) may be heavier than estimated.
+- Horizon-profile precompute (viewshed) may be heavier than estimated.
 - Cross-border loops are impossible in v1.
 - The base map depends on geo.admin.ch availability and its fair-use limits.
   Fine for a personal deployment; a public launch needs a checked quota or a
