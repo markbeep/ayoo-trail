@@ -79,9 +79,10 @@ License conclusions checked on this date:
   10 min of departures 06:00–10:00. Each scan tracks the latest time you could
   leave home, so a trip off the 10 min grid costs no extra wait. Walking is
   4.5 km/h in a straight line, at most 15 min to the first stop and 20 min from
-  the last. The server stamps those walking discs on 200 m web-mercator cells,
-  counts origins per cell and returns one PNG: shared reach strong, partial
-  reach faint.
+  the last. The server returns each origin's reached stations with their times;
+  the client stamps the walking discs on 200 m web-mercator cells, counts
+  origins per cell (shared reach strong, partial reach faint) and answers hover
+  times from the same list (ADR 0005).
 - **Caveat**: straight-line walking ignores terrain and rivers. Not used for
   routing.
 - **Status**: built.

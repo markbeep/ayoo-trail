@@ -14,8 +14,7 @@ import type { LatLon, Route } from "../routes/types";
 import { bounds, cumulative, legAt, nearestIndex } from "../routes/geo";
 import { circle, edgePoint, radiusTo, type Zone } from "../routes/zones";
 import type { Checkpoint } from "../routes/types";
-import type { TravelOrigin } from "../routes/travel";
-import type { TravelImage } from "../api";
+import type { ReachImage, TravelOrigin } from "../routes/travel";
 import { fetchSchweizMobilLogos, fetchWebcams, identifySchweizMobil, loadLogo, schweizMobilPopup, webcamPopup, WEBCAM_MIN_ZOOM, WINDY_CREDIT, type WebcamProps } from "./info";
 
 export interface RouteColors {
@@ -151,7 +150,9 @@ const LOGO_PX = 26;
 
 export interface MapHandlers {
   onRouteClick?: (id: string) => void;
-  onMapClick?: (p: LatLon) => void;
+  onMapClick?: (p: LatLon, at: { x: number; y: number }) => void;
+  /** The pointer over the map (mouse only), null when it leaves. */
+  onPointer?: (p: LatLon | null, at: { x: number; y: number }) => void;
   /** Right-click or touch long-press: map position, screen point inside the container, and the
    * area or checkpoint under it, if any. */
   onContextMenu?: (p: LatLon, at: { x: number; y: number }, hit: { zone?: number; checkpoint?: number; origin?: number }) => void;
@@ -229,7 +230,7 @@ export class MapController {
       const hit = this.map.queryRenderedFeatures(e.point, { layers: ["route-hit"] })[0];
       const id = hit?.properties?.id;
       if (typeof id === "string") handlers.onRouteClick?.(id);
-      else handlers.onMapClick?.({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+      else handlers.onMapClick?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point);
     });
     // Listening also makes MapLibre suppress the browser menu on the canvas.
     this.map.on("contextmenu", (e) => {
@@ -245,6 +246,8 @@ export class MapController {
       handlers.onContextMenu?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point, { zone, checkpoint, origin });
     });
     this.map.on("movestart", () => handlers.onMoveStart?.());
+    this.map.on("mousemove", (e) => handlers.onPointer?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point));
+    this.map.getCanvas().addEventListener("mouseleave", () => handlers.onPointer?.(null, { x: 0, y: 0 }));
     let overSelected = false;
     this.map.on("mousemove", (e) => {
       if (!this.selected || !this.map.getLayer("route-hit")) return;
@@ -651,13 +654,13 @@ export class MapController {
     });
   }
 
-  /** The reach image for the Travel time overlay, or none. */
-  async setTravel(img: TravelImage | null) {
+  /** The reach image for the Travel time overlay (drawn by the client, ADR 0005), or none. */
+  async setTravel(img: ReachImage | null) {
     await this.ready;
     const src = this.map.getSource(TRAVEL) as maplibregl.ImageSource;
     if (!img) { src.updateImage({ url: BLANK, coordinates: CH_CORNERS }); return; }
     const [w, s, e, n] = img.bounds;
-    src.updateImage({ url: img.image, coordinates: [[w, n], [e, n], [e, s], [w, s]] });
+    src.updateImage({ image: new ImageData(img.data, img.width, img.height), coordinates: [[w, n], [e, n], [e, s], [w, s]] });
   }
 
   /** GPX checkpoints (D98). */

@@ -8,8 +8,9 @@ import type { LatLon } from "../routes/types";
 import {
   hoverIndex, selected, setHoverIndex, baseMap, overlays, pickingStart, routes, selectedId, setPickingStart, setSelectedId, setStart, start,
   checkpoints, costView, editWaypoints, MAX_WAYPOINTS, refreshing, zones, moveZone, resizeZone,
-  origins, moveOrigin, travelImage, refreshTravel,
+  origins, moveOrigin, travelReach, refreshTravel,
 } from "../state";
+import { reachImage, timeTo } from "../routes/travel";
 
 /** Reads a CSS custom property so map paint colors follow the design tokens. */
 function token(name: string): string {
@@ -22,6 +23,18 @@ export function MapView(props: { padding: () => { left: number; right: number; t
   let el!: HTMLDivElement;
   let ctl: MapController | undefined;
   const [menu, setMenu] = createSignal<MenuState | null>(null);
+  // Travel time per origin at the pointer, or at a tap on touch screens (ADR 0005).
+  const [tip, setTip] = createSignal<{ p: LatLon; x: number; y: number } | null>(null);
+  const travelOn = () => overlays().includes("travel") && travelReach() !== null;
+  const tipLines = () => {
+    const r = travelReach(), t = tip();
+    if (!r || !t || !overlays().includes("travel")) return null;
+    const lines = r.origins.map((o, i) => {
+      const s = timeTo(r.stops[i] ?? [], o.minutes, t.p);
+      return { n: i + 1, text: s === null ? "over budget" : `${Math.round(s / 60)} min` };
+    });
+    return { x: t.x, y: t.y, lines };
+  };
 
   // 2.0 forbids creating effects inside onSettled, so they live here, deferred, and
   // onSettled applies their initial values once the controller exists.
@@ -43,8 +56,9 @@ export function MapView(props: { padding: () => { left: number; right: number; t
       },
     }, {
       onRouteClick: (id) => setSelectedId(id),
-      onMapClick: (p) => {
-        if (pickingStart()) {
+      onMapClick: (p, at) => {
+        if (untrack(travelOn) && matchMedia("(hover: none)").matches) setTip({ p, ...at });
+        else if (pickingStart()) {
           setStart(p);
           setPickingStart(false);
         } else if (DEV_ROUTE) addWaypoint(p);
@@ -54,7 +68,8 @@ export function MapView(props: { padding: () => { left: number; right: number; t
       onZoneMove: moveZone,
       onZoneResize: resizeZone,
       onOriginMove: moveOrigin,
-      onMoveStart: () => setMenu(null),
+      onPointer: (p, at) => setTip(p && untrack(travelOn) ? { p, ...at } : null),
+      onMoveStart: () => { setMenu(null); setTip(null); },
       onWaypointMove: (i, p) => {
         const r = untrack(selected);
         if (r) void editWaypoints(r.id, r.waypoints.map((w, j) => (j === i ? p : w)));
@@ -100,7 +115,7 @@ export function MapView(props: { padding: () => { left: number; right: number; t
   createEffect(zones, (z) => void ctl?.setZones(z), { defer: true });
   createEffect(checkpoints, (c) => void ctl?.setCheckpoints(c), { defer: true });
   createEffect(origins, (o) => void ctl?.setOrigins(o), { defer: true });
-  createEffect(travelImage, (img) => void ctl?.setTravel(img), { defer: true });
+  createEffect(travelReach, (r) => void ctl?.setTravel(r ? reachImage(r.stops, r.origins.map((o) => o.minutes)) : null), { defer: true });
   createEffect(routes, (rs) => {
     const id = untrack(selectedId);
     void ctl?.setRoutes(rs, id);
@@ -123,6 +138,13 @@ export function MapView(props: { padding: () => { left: number; right: number; t
   return (
     <>
       <div ref={el} class="map" role="region" aria-label="Map" />
+      <Show when={tipLines()}>
+        {(t) => (
+          <div class="travel-tip" role="status" style={{ left: `${t().x}px`, top: `${t().y}px` }}>
+            {t().lines.map((l) => <div><span class="travel-n">{l.n}</span> {l.text}</div>)}
+          </div>
+        )}
+      </Show>
       <Show when={menu()}>{(m) => <MapMenu menu={m()} onClose={() => setMenu(null)} />}</Show>
     </>
   );

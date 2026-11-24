@@ -31,13 +31,8 @@ pub const WINDOW: (u32, u32, u32) = (6 * 3600, 10 * 3600, 600);
 pub const MAX_BUDGET_MIN: u32 = 240;
 pub const MIN_BUDGET_MIN: u32 = 10;
 pub const MAX_ORIGINS: usize = 8;
-/// Raster cell edge on the ground.
-pub const CELL_M: f64 = 200.0;
 const MAGIC: &[u8; 8] = b"AYTRAN01";
 const REF_LAT: f64 = 46.8;
-/// RGBA for shared and partial reach: one hue, two strengths.
-const SHARED: [u8; 4] = [31, 78, 140, 150];
-const PARTIAL: [u8; 4] = [31, 78, 140, 70];
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Pod, Zeroable)]
@@ -556,147 +551,16 @@ impl Transit {
     }
 
     /// Per raster cell, how many of the origins `(point, budget minutes)` reach it.
-    pub fn reach_grid(&self, origins: &[(LatLon, u32)]) -> ReachGrid {
-        // Discs: (center, radius m) per origin; the origin itself walks too.
-        let discs: Vec<Vec<(LatLon, f64)>> = origins
-            .iter()
-            .map(|&(p, min)| {
-                let budget = min * 60;
-                let mut d = vec![(p, budget.min(LAST_WALK_S) as f64 * WALK_MPS)];
-                d.extend(self.reach(p, budget).into_iter().map(|(s, t)| {
-                    (
-                        self.stations[s as usize],
-                        (budget - t).min(LAST_WALK_S) as f64 * WALK_MPS,
-                    )
-                }));
-                d
-            })
-            .collect();
-        ReachGrid::stamp(&discs)
-    }
-}
-
-/// Web-mercator grid of origin counts, north row first.
-#[derive(Debug)]
-pub struct ReachGrid {
-    /// Mercator x/y (0..1, y down) of the north-west corner and cell size.
-    x0: f64,
-    y0: f64,
-    cell: f64,
-    pub w: usize,
-    pub h: usize,
-    pub n: u8,
-    pub count: Vec<u8>,
-}
-
-fn merc(p: LatLon) -> (f64, f64) {
-    let s = p.lat.to_radians().sin();
-    (
-        p.lon / 360.0 + 0.5,
-        0.5 - ((1.0 + s) / (1.0 - s)).ln() / (4.0 * std::f64::consts::PI),
-    )
-}
-
-fn unmerc(x: f64, y: f64) -> LatLon {
-    let lat = (std::f64::consts::PI * (1.0 - 2.0 * y))
-        .sinh()
-        .atan()
-        .to_degrees();
-    LatLon {
-        lat,
-        lon: (x - 0.5) * 360.0,
-    }
-}
-
-impl ReachGrid {
-    fn stamp(discs: &[Vec<(LatLon, f64)>]) -> ReachGrid {
-        const CIRC: f64 = 2.0 * std::f64::consts::PI * crate::geodesy::EARTH_RADIUS_M;
-        // Mercator units per ground meter at latitude, and the disc radius in them.
-        let scale = |p: LatLon| 1.0 / (CIRC * p.lat.to_radians().cos());
-        let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-        for &(p, r) in discs.iter().flatten() {
-            let (x, y) = merc(p);
-            let r = r * scale(p);
-            (x0, y0, x1, y1) = (x0.min(x - r), y0.min(y - r), x1.max(x + r), y1.max(y + r));
-        }
-        let mid = unmerc((x0 + x1) / 2.0, (y0 + y1) / 2.0);
-        let cell = CELL_M * scale(mid);
-        let (w, h) = (
-            ((x1 - x0) / cell).ceil().max(1.0) as usize,
-            ((y1 - y0) / cell).ceil().max(1.0) as usize,
+    /// The origin (0 s) and every station it reaches within `minutes`, with the
+    /// door-to-door seconds: what the client draws and hovers from (ADR 0005).
+    pub fn stops(&self, origin: LatLon, minutes: u32) -> Vec<(LatLon, u32)> {
+        let mut v = vec![(origin, 0)];
+        v.extend(
+            self.reach(origin, minutes * 60)
+                .into_iter()
+                .map(|(s, t)| (self.stations[s as usize], t)),
         );
-        let mut count = vec![0u8; w * h];
-        let mut last = vec![u8::MAX; w * h];
-        for (o, ds) in discs.iter().enumerate() {
-            for &(p, r) in ds {
-                let (x, y) = merc(p);
-                let r = r * scale(p);
-                let cx = |v: f64| ((v - x0) / cell).floor().clamp(0.0, (w - 1) as f64) as usize;
-                let cy = |v: f64| ((v - y0) / cell).floor().clamp(0.0, (h - 1) as f64) as usize;
-                for j in cy(y - r)..=cy(y + r) {
-                    let yc = y0 + (j as f64 + 0.5) * cell;
-                    for i in cx(x - r)..=cx(x + r) {
-                        let xc = x0 + (i as f64 + 0.5) * cell;
-                        let k = j * w + i;
-                        if (xc - x).powi(2) + (yc - y).powi(2) <= r * r && last[k] != o as u8 {
-                            last[k] = o as u8;
-                            count[k] += 1;
-                        }
-                    }
-                }
-            }
-        }
-        ReachGrid {
-            x0,
-            y0,
-            cell,
-            w,
-            h,
-            n: discs.len() as u8,
-            count,
-        }
-    }
-
-    /// Origins reaching the cell holding `p`; 0 outside the grid.
-    pub fn at(&self, p: LatLon) -> u8 {
-        let (x, y) = merc(p);
-        let (i, j) = ((x - self.x0) / self.cell, (y - self.y0) / self.cell);
-        if i < 0.0 || j < 0.0 || i >= self.w as f64 || j >= self.h as f64 {
-            return 0;
-        }
-        self.count[j as usize * self.w + i as usize]
-    }
-
-    /// `[west, south, east, north]` in degrees.
-    pub fn bounds(&self) -> [f64; 4] {
-        let nw = unmerc(self.x0, self.y0);
-        let se = unmerc(
-            self.x0 + self.w as f64 * self.cell,
-            self.y0 + self.h as f64 * self.cell,
-        );
-        [nw.lon, se.lat, se.lon, nw.lat]
-    }
-
-    /// Shared reach strong, partial reach faint, the rest transparent.
-    pub fn png(&self) -> Vec<u8> {
-        let rgba: Vec<u8> = self
-            .count
-            .iter()
-            .flat_map(|&c| match c {
-                0 => [0; 4],
-                c if c == self.n => SHARED,
-                _ => PARTIAL,
-            })
-            .collect();
-        let mut buf = Vec::new();
-        let mut enc = png::Encoder::new(&mut buf, self.w as u32, self.h as u32);
-        enc.set_color(png::ColorType::Rgba);
-        enc.set_depth(png::BitDepth::Eight);
-        enc.set_compression(png::Compression::Fast);
-        let mut wr = enc.write_header().expect("png header");
-        wr.write_image_data(&rgba).expect("png data");
-        drop(wr);
-        buf
+        v
     }
 }
 
@@ -765,32 +629,17 @@ mod tests {
     }
 
     #[test]
-    fn grid_counts_shared_and_partial_reach() {
+    fn stops_start_with_the_origin_and_stay_in_budget() {
         let t = fixture();
-        let (a, c) = (
-            LatLon {
-                lat: 47.0,
-                lon: 8.0,
-            },
-            LatLon {
-                lat: 47.0,
-                lon: 8.3,
-            },
-        );
-        let g = t.reach_grid(&[(a, 30), (c, 10)]);
-        assert_eq!(g.n, 2);
-        assert_eq!(g.at(c), 2);
-        assert_eq!(g.at(a), 1);
-        assert_eq!(
-            g.at(LatLon {
-                lat: 47.0,
-                lon: 8.2
-            }),
-            0
-        );
-        let [w, s, e, n] = g.bounds();
-        assert!(w < 8.0 && e > 8.3 && s < 47.0 && n > 47.0);
-        assert_eq!(&g.png()[1..4], b"PNG");
+        let a = LatLon {
+            lat: 47.0,
+            lon: 8.0,
+        };
+        let s = t.stops(a, 12);
+        assert_eq!(s[0], (a, 0));
+        assert!(s.iter().all(|&(_, secs)| secs <= 12 * 60));
+        assert!(s.iter().any(|&(p, _)| (p.lon - 8.1).abs() < 1e-6));
+        assert!(!s.iter().any(|&(p, _)| (p.lon - 8.3).abs() < 1e-6));
     }
 
     #[test]

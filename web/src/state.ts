@@ -4,8 +4,8 @@ import { createMemo, createRoot, createSignal, flush } from "solid-js";
 import type { BaseMapId } from "./map/basemaps";
 import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
 import type { BreakdownKey, Checkpoint, LatLon, Penalties, Route, Weights } from "./routes/types";
-import { ApiError, generate, routeVia, travel, type ClimbGoal, type TravelImage } from "./api";
-import { clampMinutes, loadOrigins, withOrigin, type TravelOrigin } from "./routes/travel";
+import { ApiError, generate, routeVia, travel, type ClimbGoal } from "./api";
+import { clampMinutes, loadOrigins, withOrigin, type Stop, type TravelOrigin } from "./routes/travel";
 import { clampRadius, MAX_ZONES, ZONE_DEFAULT_M, type Zone } from "./routes/zones";
 import { decodeShare, DEFAULT_PENALTIES, encodeShare, MAX_CHECKPOINTS } from "./url";
 import { nearestOnRoute } from "./routes/gpx";
@@ -108,9 +108,11 @@ export function toggleOverlay(id: string) {
   if (id === "travel") refreshTravel();
 }
 
-/** Travel time layer (ADR 0002): the origins, and the server's image of their reach. */
+/** Travel time layer (ADR 0002, 0005): the origins, and the stations each reaches. */
 export const [origins, setOriginsRaw] = createSignal<readonly TravelOrigin[]>(loadOrigins(stored.origins));
-export const [travelImage, setTravelImage] = createSignal<TravelImage | null>(null);
+/** The server's answer and the origins it was for, so the area and hover times agree. */
+export interface TravelReach { origins: readonly TravelOrigin[]; stops: Stop[][] }
+export const [travelReach, setTravelReach] = createSignal<TravelReach | null>(null);
 export const [travelError, setTravelError] = createSignal<string | null>(null);
 function setOrigins(o: readonly TravelOrigin[]) {
   setOriginsRaw(o);
@@ -137,15 +139,15 @@ export function refreshTravel() {
   travelTimer = setTimeout(() => {
     const list = origins();
     if (!overlays().includes("travel") || list.length === 0) {
-      setTravelImage(null);
+      setTravelReach(null);
       setTravelError(null);
       return;
     }
     travel(list).then(
-      (img) => { if (mine === travelSeq) { setTravelImage(img); setTravelError(null); } },
+      (r) => { if (mine === travelSeq) { setTravelReach({ origins: list, stops: r.origins }); setTravelError(null); } },
       (e: unknown) => {
         if (mine !== travelSeq) return;
-        setTravelImage(null);
+        setTravelReach(null);
         setTravelError(e instanceof ApiError && e.message === "no transit data loaded"
           ? "Travel times aren't available on this server."
           : "Couldn't load travel times.");

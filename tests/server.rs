@@ -180,14 +180,31 @@ async fn travel_rejects_bad_budgets_and_too_many_origins() {
 }
 
 #[tokio::test]
-async fn travel_returns_an_image_and_its_bounds() {
-    let body = serde_json::json!({"origins": [{"lat": 47.0, "lon": 8.0, "minutes": 30}]});
+async fn travel_returns_reached_stops_per_origin() {
+    let body = serde_json::json!({"origins": [
+        {"lat": 47.0, "lon": 8.0, "minutes": 30},
+        {"lat": 47.0, "lon": 8.3, "minutes": 10}
+    ]});
     let (status, json) = post_travel(app(with_transit()), body).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(json["image"]
-        .as_str()
-        .unwrap()
-        .starts_with("data:image/png;base64,"));
-    let b: Vec<f64> = serde_json::from_value(json["bounds"].clone()).unwrap();
-    assert!(b[0] < 8.0 && b[2] > 8.3 && b[1] < 47.0 && b[3] > 47.0);
+    let lists: Vec<Vec<[f64; 3]>> = serde_json::from_value(json["origins"].clone()).unwrap();
+    assert_eq!(lists.len(), 2);
+    assert_eq!(lists[0][0], [8.0, 47.0, 0.0]);
+    assert!(lists[0].len() > 1 && lists[0].iter().all(|s| s[2] <= 1800.0));
+}
+
+#[tokio::test]
+async fn travel_is_gzipped_when_the_client_accepts_it() {
+    let body = serde_json::json!({"origins": [{"lat": 47.0, "lon": 8.0, "minutes": 30}]});
+    let res = app(with_transit())
+        .oneshot(
+            Request::post("/api/travel")
+                .header("content-type", "application/json")
+                .header("accept-encoding", "gzip")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.headers()["content-encoding"], "gzip");
 }

@@ -254,6 +254,12 @@ input { caret-color: var(--signal); }
 .map-menu input:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 @media (pointer: coarse) { .map-menu input { font-size: 16px; } }
 
+.travel-tip {
+  position: absolute; z-index: 2; margin: 14px 0 0 14px; padding: 4px 8px; pointer-events: none;
+  background: var(--paper); border: 1px solid var(--ink); font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.travel-tip div { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+
 /* ---------- map tools ---------- */
 .map-tools { position: absolute; z-index: 2; right: var(--edge); top: var(--edge); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .round-btn {

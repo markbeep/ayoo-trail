@@ -275,7 +275,7 @@ validated to `0..=4`; anything outside is a `422`.
 | `POST /api/route` | `{waypoints, profile}` | `{route}` |
 | `GET /api/health` | | `{status, graph_date}` |
 | `GET /api/tiles/view/{z}/{x}/{y}` | | 256 px PNG of the 360° view overlay from `view.bin` (D100); 204 without data, 404 without `view.bin` |
-| `POST /api/travel` | `{origins: [{lat, lon, minutes}]}` (1–8 origins, 10–240 min) | `{bounds: [w, s, e, n], image: "data:image/png;base64,…"}`: shared and partial reach (ADR 0002); 503 without `transit.bin` |
+| `POST /api/travel` | `{origins: [{lat, lon, minutes}]}` (1–8 origins, 10–240 min) | `{origins: [[[lon, lat, secs], …], …]}`: per origin, itself (0 s) and each station it reaches within its budget (ADR 0002, 0005); gzipped; 503 without `transit.bin` |
 | `GET /api/webcams` | `?bbox=north,east,south,west` (sides ≤ 3°) | GeoJSON webcams from Windy, cached 5 min (D102); 503 without `WINDY_API_KEY` |
 | `GET /` | | static client |
 
@@ -329,8 +329,11 @@ link (D91) reproduces the loop until the graph is rebuilt.
   adds a numbered travel origin (at most 8, 60 min by default) and turns the
   overlay on. Origins are draggable map markers while it is on; their time
   budgets are scrub fields under its switch. They are stored in localStorage
-  only, never in share links. The server's PNG is drawn as a MapLibre image
-  source under the map's lines and labels.
+  only, never in share links. The client stamps the server's stations as
+  walking discs on 200 m cells (`routes/travel.ts`) and draws the result as a
+  MapLibre image source under the map's lines and labels. Hovering (a tap on
+  touch screens) shows each origin's time to that spot or "over budget"
+  (ADR 0005).
 - Home-screen install (D113): apple-touch-icon and a manifest, no service worker.
 - The selected loop is drag-editable with Undo/Reset and an optional
   color-by-cost view (D54).

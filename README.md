@@ -42,7 +42,8 @@ Base maps: Outdoor, Swiss topo, Satellite. Overlays: relief shading, marked trai
 Travel time is only a map layer, not a cost term: it colours where one or more travel origins
 get by public transport within their own time budgets (Saturday morning). It is dark where
 everyone gets there and light where only some do. Add an origin from the map menu
-(right-click or long-press: *Travel time from here*).
+(right-click or long-press: *Travel time from here*). Point at the map (tap on a phone) to see
+each origin's time to that spot.
 
 ## Run it
 

@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tower_http::compression::CompressionLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -449,13 +450,12 @@ struct TravelBody {
     origins: Vec<TravelOrigin>,
 }
 
-/// `POST /api/travel`: shared and partial reach of the travel origins as one PNG over
-/// `bounds` `[west, south, east, north]` (ADR 0002).
+/// `POST /api/travel`: per travel origin, `[lon, lat, secs]` for the origin (0 s) and each
+/// station it reaches within its budget (ADR 0002, 0005). The client draws the area.
 async fn travel(
     State(t): State<Option<Arc<Transit>>>,
     body: Result<Json<TravelBody>, JsonRejection>,
 ) -> Result<Json<Value>, ApiError> {
-    use base64::Engine;
     let t = t.ok_or_else(|| api_err(StatusCode::SERVICE_UNAVAILABLE, "no transit data loaded"))?;
     let Json(req) = body.map_err(|_| unprocessable("invalid request body"))?;
     if req.origins.is_empty() || req.origins.len() > MAX_ORIGINS {
@@ -482,13 +482,22 @@ async fn travel(
         origins.push((p, o.minutes));
     }
     let _permit = permits().acquire().await.expect("semaphore never closed");
-    let g = tokio::task::spawn_blocking(move || t.reach_grid(&origins))
-        .await
-        .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "travel time failed"))?;
-    let png = base64::engine::general_purpose::STANDARD.encode(g.png());
-    Ok(Json(
-        json!({ "bounds": g.bounds(), "image": format!("data:image/png;base64,{png}") }),
-    ))
+    let lists = tokio::task::spawn_blocking(move || {
+        // 5 decimals is about 1 m; keeps the payload small.
+        let r = |v: f64| (v * 1e5).round() / 1e5;
+        origins
+            .iter()
+            .map(|&(p, m)| {
+                t.stops(p, m)
+                    .into_iter()
+                    .map(|(q, secs)| json!([r(q.lon), r(q.lat), secs]))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|_| api_err(StatusCode::INTERNAL_SERVER_ERROR, "travel time failed"))?;
+    Ok(Json(json!({ "origins": lists })))
 }
 
 async fn api_not_found() -> StatusCode {
@@ -525,6 +534,8 @@ pub fn app(config: ServerConfig) -> Router {
     Router::new()
         .nest("/api", api)
         .fallback_service(client)
+        // JSON (the travel stops, ~3x smaller) and the client bundle; images are skipped.
+        .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
 }
 
