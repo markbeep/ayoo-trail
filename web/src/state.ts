@@ -132,13 +132,15 @@ let travelSeq = 0;
 export function refreshTravel() {
   clearTimeout(travelTimer);
   const mine = ++travelSeq;
-  const list = origins();
-  if (!overlays().includes("travel") || list.length === 0) {
-    setTravelImage(null);
-    setTravelError(null);
-    return;
-  }
+  // Read the state when the timer fires: Solid 2.0 applies a set only at the next flush,
+  // so reading here, right after setOrigins or toggleOverlay, sees the previous value.
   travelTimer = setTimeout(() => {
+    const list = origins();
+    if (!overlays().includes("travel") || list.length === 0) {
+      setTravelImage(null);
+      setTravelError(null);
+      return;
+    }
     travel(list).then(
       (img) => { if (mine === travelSeq) { setTravelImage(img); setTravelError(null); } },
       (e: unknown) => {
