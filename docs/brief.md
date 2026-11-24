@@ -147,7 +147,7 @@ swissmobility (difficulty imagery), MeteoSwiss snow map, SLF, OSM.
 
 ## Open questions
 
-Answered questions are recorded in `docs/decisions.md`.
+Answered questions are recorded as ADRs in `docs/adr/` (D1–D116 in `docs/decisions.md`).
 
 | Q | Question | State |
 |---|---|---|

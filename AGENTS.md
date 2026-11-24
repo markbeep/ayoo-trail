@@ -30,7 +30,9 @@ pluggable, and layer gating/tiers may come later.
 | File | Role |
 |------|------|
 | `docs/brief.md` | Vision, goals, feature backlog, open questions. |
-| `docs/decisions.md` | Append-only log of decisions and why. |
+| `docs/adr/` | One file per decision (`NNNN-slug.md`), from 2026-11-24 on. |
+| `docs/decisions.md` | Closed log of decisions D1–D116; read-only. |
+| `docs/agents/` | Config for the engineering skills (issue tracker, labels, domain docs). |
 | `docs/layers.md` | Per-layer data sources, licenses, algorithms, precompute cost. |
 | `docs/design.md` | As-built design: architecture, graph format, cost model, generation, API, frontend, setup. |
 | `docs/milestones.md` | v1 plan status (done). |
@@ -48,6 +50,21 @@ pluggable, and layer gating/tiers may come later.
 - The owner wants to be asked about details rather than have choices made for
   them, especially for product scope, UX, and data sources. Technical
   implementation choices may be proposed as a default with the reason.
-- Record every settled decision in `docs/decisions.md` in the same turn, and
-  move the question out of the open list.
+- Record every settled decision as a new ADR in `docs/adr/` in the same turn,
+  and move the question out of the open list. `docs/decisions.md` is closed
+  at D116; read it, don't append to it.
 - Mark inferences as inferences; never present a guess as a requirement.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `markbeep/ayoo-trail`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The default five: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` plus `docs/adr/` (D1–D116 stay in `docs/decisions.md`). See `docs/agents/domain.md`.

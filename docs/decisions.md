@@ -1,7 +1,7 @@
 # Decisions
 
-Append-only. One entry per decision: date, decision, why, source. Move the
-matching question out of `docs/brief.md` when it lands here.
+Closed at D116 (2026-11-24). New decisions are ADR files in `docs/adr/`;
+see `docs/adr/0001-decisions-move-to-adr-files.md`. Do not append here.
 
 | # | Date | Decision | Why / source |
 |---|------|----------|--------------|
