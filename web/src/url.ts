@@ -57,7 +57,8 @@ export function encodeShare(s: Share): string {
   if (s.zones.length) parts.push(`z=${s.zones.map((z) => `${pt(z)},${Math.round(z.radius_m)}${zoneFlag(z)}`).join(";")}`);
   if (s.checkpoints.length) parts.push(`k=${s.checkpoints.map((c) => `${pt(c)},${nameOut(c.name)}`).join(";")}`);
   if (s.wps) parts.push(`p=${s.wps.map(pt).join(";")}`);
-  return parts.join("&");
+  // %3B, not `;`: the deployed proxy splits a raw `;` like `&` and cuts `p=` and `z=` short (ADR 0006).
+  return parts.join("&").replaceAll(";", "%3B");
 }
 
 const num = (v: unknown, lo: number, hi: number): number => {

@@ -24,3 +24,9 @@ climb".
 
 The owner asked for a thumbnail showing the route on relief with views, and
 chose query links, server-side rendering, and distance and climb in the title.
+
+## Addendum: `;` is sent as `%3B`
+
+The deployed proxy treats a raw `;` in the query as a separator, so `p=` and
+`z=` reached the server cut short, and edited copies got no preview. Links
+written before this fix have the same problem; the client still opens them.

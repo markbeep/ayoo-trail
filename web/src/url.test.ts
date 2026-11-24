@@ -20,6 +20,7 @@ const share: Share = {
 test("a share link round-trips", () => {
   assert.deepEqual(decodeShare(`#${encodeShare(share)}`), share);
   assert.deepEqual(decodeShare(`?${encodeShare(share)}`), share);
+  assert.ok(!encodeShare(share).includes(";") && encodeShare(share).includes("%3B"), encodeShare(share));
   assert.deepEqual(decodeShare(encodeShare({ ...share, climb: "max", wps: null })),
     { ...share, climb: "max", wps: null });
 });
