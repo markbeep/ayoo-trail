@@ -114,6 +114,8 @@ export const [origins, setOriginsRaw] = createSignal<readonly TravelOrigin[]>(lo
 export interface TravelReach { origins: readonly TravelOrigin[]; stops: Stop[][] }
 export const [travelReach, setTravelReach] = createSignal<TravelReach | null>(null);
 export const [travelError, setTravelError] = createSignal<string | null>(null);
+/** Origin whose list row the mouse is on: the map shows only its reach. */
+export const [travelFocus, setTravelFocus] = createSignal<number | null>(null);
 function setOrigins(o: readonly TravelOrigin[]) {
   setOriginsRaw(o);
   save({ origins: [...o] });

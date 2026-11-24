@@ -333,7 +333,7 @@ link (D91) reproduces the loop until the graph is rebuilt.
   walking discs on 200 m cells (`routes/travel.ts`) and draws the result as a
   MapLibre image source under the map's lines and labels. Hovering (a tap on
   touch screens) shows each origin's time to that spot or "over budget"
-  (ADR 0005).
+  (ADR 0005). Pointing at an origin's list row shows only its reach.
 - Home-screen install (D113): apple-touch-icon and a manifest, no service worker.
 - The selected loop is drag-editable with Undo/Reset and an optional
   color-by-cost view (D54).

@@ -8,7 +8,7 @@ import type { LatLon } from "../routes/types";
 import {
   hoverIndex, selected, setHoverIndex, baseMap, overlays, pickingStart, routes, selectedId, setPickingStart, setSelectedId, setStart, start,
   checkpoints, costView, editWaypoints, MAX_WAYPOINTS, refreshing, zones, moveZone, resizeZone,
-  origins, moveOrigin, travelReach, refreshTravel,
+  origins, moveOrigin, travelReach, travelFocus, refreshTravel,
 } from "../state";
 import { reachImage, timeTo } from "../routes/travel";
 
@@ -115,7 +115,14 @@ export function MapView(props: { padding: () => { left: number; right: number; t
   createEffect(zones, (z) => void ctl?.setZones(z), { defer: true });
   createEffect(checkpoints, (c) => void ctl?.setCheckpoints(c), { defer: true });
   createEffect(origins, (o) => void ctl?.setOrigins(o), { defer: true });
-  createEffect(travelReach, (r) => void ctl?.setTravel(r ? reachImage(r.stops, r.origins.map((o) => o.minutes)) : null), { defer: true });
+  createEffect(() => ({ r: travelReach(), f: travelFocus() }), ({ r, f }) => {
+    if (!r) return void ctl?.setTravel(null);
+    // A hovered list row shows only that origin's reach.
+    const only = f !== null && r.stops[f] && r.origins[f] ? f : null;
+    void ctl?.setTravel(only === null
+      ? reachImage(r.stops, r.origins.map((o) => o.minutes))
+      : reachImage([r.stops[only]!], [r.origins[only]!.minutes]));
+  }, { defer: true });
   createEffect(routes, (rs) => {
     const id = untrack(selectedId);
     void ctl?.setRoutes(rs, id);

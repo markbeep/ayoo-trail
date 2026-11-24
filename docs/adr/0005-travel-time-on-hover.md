@@ -9,6 +9,10 @@ with each travel origin's time to that spot ("1 · 47 min"), or "over budget"
 when it is outside that origin's time budget. On touch screens a tap shows the
 same tooltip there; with the layer on, a tap no longer opens place info.
 
+Pointing at an origin's row in the list under the Travel time switch shows only
+that origin's reach on the map until the pointer leaves the row. Mouse only; not
+on touch screens.
+
 The server no longer draws the area. `POST /api/travel` returns, per origin, the
 stations it reaches within its budget and the door-to-door seconds to each. The
 client draws shared and partial reach from that list and computes the hover
