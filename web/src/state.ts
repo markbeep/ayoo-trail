@@ -4,7 +4,8 @@ import { createMemo, createRoot, createSignal, flush } from "solid-js";
 import type { BaseMapId } from "./map/basemaps";
 import { DEFAULT_BASE_MAP, DEFAULT_OVERLAYS } from "./map/basemaps";
 import type { BreakdownKey, Checkpoint, LatLon, Penalties, Route, Weights } from "./routes/types";
-import { ApiError, generate, routeVia, type ClimbGoal } from "./api";
+import { ApiError, generate, routeVia, travel, type ClimbGoal, type TravelImage } from "./api";
+import { clampMinutes, loadOrigins, withOrigin, type TravelOrigin } from "./routes/travel";
 import { clampRadius, MAX_ZONES, ZONE_DEFAULT_M, type Zone } from "./routes/zones";
 import { decodeShare, DEFAULT_PENALTIES, encodeShare, MAX_CHECKPOINTS } from "./url";
 import { nearestOnRoute } from "./routes/gpx";
@@ -41,7 +42,11 @@ export const CLIMB_STEP_M = 10;
 export const climbMaxM = () => Math.max(1500, Math.ceil((150 * distanceKm()) / 100) * 100);
 
 const STORE_KEY = "trail-calc:v1";
-interface Stored { start?: LatLon; startName?: string | null; baseMap?: BaseMapId; overlays?: string[]; zones?: Zone[]; checkpoints?: Checkpoint[] }
+interface Stored {
+  start?: LatLon; startName?: string | null; baseMap?: BaseMapId; overlays?: string[]; zones?: Zone[]; checkpoints?: Checkpoint[];
+  /** Travel origins (ADR 0002): this device only, never in share links. */
+  origins?: TravelOrigin[];
+}
 function load(): Stored {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Stored; } catch { return {}; }
 }
@@ -100,6 +105,51 @@ export function toggleOverlay(id: string) {
   const next = overlays().includes(id) ? overlays().filter((o) => o !== id) : [...overlays(), id];
   setOverlaysRaw(next);
   save({ overlays: next });
+  if (id === "travel") refreshTravel();
+}
+
+/** Travel time layer (ADR 0002): the origins, and the server's image of their reach. */
+export const [origins, setOriginsRaw] = createSignal<readonly TravelOrigin[]>(loadOrigins(stored.origins));
+export const [travelImage, setTravelImage] = createSignal<TravelImage | null>(null);
+export const [travelError, setTravelError] = createSignal<string | null>(null);
+function setOrigins(o: readonly TravelOrigin[]) {
+  setOriginsRaw(o);
+  save({ origins: [...o] });
+  refreshTravel();
+}
+export function addOrigin(p: LatLon) {
+  setOrigins(withOrigin(origins(), p));
+  if (!overlays().includes("travel")) toggleOverlay("travel");
+}
+export const moveOrigin = (i: number, p: LatLon) => setOrigins(origins().map((o, j) => (j === i ? { ...o, ...p } : o)));
+export const setOriginMinutes = (i: number, m: number) =>
+  setOrigins(origins().map((o, j) => (j === i ? { ...o, minutes: clampMinutes(m) } : o)));
+export const removeOrigin = (i: number) => setOrigins(origins().filter((_, j) => j !== i));
+
+let travelTimer: ReturnType<typeof setTimeout> | undefined;
+let travelSeq = 0;
+/** Fetch the reach image shortly after the last change (a scrubbed budget sends many). */
+export function refreshTravel() {
+  clearTimeout(travelTimer);
+  const mine = ++travelSeq;
+  const list = origins();
+  if (!overlays().includes("travel") || list.length === 0) {
+    setTravelImage(null);
+    setTravelError(null);
+    return;
+  }
+  travelTimer = setTimeout(() => {
+    travel(list).then(
+      (img) => { if (mine === travelSeq) { setTravelImage(img); setTravelError(null); } },
+      (e: unknown) => {
+        if (mine !== travelSeq) return;
+        setTravelImage(null);
+        setTravelError(e instanceof ApiError && e.message === "no transit data loaded"
+          ? "Travel times aren't available on this server."
+          : "Couldn't load travel times.");
+      },
+    );
+  }, 250);
 }
 /** The climb goal for `/api/generate`, or null without one ("off"). */
 export function climbGoal(): ClimbGoal | null {

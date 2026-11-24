@@ -66,6 +66,7 @@ export const OVERLAYS: readonly OverlayDef[] = [
   { id: "view", label: "360° view", defaultOn: false },
   { id: "schweizmobil", label: "SchweizMobil hiking", defaultOn: false },
   { id: "webcams", label: "Webcams", defaultOn: false },
+  { id: "travel", label: "Travel time", defaultOn: false },
 ];
 
 /** SchweizMobil hiking routes (D103): ASTRA's Wanderland layer on geo.admin.ch, CH only. */

@@ -275,6 +275,7 @@ validated to `0..=4`; anything outside is a `422`.
 | `POST /api/route` | `{waypoints, profile}` | `{route}` |
 | `GET /api/health` | | `{status, graph_date}` |
 | `GET /api/tiles/view/{z}/{x}/{y}` | | 256 px PNG of the 360° view overlay from `view.bin` (D100); 204 without data, 404 without `view.bin` |
+| `POST /api/travel` | `{origins: [{lat, lon, minutes}]}` (1–8 origins, 10–240 min) | `{bounds: [w, s, e, n], image: "data:image/png;base64,…"}`: shared and partial reach (ADR 0002); 503 without `transit.bin` |
 | `GET /api/webcams` | `?bbox=north,east,south,west` (sides ≤ 3°) | GeoJSON webcams from Windy, cached 5 min (D102); 503 without `WINDY_API_KEY` |
 | `GET /` | | static client |
 
@@ -324,6 +325,12 @@ link (D91) reproduces the loop until the graph is rebuilt.
 - Presets follow the distance (30/60/90 m per km); a typed target is fixed
   meters; Max asks for as much climb as possible.
 - A "must-pass areas need at least N km" error offers "Use N km".
+- Travel time overlay (ADR 0002): "Travel time from here" in the map menu
+  adds a numbered travel origin (at most 8, 60 min by default) and turns the
+  overlay on. Origins are draggable map markers while it is on; their time
+  budgets are scrub fields under its switch. They are stored in localStorage
+  only, never in share links. The server's PNG is drawn as a MapLibre image
+  source under the map's lines and labels.
 - Home-screen install (D113): apple-touch-icon and a manifest, no service worker.
 - The selected loop is drag-editable with Undo/Reset and an optional
   color-by-cost view (D54).
@@ -371,6 +378,8 @@ link (D91) reproduces the loop until the graph is rebuilt.
 - `just data` fetches the sources: the Geofabrik CH PBF, swissALTI3D 2 m
   tiles for the region bbox (STAC API) or DHM25, and the swissTLM3D Wanderwege
   GPKG. Only curl, jq and unzip; no GDAL (D37).
+- `just transit` fetches the Swiss GTFS feed and builds `data/transit.bin`
+  for the Travel time overlay (optional; without it `/api/travel` answers 503).
 - `just import REGION=ch` builds the full graph; `REGION=demo` builds the
   Wattwil–Ziegelbrücke bbox (D34). The DEM source is configurable (D33).
 - `docker compose up` is the full-stack path: an `import` service that exits

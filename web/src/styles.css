@@ -470,3 +470,15 @@ input { caret-color: var(--signal); }
 .qgrid .seg { border: 0; border-top: 1px solid var(--line); flex: 1; }
 .qgo { margin: 0; min-height: 0; height: 100%; font-size: 14px; gap: 6px; }
 .qgrid .start-results { margin: 2px -6px -4px; border-width: 1px 0 0; }
+
+/* Travel origins under the Travel time switch (ADR 0002): timetable rows, ink numbers. */
+.travel { padding: 2px 0 4px; }
+.travel-note { font-size: 11px; color: var(--muted); line-height: 1.35; padding: 2px 0 4px; }
+.travel-note.warn { color: var(--warn); }
+.travel-list { list-style: none; border-top: 1px solid var(--line); }
+.travel-list li { display: flex; align-items: center; gap: 6px; min-height: 28px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.travel-n { flex: none; width: 16px; height: 16px; display: grid; place-items: center; background: var(--ink); color: var(--paper); font-size: 10px; font-weight: 800; }
+.travel-at { flex: 1; min-width: 0; font-size: 11px; font-family: var(--font-narrow); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.travel-rm { flex: none; width: 24px; height: 24px; display: grid; place-items: center; color: var(--muted); }
+.travel-rm:hover { background: var(--well); color: var(--ink); }
+.travel-list .scrub, .travel-list .scrub-input { flex: none; width: 66px; min-height: 26px; padding: 3px 6px; font-size: 13px; white-space: nowrap; }

@@ -67,17 +67,24 @@ License conclusions checked on this date:
   from the raster. The user's stance is strong: cities are a last resort.
 - **Status**: v1.
 
-## Start reachability
+## Travel time (start reachability)
 
-- **Source**: GTFS from opentransportdata.swiss (SBB + regional), plus the
-  walking network for the last leg.
-- **Derivation**: one-off precompute per home location: travel minutes to every
-  stop (RAPTOR or a simple GTFS journey scan), plus walking time from the stop
-  to the candidate start. Store a station table and a coarse travel-time
-  raster.
-- **Caveat**: this is a small project of its own and is deferred (D19). Any map
-  point is a start in v1.
-- **Status**: later.
+- **Source**: the Swiss GTFS feed from opentransportdata.swiss (SBB and regional
+  operators, some cross-border stops). The permalink downloads without a key.
+- **Precompute** (`just transit`, ADR 0002): the feed's busiest Saturday,
+  connections leaving 06:00–14:00, platforms collapsed onto their stations,
+  frequency trips expanded (at most one departure every 5 min), and footpaths
+  between stations ≤ 400 m. Stored in `data/transit.bin`.
+- **Query** (`POST /api/travel`): per travel origin, a connection scan for each
+  10 min of departures 06:00–10:00. Each scan tracks the latest time you could
+  leave home, so a trip off the 10 min grid costs no extra wait. Walking is
+  4.5 km/h in a straight line, at most 15 min to the first stop and 20 min from
+  the last. The server stamps those walking discs on 200 m web-mercator cells,
+  counts origins per cell and returns one PNG: shared reach strong, partial
+  reach faint.
+- **Caveat**: straight-line walking ignores terrain and rivers. Not used for
+  routing.
+- **Status**: built.
 
 ## Viewshed and horizon profiles
 
@@ -135,5 +142,5 @@ License conclusions checked on this date:
 | OSM import + attributes | `graph.bin` | monthly | minutes–hours |
 | Official trail join | graph attribute | yearly | minutes |
 | Land cover raster | PMTiles + graph attribute | yearly | minutes |
-| Reachability from home | station table + raster | on demand | minutes |
+| Travel time | `transit.bin` (22 MB) | yearly, after the December timetable change | ~10 s for CH (1.4 GB `stop_times.txt`) |
 | Horizon / view score | `view.bin` (8.7 MB) | once, DEM changes | 80 s for CH, 16 threads |

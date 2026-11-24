@@ -36,8 +36,8 @@ pub const CELL_M: f64 = 200.0;
 const MAGIC: &[u8; 8] = b"AYTRAN01";
 const REF_LAT: f64 = 46.8;
 /// RGBA for shared and partial reach: one hue, two strengths.
-const SHARED: [u8; 4] = [31, 78, 140, 120];
-const PARTIAL: [u8; 4] = [31, 78, 140, 45];
+const SHARED: [u8; 4] = [31, 78, 140, 150];
+const PARTIAL: [u8; 4] = [31, 78, 140, 70];
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Pod, Zeroable)]

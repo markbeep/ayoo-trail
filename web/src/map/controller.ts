@@ -14,6 +14,8 @@ import type { LatLon, Route } from "../routes/types";
 import { bounds, cumulative, legAt, nearestIndex } from "../routes/geo";
 import { circle, edgePoint, radiusTo, type Zone } from "../routes/zones";
 import type { Checkpoint } from "../routes/types";
+import type { TravelOrigin } from "../routes/travel";
+import type { TravelImage } from "../api";
 import { fetchSchweizMobilLogos, fetchWebcams, identifySchweizMobil, loadLogo, schweizMobilPopup, webcamPopup, WEBCAM_MIN_ZOOM, WINDY_CREDIT, type WebcamProps } from "./info";
 
 export interface RouteColors {
@@ -69,6 +71,11 @@ const HERE = "here";
 const ZONES = "zones";
 const ZONE_HANDLES = "zone-handles";
 const CHECKPOINTS = "checkpoints";
+const TRAVEL = "travel";
+const TRAVEL_ORIGINS = "travel-origins";
+/** Placeholder for the Travel time image until the first reach arrives (an image source needs one). */
+const BLANK = (() => { const c = document.createElement("canvas"); c.width = c.height = 1; return c.toDataURL(); })();
+const CH_CORNERS: [[number, number], [number, number], [number, number], [number, number]] = [[5.9, 47.85], [10.5, 47.85], [10.5, 45.8], [5.9, 45.8]];
 const EMPTY = { type: "FeatureCollection" as const, features: [] };
 const point = (p: LatLon | null) => ({
   type: "FeatureCollection" as const,
@@ -90,6 +97,7 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
     schweizmobil: { type: "raster", ...SCHWEIZMOBIL_SOURCE },
     "schweizmobil-logos": { type: "geojson", data: { type: "FeatureCollection", features: [] } },
     webcams: { type: "geojson", data: { type: "FeatureCollection", features: [] }, attribution: WINDY_CREDIT },
+    [TRAVEL]: { type: "image", url: BLANK, coordinates: CH_CORNERS },
   };
   for (const def of BASE_MAPS) if (def.raster) sources[def.id] = { type: "raster", ...def.raster };
   const withVis = (ls: LayerSpecification[], v: boolean) => ls.map((l) => ({ ...l, layout: { ...l.layout, visibility: on(v) } }) as LayerSpecification);
@@ -116,6 +124,8 @@ function buildStyle(base: BaseMapId, overlays: readonly string[], c: MapColors):
       paint: { "fill-color": c.forest, "fill-opacity": 0.45 },
     },
     { id: "overlay-view", type: "raster", source: "view", layout: { visibility: overlay("view") }, paint: { "raster-opacity": 0.75 } },
+    // Shared and partial reach, coloured by the server (ADR 0002); under lines and labels.
+    { id: "overlay-travel", type: "raster", source: TRAVEL, layout: { visibility: overlay("travel") }, paint: { "raster-fade-duration": 0, "raster-resampling": "nearest" } },
     ...withVis(outdoorLines(c.palette), outdoor),
     { id: "overlay-trails", type: "raster", source: "trails", layout: { visibility: overlay("trails") } },
     { id: "overlay-schweizmobil", type: "raster", source: "schweizmobil", layout: { visibility: overlay("schweizmobil") } },
@@ -144,7 +154,7 @@ export interface MapHandlers {
   onMapClick?: (p: LatLon) => void;
   /** Right-click or touch long-press: map position, screen point inside the container, and the
    * area or checkpoint under it, if any. */
-  onContextMenu?: (p: LatLon, at: { x: number; y: number }, hit: { zone?: number; checkpoint?: number }) => void;
+  onContextMenu?: (p: LatLon, at: { x: number; y: number }, hit: { zone?: number; checkpoint?: number; origin?: number }) => void;
   /** The map started moving (closes transient UI such as the context menu). */
   onMoveStart?: () => void;
   /** Pointer over the selected route (null when it leaves). */
@@ -156,6 +166,8 @@ export interface MapHandlers {
   /** Avoid areas (D90): drag the center to move one, the edge handle to resize it. */
   onZoneMove?: (i: number, p: LatLon) => void;
   onZoneResize?: (i: number, radius_m: number) => void;
+  /** Travel origins (ADR 0002): drag one to move it. */
+  onOriginMove?: (i: number, p: LatLon) => void;
 }
 
 export class MapController {
@@ -170,6 +182,8 @@ export class MapController {
   private justDragged = false;
   private zones: readonly Zone[] = [];
   private zoneDrag: { i: number; edge: boolean; at: LatLon | null; from: maplibregl.Point } | null = null;
+  private origins: readonly TravelOrigin[] = [];
+  private originDrag: { i: number; at: LatLon | null; from: maplibregl.Point } | null = null;
 
   constructor(
     container: HTMLElement, base: BaseMapId, overlays: readonly string[], private colors: MapColors, handlers: MapHandlers = {},
@@ -226,8 +240,9 @@ export class MapController {
       };
       // A checkpoint sits on top of any area it is in.
       const checkpoint = at(["checkpoints"]);
-      const zone = checkpoint === undefined ? at(["zone-fill", "zone-handles"]) : undefined;
-      handlers.onContextMenu?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point, { zone, checkpoint });
+      const origin = checkpoint === undefined ? at(["overlay-travel-origins"]) : undefined;
+      const zone = checkpoint === undefined && origin === undefined ? at(["zone-fill", "zone-handles"]) : undefined;
+      handlers.onContextMenu?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }, e.point, { zone, checkpoint, origin });
     });
     this.map.on("movestart", () => handlers.onMoveStart?.());
     let overSelected = false;
@@ -267,6 +282,15 @@ export class MapController {
       canvas().style.cursor = "grabbing";
     };
     this.map.on("mousedown", "zone-handles", (e) => { if (e.originalEvent.button === 0) onZone(e); });
+    const onOrigin = (e: maplibregl.MapMouseEvent | maplibregl.MapTouchEvent) => {
+      const f = this.map.queryRenderedFeatures(e.point, { layers: ["overlay-travel-origins"] })[0];
+      if (!f || this.drag || this.zoneDrag || this.originDrag) return;
+      e.preventDefault();
+      this.originDrag = { i: Number(f.properties?.i), at: null, from: e.point };
+      canvas().style.cursor = "grabbing";
+    };
+    this.map.on("mousedown", "overlay-travel-origins", (e) => { if (e.originalEvent.button === 0) onOrigin(e); });
+    this.map.on("touchstart", "overlay-travel-origins", (e) => { if (e.points.length === 1) onOrigin(e); });
     this.map.on("touchstart", "zone-handles", (e) => { if (e.points.length === 1) onZone(e); });
     this.map.on("touchstart", "waypoints", (e) => { if (e.points.length === 1) onHandle(e); });
     // shortcut: adding points by dragging the line is mouse-only, so touch panning over the route still pans; add a long-press if phones need it.
@@ -278,6 +302,12 @@ export class MapController {
       begin(e, legAt(r.geometry.coordinates, this.wps, k), true);
     });
     const move = (e: maplibregl.MapMouseEvent | maplibregl.MapTouchEvent) => {
+      const od = this.originDrag;
+      if (od && (od.at || od.from.dist(e.point) >= 5)) {
+        od.at = { lat: e.lngLat.lat, lon: e.lngLat.lng };
+        this.drawOrigins(this.origins.map((o, j) => (j !== od.i ? o : { ...o, ...od.at! })));
+        return;
+      }
       const zd = this.zoneDrag;
       if (zd && (zd.at || zd.from.dist(e.point) >= 5)) {
         zd.at = { lat: e.lngLat.lat, lon: e.lngLat.lng };
@@ -295,6 +325,17 @@ export class MapController {
     this.map.on("mousemove", move);
     this.map.on("touchmove", move);
     const end = () => {
+      const od = this.originDrag;
+      if (od) {
+        this.originDrag = null;
+        canvas().style.cursor = "";
+        if (od.at) {
+          this.justDragged = true;
+          h.onOriginMove?.(od.i, od.at);
+        }
+        this.drawOrigins(this.origins);
+        return;
+      }
       const zd = this.zoneDrag;
       if (zd) {
         this.zoneDrag = null;
@@ -323,6 +364,8 @@ export class MapController {
     this.map.on("touchend", end);
     this.map.on("mouseenter", "waypoints", () => (canvas().style.cursor = "grab"));
     this.map.on("mouseenter", "zone-handles", () => (canvas().style.cursor = "grab"));
+    this.map.on("mouseenter", "overlay-travel-origins", () => (canvas().style.cursor = "grab"));
+    this.map.on("mouseleave", "overlay-travel-origins", () => { if (!this.originDrag) canvas().style.cursor = ""; });
     this.map.on("mouseleave", "zone-handles", () => { if (!this.zoneDrag) canvas().style.cursor = ""; });
     this.map.on("mouseleave", "waypoints", () => { if (!this.drag) canvas().style.cursor = ""; });
   }
@@ -337,6 +380,7 @@ export class MapController {
     this.map.addSource(ZONES, { type: "geojson", data: EMPTY });
     this.map.addSource(ZONE_HANDLES, { type: "geojson", data: EMPTY });
     this.map.addSource(CHECKPOINTS, { type: "geojson", data: EMPTY });
+    this.map.addSource(TRAVEL_ORIGINS, { type: "geojson", data: EMPTY });
     // Areas sit under the routes: avoid in the "avoided" end of the cost ramp, prefer in the
     // cheap end (D97). Soft edges dashed, hard edges solid and heavier.
     const avoid = c.cost[c.cost.length - 1]!;
@@ -415,6 +459,17 @@ export class MapController {
       id: "checkpoint-labels", type: "symbol", source: CHECKPOINTS,
       layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Bold"], "text-size": 12, "text-anchor": "left", "text-offset": [0.9, 0] },
       paint: { "text-color": c.palette.label, "text-halo-color": c.palette.halo, "text-halo-width": 1.5 },
+    });
+    // Travel origins: numbered ink markers, shown with the Travel time overlay (its `overlay-travel-…` layers).
+    const travelVis = { visibility: this.map.getLayoutProperty("overlay-travel", "visibility") ?? "none" } as const;
+    this.map.addLayer({
+      id: "overlay-travel-origins", type: "circle", source: TRAVEL_ORIGINS, layout: travelVis,
+      paint: { "circle-radius": 9, "circle-color": c.start, "circle-stroke-color": c.casing, "circle-stroke-width": 2 },
+    });
+    this.map.addLayer({
+      id: "overlay-travel-labels", type: "symbol", source: TRAVEL_ORIGINS,
+      layout: { ...travelVis, "text-field": ["to-string", ["get", "n"]], "text-font": ["Noto Sans Bold"], "text-size": 11, "text-allow-overlap": true, "text-ignore-placement": true },
+      paint: { "text-color": c.casing },
     });
     this.map.addLayer({
       id: "here", type: "circle", source: HERE,
@@ -580,6 +635,29 @@ export class MapController {
     this.zones = zones;
     await this.ready;
     if (!this.zoneDrag) this.drawZones(zones);
+  }
+
+  /** Travel origins (ADR 0002). */
+  async setOrigins(origins: readonly TravelOrigin[]) {
+    this.origins = origins;
+    await this.ready;
+    if (!this.originDrag) this.drawOrigins(origins);
+  }
+
+  private drawOrigins(origins: readonly TravelOrigin[]) {
+    (this.map.getSource(TRAVEL_ORIGINS) as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: origins.map((o, i) => ({ type: "Feature", properties: { i, n: i + 1 }, geometry: { type: "Point", coordinates: [o.lon, o.lat] } })),
+    });
+  }
+
+  /** The reach image for the Travel time overlay, or none. */
+  async setTravel(img: TravelImage | null) {
+    await this.ready;
+    const src = this.map.getSource(TRAVEL) as maplibregl.ImageSource;
+    if (!img) { src.updateImage({ url: BLANK, coordinates: CH_CORNERS }); return; }
+    const [w, s, e, n] = img.bounds;
+    src.updateImage({ url: img.image, coordinates: [[w, n], [e, n], [e, s], [w, s]] });
   }
 
   /** GPX checkpoints (D98). */

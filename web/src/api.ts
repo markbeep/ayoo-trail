@@ -1,5 +1,6 @@
 import type { LatLon, Penalties, Route, Weights } from "./routes/types";
 import { zoneMode, type Zone } from "./routes/zones";
+import type { TravelOrigin } from "./routes/travel";
 
 export interface Health {
   status: string;
@@ -44,3 +45,13 @@ export const generate = (
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ start, distance_m, climb, profile: { weights, max_sac, exclude: exclude(zones), ...penalties } }),
   }).then((r) => r.routes);
+
+/** Shared and partial reach as one PNG over `bounds` `[west, south, east, north]` (ADR 0002). */
+export interface TravelImage { bounds: [number, number, number, number]; image: string }
+
+export const travel = (origins: readonly TravelOrigin[]) =>
+  call<TravelImage>("/api/travel", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ origins }),
+  });

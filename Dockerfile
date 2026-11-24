@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ayoo: one small image with both binaries and the built client (D11, D17).
-# The graph is not baked in: mount it at /data (graph.bin, optional view.bin), so it can be rebuilt independently.
+# The graph is not baked in: mount it at /data (graph.bin, optional view.bin and transit.bin), so it can be rebuilt independently.
 
 # glibc, matching the lockfile: the Solid compiler ships native binaries per libc.
 FROM node:26.13.1-slim AS web

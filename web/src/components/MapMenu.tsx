@@ -1,15 +1,17 @@
 // Map context menu (D46): right-click, or long-press on phones.
 import { createEffect, createSignal, onSettled, Show } from "solid-js";
-import { CircleDot, CircleSlash, Copy, Flag, MapPin, Repeat2, Trash2 } from "@lucide/solid";
+import { CircleDot, CircleSlash, Copy, Flag, MapPin, Repeat2, TrainFront, Trash2 } from "@lucide/solid";
 import type { LatLon } from "../routes/types";
 import {
-  addCheckpoint, addZone, checkpoints, removeCheckpoint, removeZone, renameCheckpoint, selected, setStart, toggleHard, zones,
+  addCheckpoint, addOrigin, addZone, checkpoints, origins, removeCheckpoint, removeOrigin, removeZone, renameCheckpoint, selected, setStart,
+  toggleHard, zones,
 } from "../state";
 import { MAX_CHECKPOINTS } from "../url";
 import { isMust, MAX_MUST, MAX_ZONES } from "../routes/zones";
+import { MAX_ORIGINS } from "../routes/travel";
 
-/** `zone` / `checkpoint`: what was long-pressed or right-clicked, if anything (D90, D97, D98). */
-export interface MenuState { p: LatLon; x: number; y: number; zone?: number | undefined; checkpoint?: number | undefined }
+/** `zone` / `checkpoint` / `origin`: what was long-pressed or right-clicked, if anything (D90, D97, D98, ADR 0002). */
+export interface MenuState { p: LatLon; x: number; y: number; zone?: number | undefined; checkpoint?: number | undefined; origin?: number | undefined }
 
 export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
   const [copied, setCopied] = createSignal(false);
@@ -48,6 +50,8 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
   });
 
   const cp = () => (props.menu.checkpoint === undefined ? undefined : checkpoints()[props.menu.checkpoint]);
+  /** The right-clicked travel origin, wrapped so index 0 is truthy for Show. */
+  const origin = () => { const i = props.menu?.origin; return i !== undefined && origins()[i] ? { i } : undefined; };
 
   return (
     <div class="map-menu" role="menu" aria-label="Map actions" ref={el} style={style()}>
@@ -62,7 +66,13 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
           </button>
         </>}
       </Show>
-      <Show when={!cp()}>
+      {/* `?.`: removing closes the menu, and these re-read after the menu is gone. */}
+      <Show when={origin()}>
+        {(o) => <button role="menuitem" onClick={() => { removeOrigin(o().i); props.onClose(); }}>
+          <Trash2 size={16} />Remove travel origin {o().i + 1}
+        </button>}
+      </Show>
+      <Show when={!cp() && props.menu?.origin === undefined}>
       <button role="menuitem" onClick={() => { setStart(props.menu.p); props.onClose(); }}>
         <MapPin size={16} />Start here
       </button>
@@ -74,6 +84,9 @@ export function MapMenu(props: { menu: MenuState; onClose: () => void }) {
           </button>
           <button role="menuitem" disabled={full()} onClick={() => { addZone(props.menu.p, "prefer"); props.onClose(); }}>
             <CircleDot size={16} />Prefer area here
+          </button>
+          <button role="menuitem" disabled={origins().length >= MAX_ORIGINS} onClick={() => { addOrigin(props.menu.p); props.onClose(); }}>
+            <TrainFront size={16} />Travel time from here
           </button>
           <Show when={selected()}>
             <button role="menuitem" disabled={checkpoints().length >= MAX_CHECKPOINTS}

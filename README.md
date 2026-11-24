@@ -28,15 +28,17 @@ generator places turning points where your weighted costs are low and routes bet
 - **Quiet roads**: avoid busy road classes.
 - **Avoid/prefer areas**: circles you place on the map (long-press or right-click) and resize.
 
+Not a cost term, just a map layer: **Travel time** colours where one or more travel origins get
+by public transport within their own time budgets (Saturday morning). It is dark where everyone
+gets there and light where only some do.
+
 **Planned**
 
 - Views (viewshed), which will also pull loops toward peaks and viewpoints.
 - Remoteness.
 - Snow cover for a date.
-- Sun and shade.
 - POIs: water, toilets, shops.
 - Webcams and photos.
-- Start reachability by public transport.
 - Popular trails.
 
 ## Run it
@@ -54,8 +56,9 @@ Other commands:
 
 - `just check` runs fmt, clippy, the tests and the typecheck.
 - `just smoke` runs an end-to-end health, generate and route check.
+- `just transit` fetches the Swiss GTFS feed and builds `data/transit.bin` for the Travel time layer.
 - `docker compose up` runs the import and the server as one image.
 
 Server settings: `BIND`, `DATA_DIR`, `STATIC_DIR`.
 
-Data: © swisstopo, © OpenStreetMap contributors.
+Data: © swisstopo, © OpenStreetMap contributors, timetable from opentransportdata.swiss.
