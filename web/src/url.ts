@@ -1,4 +1,5 @@
-// Share links (D91): the query, the selected loop and its dragged points in the URL hash.
+// Share links (D91): the query, the selected loop and its dragged points in the URL query
+// (ADR 0006; `#` before it, still read).
 // Pure: no state imports, so `node --test` can run it.
 import type { Checkpoint, LatLon, Penalties, Weights } from "./routes/types";
 import type { Zone } from "./routes/zones";
@@ -72,9 +73,9 @@ const list = (v: string | null, max: number): string[][] => {
   return items;
 };
 
-/** The share in a URL hash, or null when there is none or it doesn't validate. */
+/** The share in a URL query or hash, or null when there is none or it doesn't validate. */
 export function decodeShare(hash: string): Share | null {
-  const q = new URLSearchParams(hash.replace(/^#/, ""));
+  const q = new URLSearchParams(hash.replace(/^[#?]/, ""));
   const start = q.get("s");
   if (!start) return null;
   try {

@@ -405,3 +405,46 @@ async fn score_is_how_close_the_loop_gets_to_the_best_the_weights_allow() {
     off["profile"] = json!({"weights": {"slope": 0.0, "surface": 0.0, "tech": 0.0, "official": 0.0, "forest": 0.0, "urban": 0.0, "traffic": 0.0}});
     assert!((post(Some(graph()), off).await.1["score"].as_f64().unwrap() - 100.0).abs() < 0.05);
 }
+
+#[tokio::test]
+async fn share_link_page_carries_a_link_preview() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("index.html"),
+        "<html><head><title>ayoo</title></head></html>",
+    )
+    .unwrap();
+    let page = |uri: &'static str| {
+        let app = app(ServerConfig {
+            static_dir: dir.path().to_path_buf(),
+            graph: Some(graph()),
+            view: None,
+            transit: None,
+            windy_key: None,
+        });
+        async move {
+            let res = app
+                .oneshot(
+                    Request::get(uri)
+                        .header("host", "ayoo.test")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(res.status(), StatusCode::OK);
+            String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap()
+        }
+    };
+    let html = page("/?s=46.9,7.4005&d=0.5&c=max&t=0.6&x=3").await;
+    assert!(
+        html.contains(r#"property="og:title" content="Loop A · 0."#),
+        "{html}"
+    );
+    assert!(
+        html.contains(r#"content="http://ayoo.test/api/og.jpg?s=46.9,7.4005&amp;d=0.5"#),
+        "{html}"
+    );
+    assert!(!page("/").await.contains("og:title"));
+    assert!(!page("/?s=nonsense").await.contains("og:title"));
+}

@@ -377,14 +377,15 @@ export function shareLink(): string {
     weights: weights(), maxSac: maxSac(), zones: [...zones()], checkpoints: [...checkpoints()], loop: i,
     wps: r?.copyOf ? r.waypoints : null, penalties: penalties(),
   });
-  return `${location.origin}${location.pathname}#${hash}`;
+  // A query, not a hash: link-preview crawlers only send the server the query (ADR 0006).
+  return `${location.origin}${location.pathname}?${hash}`;
 }
 
-/** Open a share link from the URL hash, if there is one: apply it, generate, select and re-edit the loop. */
+/** Open a share link from the URL query (or an older link's hash): apply it, generate, select and re-edit the loop. */
 export async function openShared() {
-  const s = decodeShare(location.hash);
+  const s = decodeShare(location.search) ?? decodeShare(location.hash);
   if (!s) return;
-  window.history.replaceState(null, "", location.pathname + location.search);
+  window.history.replaceState(null, "", location.pathname);
   setStart(s.start); // no name in the link: the label shows the coordinates
   setDistanceKm(s.km);
   setClimbRaw(s.climb);

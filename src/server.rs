@@ -4,14 +4,16 @@
 //! `static_dir`, falling back to `index.html` so client-side deep links work.
 
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{Path, Query, State};
-use axum::http::{header, StatusCode};
+use axum::extract::{Path, Query, RawQuery, State};
+use axum::http::{header, HeaderMap, StatusCode};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use tower_http::compression::CompressionLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
@@ -510,11 +512,11 @@ pub fn app(config: ServerConfig) -> Router {
         .route("/health", get(health))
         .route("/route", post(route))
         .route("/generate", post(generate_loops))
-        .with_state(config.graph)
+        .with_state(config.graph.clone())
         .merge(
             Router::new()
                 .route("/tiles/view/{z}/{x}/{y}", get(view_tile))
-                .with_state(config.view),
+                .with_state(config.view.clone()),
         )
         .merge(
             Router::new()
@@ -529,14 +531,166 @@ pub fn app(config: ServerConfig) -> Router {
         .fallback(api_not_found);
 
     let index = config.static_dir.join("index.html");
+    let share = ShareState {
+        graph: config.graph.clone(),
+        view: config.view.clone(),
+        index: index.clone(),
+    };
+    let api = api.merge(
+        Router::new()
+            .route("/og.jpg", get(og_image))
+            .with_state(share.clone()),
+    );
     let client = ServeDir::new(&config.static_dir).fallback(ServeFile::new(index));
 
     Router::new()
+        .route("/", get(index_page).with_state(share))
         .nest("/api", api)
         .fallback_service(client)
         // JSON (the travel stops, ~3x smaller) and the client bundle; images are skipped.
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
+}
+
+/// What a shared loop's link preview needs (ADR 0006).
+#[derive(Clone)]
+struct ShareState {
+    graph: Shared,
+    view: Option<Arc<ViewGrid>>,
+    index: PathBuf,
+}
+
+struct Preview {
+    title: String,
+    /// The loop as `[lon, lat]`.
+    coords: Vec<[f64; 2]>,
+    jpeg: OnceLock<Option<Vec<u8>>>,
+}
+
+/// The shared loop in `q`, regenerated once per link and kept for the image request that follows.
+async fn preview(st: &ShareState, q: &HashMap<String, String>, raw: &str) -> Option<Arc<Preview>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Arc<Preview>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some(p) = cache.lock().unwrap().get(raw) {
+        return Some(p.clone());
+    }
+    let g = st.graph.clone()?;
+    let s = crate::share::decode(q)?;
+    let _permit = permits().acquire().await.expect("semaphore never closed");
+    let p = tokio::task::spawn_blocking(move || -> Option<Preview> {
+        let mut profile = s.generate["profile"].clone();
+        let v = compute_loops(&g, serde_json::from_value(s.generate).ok()?).ok()?;
+        let mut r = v["routes"].get(s.index)?.clone();
+        let mut star = "";
+        if let Some(wps) = s.wps {
+            // As the client's edited copy: re-routed through its points at the loop's climb pressure.
+            profile["weights"]["climb_pressure"] = r["climb_pressure"].clone();
+            let req =
+                json!({ "waypoints": wps, "profile": profile, "climb_target_m": s.climb_target_m });
+            r = compute_route(&g, serde_json::from_value(req).ok()?).ok()?;
+            star = "*";
+        }
+        let coords = r["geometry"]["coordinates"]
+            .as_array()?
+            .iter()
+            .map(|c| Some([c[0].as_f64()?, c[1].as_f64()?]))
+            .collect::<Option<Vec<_>>>()?;
+        Some(Preview {
+            title: format!(
+                "Loop {}{star} · {:.1} km · {:.0} m climb",
+                char::from(b'A' + s.index.min(25) as u8),
+                r["distance_m"].as_f64()? / 1000.0,
+                r["climb_m"].as_f64()?,
+            ),
+            coords,
+            jpeg: OnceLock::new(),
+        })
+    })
+    .await
+    .ok()??;
+    let p = Arc::new(p);
+    let mut c = cache.lock().unwrap();
+    // shortcut: forgets every preview at 256 links; use an LRU if shared links get busy.
+    if c.len() >= 256 {
+        c.clear();
+    }
+    c.insert(raw.to_string(), p.clone());
+    Some(p)
+}
+
+fn attr(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+/// `GET /`: the client, with link-preview tags when the query is a share link (ADR 0006).
+async fn index_page(
+    State(st): State<ShareState>,
+    Query(q): Query<HashMap<String, String>>,
+    RawQuery(raw): RawQuery,
+    headers: HeaderMap,
+) -> Response {
+    let Ok(mut html) = tokio::fs::read_to_string(&st.index).await else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let raw = raw.unwrap_or_default();
+    if let Some(p) = preview(&st, &q, &raw).await {
+        let h = |k: &str| headers.get(k).and_then(|v| v.to_str().ok());
+        let origin = format!(
+            "{}://{}",
+            h("x-forwarded-proto").unwrap_or("http"),
+            h("host").unwrap_or("localhost")
+        );
+        let tags = format!(
+            concat!(
+                r#"<meta property="og:type" content="website" /><meta property="og:site_name" content="ayoo" />"#,
+                r#"<meta property="og:title" content="{t}" /><meta property="og:description" content="A trail-running loop on ayoo" />"#,
+                r#"<meta property="og:url" content="{o}/?{q}" /><meta property="og:image" content="{o}/api/og.jpg?{q}" />"#,
+                r#"<meta property="og:image:width" content="{w}" /><meta property="og:image:height" content="{hh}" />"#,
+                r#"<meta name="twitter:card" content="summary_large_image" />"#,
+            ),
+            t = attr(&p.title),
+            o = attr(&origin),
+            q = attr(&raw),
+            w = crate::og::W,
+            hh = crate::og::H,
+        );
+        html = html.replacen("</head>", &format!("{tags}</head>"), 1);
+    }
+    ([(header::CACHE_CONTROL, "no-cache")], Html(html)).into_response()
+}
+
+/// `GET /api/og.jpg?<share query>`: the loop over relief and the 360° view (ADR 0006).
+async fn og_image(
+    State(st): State<ShareState>,
+    Query(q): Query<HashMap<String, String>>,
+    RawQuery(raw): RawQuery,
+) -> Response {
+    let Some(p) = preview(&st, &q, &raw.unwrap_or_default()).await else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let view = st.view.clone();
+    let png = tokio::task::spawn_blocking(move || {
+        p.jpeg
+            .get_or_init(|| {
+                crate::og::render_jpeg(&p.coords, view.as_deref(), &crate::og::fetch_terrain)
+            })
+            .clone()
+    })
+    .await;
+    match png {
+        Ok(Some(png)) => (
+            [
+                (header::CONTENT_TYPE, "image/jpeg"),
+                (header::CACHE_CONTROL, "public, max-age=86400"),
+            ],
+            png,
+        )
+            .into_response(),
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 #[cfg(test)]

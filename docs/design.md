@@ -371,8 +371,12 @@ link (D91) reproduces the loop until the graph is rebuilt.
 - State: Solid signals. Start, map layers, areas and checkpoints in
   localStorage. A share link (D91) puts the query, the areas (with a kind/hard
   flag, D97), the checkpoints, the selected loop and its edited points in the
-  URL hash; opening it regenerates and re-applies the edit. No router library.
-- No SSR.
+  URL query (older links: the hash, still read); opening it regenerates and
+  re-applies the edit. No router library.
+- No SSR, except link previews (ADR 0006): `GET /` with a share query adds
+  `og:` tags (title "Loop A · 15.6 km · 743 m climb") pointing at
+  `/api/og.jpg?<query>`, which the server renders from the regenerated loop
+  (`src/share.rs`, `src/og.rs`).
 
 ## 12. Local setup and deployment
 

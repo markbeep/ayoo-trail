@@ -128,7 +128,7 @@ impl ViewGrid {
 /// Overlay colour of a view score: dark in valleys, faint around the CH median (~93),
 /// yellow to red toward the best views (owner's step 1: red = excellent in every direction).
 /// Stops are a starting point to tune.
-fn ramp(v: u8) -> [u8; 4] {
+pub fn ramp(v: u8) -> [u8; 4] {
     const STOPS: [(f32, [f32; 4]); 5] = [
         (0.0, [40.0, 40.0, 90.0, 150.0]),
         (0.35, [70.0, 110.0, 170.0, 60.0]),
