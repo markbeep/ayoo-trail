@@ -20,8 +20,8 @@ comes from the backlog and open questions in `docs/brief.md`.
 ## What it is
 
 A web app that generates trail-running routes algorithmically: give it a
-distance and a set of preference layers (views, remoteness, surface,
-technicality, snow, POIs, transit access) and it returns scenic routes — quick
+distance and a set of preference layers (views, surface, technicality,
+forest, away from towns, avoid/prefer areas) and it returns scenic routes — quick
 defaults for casual use, many more controls for power users. Layers are
 pluggable, and layer gating/tiers may come later.
 

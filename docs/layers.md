@@ -59,7 +59,7 @@ License conclusions checked on this date:
 - **Cost**: spatial join at import; moderate.
 - **Status**: v1 for the cost term, later for the overlay.
 
-## Urban and remoteness
+## Urban (away from towns)
 
 - **Source**: OSM `place`/`landuse=residential` or swissTLM3D settlement
   polygons; OSM roads for the noise proxy.
@@ -105,13 +105,6 @@ License conclusions checked on this date:
   multicore laptop at 100 m, minutes at 200 m. Mark as estimate.
 - **Status**: in progress (overlay and score).
 
-
-## POIs
-
-- **Source**: OSM nodes (`amenity=drinking_water|toilets|supermarket|...`).
-- **Derivation**: extract at import into a point table; serve as vector tiles;
-  nearest-POI query per route.
-- **Status**: later.
 
 ## Webcams and photos
 

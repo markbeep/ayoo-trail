@@ -81,7 +81,6 @@ Grouped as the owner described them. None of this is scoped or prioritized yet.
 | Feature | Notes |
 |---|---|
 | Viewshed score | 360° visibility from a point; rewards ridges and peaks. Overlay and cost term (D100). |
-| Remoteness | Distance from cities/settlements. |
 | Forest cover | Prefer forest. |
 | Surface | Prefer gravel/dirt over asphalt. |
 | Technicality | Official hiking difficulty scale (e.g. Swiss T1–T6 / SchweizMobil) and/or derived from OSM tags and imagery (roots, rock, smooth gravel). |
@@ -91,7 +90,6 @@ Grouped as the owner described them. None of this is scoped or prioritized yet.
 | Feature | Notes |
 |---|---|
 | Start reachability | Travel time layer: public transport + walking, several travel origins with their own time budgets (ADR 0002). Not used for routing. |
-| POIs | Toilets, grocery stores, water fountains near or on the route. |
 
 ### Conditions and media
 

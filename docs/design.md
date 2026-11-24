@@ -20,7 +20,7 @@ drag one point to adjust it, export the GPX.
 - Trustworthy: official-trail share shown per route, weak-data segments
   penalized and visible.
 - Quick path minimal, power controls available but collapsed.
-- Layers are additive: adding viewshed or POIs later must not reshape the
+- Layers are additive: adding a layer later must not reshape the
   core.
 - One image, one compose file; runs locally and deploys to Kubernetes.
 

@@ -32,8 +32,6 @@ generator places turning points where your weighted costs are low and routes bet
 
 **Planned**
 
-- Remoteness.
-- POIs: water, toilets, shops.
 - Popular trails.
 
 ## Map layers
