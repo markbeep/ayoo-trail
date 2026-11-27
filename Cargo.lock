@@ -1872,6 +1872,7 @@ dependencies = [
  "bytemuck",
  "clap",
  "csv",
+ "flate2",
  "geo",
  "http-body-util",
  "image-webp",

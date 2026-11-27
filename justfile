@@ -77,7 +77,7 @@ data REGION="demo":
       *) echo "unknown region '$region' (demo|ch)" >&2; exit 1 ;;
     esac
     raw=data/raw
-    mkdir -p "$raw/alti3d" "$raw/wanderwege"
+    mkdir -p "$raw/alti3d" "$raw/wanderwege" "$raw/tlm"
     # Download to .part first so an interrupted fetch is not mistaken for a finished one.
     fetch() { [ -f "$2" ] || { curl -fL --retry 3 -o "$2.part" "$1" && mv "$2.part" "$2"; }; }
     fetch https://download.geofabrik.de/europe/switzerland-latest.osm.pbf "$raw/switzerland-latest.osm.pbf"
@@ -139,4 +139,10 @@ data REGION="demo":
       fetch https://data.geo.admin.ch/ch.swisstopo.swisstlm3d-wanderwege/swisstlm3d-wanderwege/swisstlm3d-wanderwege_2056_5728.gpkg.zip "$zip"
       unzip -o -d "$raw/wanderwege" "$zip"
       rm -f "$zip"
+    fi
+    # Only TLM_STRASSE.shp (434 MB of the 3.6 GB zip), by HTTP Range (ADR 0007).
+    if [ ! -f "$raw/tlm/TLM_STRASSE.shp" ]; then
+      cargo run --release --bin trail-calc-zip-entry -- \
+        https://data.geo.admin.ch/ch.swisstopo.swisstlm3d/swisstlm3d_2026-02/swisstlm3d_2026-02_2056_5728.shp.zip \
+        'TLM_STRASSEN\swissTLM3D_TLM_STRASSE.shp' "$raw/tlm/TLM_STRASSE.shp"
     fi

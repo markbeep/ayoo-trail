@@ -25,6 +25,10 @@ path = "src/bin/view.rs"
 name = "trail-calc-transit"
 path = "src/bin/transit.rs"
 
+[[bin]]
+name = "trail-calc-zip-entry"
+path = "src/bin/zip_entry.rs"
+
 [dependencies]
 axum = "0.8.9"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
@@ -42,6 +46,7 @@ roxmltree = "0.21"
 geo = "0.33"
 tiff = { version = "0.11", default-features = false, features = ["lzw"] }
 rayon = "1"
+flate2 = "1"
 weezl = "0.1"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 clap = { version = "4.6.8", features = ["derive", "env"] }
