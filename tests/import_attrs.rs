@@ -1,11 +1,11 @@
 use std::path::Path;
 
 use geo::{LineString, Polygon};
-use trail_calc::graph::{AnchorKind, EdgeAttrs, Graph, GraphWriter, LatLon};
+use trail_calc::graph::{flags, AnchorKind, EdgeAttrs, Graph, GraphWriter, LatLon};
 use trail_calc::import::ch1903::{lv95_to_wgs84, wgs84_to_lv95};
 use trail_calc::import::landcover::{apply_landcover, collect_anchors};
 use trail_calc::import::official::{
-    apply_official, read_official_gpkg, OfficialLine, OFFICIAL_TOLERANCE_M,
+    apply_official, apply_tlm, read_official_gpkg, read_tlm_shp, OfficialLine, OFFICIAL_TOLERANCE_M,
 };
 use trail_calc::import::osm::OsmExtras;
 use trail_calc::import::region;
@@ -121,6 +121,101 @@ fn reads_lines_from_a_gpkg() {
         vec![[2_600_000.0, 1_200_000.0], [2_600_100.0, 1_200_050.0]]
     );
     assert_eq!(read_official_gpkg(&path, None).unwrap().len(), 2);
+}
+
+#[test]
+fn tlm_flag_marks_only_edges_on_a_tlm_line() {
+    let mut w = one_edge(&[(46.0, 7.0), (46.0, 7.01)]);
+    let off = lv95(46.0, 7.0);
+    let from = w.add_node(
+        LatLon {
+            lat: 46.01,
+            lon: 7.0,
+        },
+        0.0,
+    );
+    let to = w.add_node(
+        LatLon {
+            lat: 46.01,
+            lon: 7.01,
+        },
+        0.0,
+    );
+    w.add_edge(
+        from,
+        to,
+        EdgeAttrs::default(),
+        &[(46.01, 7.0, 0.0), (46.01, 7.01, 0.0)],
+    );
+    let lines = vec![OfficialLine {
+        lv95: vec![off, lv95(46.0, 7.01)],
+        category: 1,
+    }];
+    assert_eq!(apply_tlm(&mut w, &lines, OFFICIAL_TOLERANCE_M), 1);
+    assert_ne!(w.edge_attrs(0).flags & flags::IN_TLM, 0);
+    assert_eq!(w.edge_attrs(1).flags & flags::IN_TLM, 0);
+    assert_eq!(
+        w.edge_attrs(0).official_category,
+        0,
+        "the TLM pass leaves categories alone"
+    );
+}
+
+/// A PolyLineZ shapefile (type 13): one record per line, one part each.
+fn shp_polyline_z(lines: &[&[[f64; 2]]]) -> Vec<u8> {
+    let mut recs = Vec::new();
+    for (i, pts) in lines.iter().enumerate() {
+        let mut c = Vec::new();
+        c.extend(13i32.to_le_bytes());
+        let (xs, ys) = (pts.iter().map(|p| p[0]), pts.iter().map(|p| p[1]));
+        for v in [
+            xs.clone().fold(f64::MAX, f64::min),
+            ys.clone().fold(f64::MAX, f64::min),
+            xs.fold(f64::MIN, f64::max),
+            ys.fold(f64::MIN, f64::max),
+        ] {
+            c.extend(v.to_le_bytes());
+        }
+        c.extend(1i32.to_le_bytes());
+        c.extend((pts.len() as i32).to_le_bytes());
+        c.extend(0i32.to_le_bytes());
+        for p in *pts {
+            c.extend(p[0].to_le_bytes());
+            c.extend(p[1].to_le_bytes());
+        }
+        c.extend([0u8; 16]); // z range
+        c.extend(vec![0u8; 8 * pts.len()]); // z values
+        recs.extend((i as i32 + 1).to_be_bytes());
+        recs.extend(((c.len() / 2) as i32).to_be_bytes());
+        recs.extend(c);
+    }
+    let mut out = Vec::new();
+    out.extend(9994i32.to_be_bytes());
+    out.extend([0u8; 20]);
+    out.extend((((100 + recs.len()) / 2) as i32).to_be_bytes());
+    out.extend(1000i32.to_le_bytes());
+    out.extend(13i32.to_le_bytes());
+    out.extend([0u8; 64]); // bbox x/y/z/m
+    out.extend(recs);
+    out
+}
+
+#[test]
+fn reads_lines_from_a_shapefile() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("s.shp");
+    let near: &[[f64; 2]] = &[
+        [2_600_000.0, 1_200_000.0],
+        [2_600_100.0, 1_200_050.0],
+        [2_600_200.0, 1_200_050.0],
+    ];
+    let far: &[[f64; 2]] = &[[2_700_000.0, 1_250_000.0], [2_700_100.0, 1_250_000.0]];
+    std::fs::write(&path, shp_polyline_z(&[near, far])).unwrap();
+    let clip = [2_599_000.0, 1_199_000.0, 2_601_000.0, 1_201_000.0];
+    let lines = read_tlm_shp(&path, Some(clip)).unwrap();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].lv95, near);
+    assert_eq!(read_tlm_shp(&path, None).unwrap().len(), 2);
 }
 
 /// Axis-aligned polygon in lon/lat (x = lon).
@@ -253,4 +348,22 @@ fn import_binary_skips_existing_output() {
         .unwrap();
     assert!(status.success());
     assert_eq!(std::fs::read(&out).unwrap(), b"keep me");
+}
+
+#[test]
+#[ignore = "reads the real swissTLM3D TLM_STRASSE.shp from data/raw"]
+fn real_tlm_shp_smoke() {
+    let b = region("demo").unwrap().bbox;
+    let (min_e, min_n) = wgs84_to_lv95(b.min_lat, b.min_lon);
+    let (max_e, max_n) = wgs84_to_lv95(b.max_lat, b.max_lon);
+    let lines = read_tlm_shp(
+        Path::new("data/raw/tlm/TLM_STRASSE.shp"),
+        Some([min_e, min_n, max_e, max_n]),
+    )
+    .unwrap();
+    assert!(lines.len() > 10_000, "{} lines", lines.len());
+    assert!(lines.iter().all(|l| l
+        .lv95
+        .iter()
+        .all(|p| p[0] > 2_480_000.0 && p[1] > 1_070_000.0)));
 }

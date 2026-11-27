@@ -8,7 +8,7 @@ use rstar::{PointDistance, RTree};
 use rusqlite::{Connection, OpenFlags};
 
 use super::{sample_lv95, ImportError, Seg};
-use crate::graph::GraphWriter;
+use crate::graph::{flags, GraphWriter};
 
 #[derive(Debug, Clone)]
 pub struct OfficialLine {
@@ -85,6 +85,59 @@ pub fn read_official_gpkg(
                     lv95,
                     category: cat,
                 });
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// All lines of a PolyLine/PolyLineZ shapefile (swissTLM3D `TLM_STRASSE.shp`, LV95), each part
+/// its own line, keeping records whose bbox meets `clip_lv95` ([min_e, min_n, max_e, max_n]).
+/// The category is 1 for every line; only the geometry is read (ADR 0007).
+pub fn read_tlm_shp(
+    path: &Path,
+    clip_lv95: Option<[f64; 4]>,
+) -> Result<Vec<OfficialLine>, ImportError> {
+    let bad = |m: &str| ImportError::Format(format!("{}: {m}", path.display()));
+    let file = std::fs::File::open(path).map_err(|e| bad(&e.to_string()))?;
+    // SAFETY: read-only map of an input file nobody writes during the import.
+    let b = unsafe { memmap2::Mmap::map(&file) }.map_err(|e| bad(&e.to_string()))?;
+    if b.len() < 100 || b[0..4] != 9994i32.to_be_bytes() {
+        return Err(bad("not a shapefile"));
+    }
+    let i32le = |i: usize| i32::from_le_bytes(b[i..i + 4].try_into().unwrap());
+    let f64le = |i: usize| f64::from_le_bytes(b[i..i + 8].try_into().unwrap());
+    let mut out = Vec::new();
+    let mut at = 100;
+    while at + 8 <= b.len() {
+        let len = i32::from_be_bytes(b[at + 4..at + 8].try_into().unwrap()) as usize * 2;
+        let c = at + 8;
+        at = c + len;
+        if at > b.len() {
+            return Err(bad("truncated record"));
+        }
+        if len < 44 || !matches!(i32le(c), 3 | 13 | 23) {
+            continue; // null shape
+        }
+        let bbox = [f64le(c + 4), f64le(c + 12), f64le(c + 20), f64le(c + 28)];
+        if clip_lv95
+            .is_some_and(|k| bbox[2] < k[0] || bbox[0] > k[2] || bbox[3] < k[1] || bbox[1] > k[3])
+        {
+            continue;
+        }
+        let (parts, points) = (i32le(c + 36) as usize, i32le(c + 40) as usize);
+        let pts_at = c + 44 + 4 * parts;
+        if pts_at + 16 * points > at {
+            return Err(bad("bad polyline record"));
+        }
+        let starts: Vec<usize> = (0..parts).map(|k| i32le(c + 44 + 4 * k) as usize).collect();
+        for (k, &s0) in starts.iter().enumerate() {
+            let s1 = starts.get(k + 1).copied().unwrap_or(points).min(points);
+            let lv95: Vec<[f64; 2]> = (s0..s1)
+                .map(|j| [f64le(pts_at + 16 * j), f64le(pts_at + 16 * j + 8)])
+                .collect();
+            if lv95.len() >= 2 {
+                out.push(OfficialLine { lv95, category: 1 });
             }
         }
     }
@@ -183,6 +236,31 @@ fn wkb(r: &mut Rd, out: &mut Vec<Vec<[f64; 2]>>, allow_multi: bool) -> Option<()
 /// included) lie within tolerance of some official line (R-tree of LV95 line segments); it takes the
 /// category of the line nearest to the majority of its matching samples. Returns edges marked.
 pub fn apply_official(w: &mut GraphWriter, lines: &[OfficialLine], tolerance_m: f64) -> u64 {
+    let mut marked = 0;
+    for (e, c) in match_edges(w, lines, tolerance_m).into_iter().enumerate() {
+        if c > 0 {
+            w.edge_attrs_mut(e as u32).official_category = c;
+            marked += 1;
+        }
+    }
+    marked
+}
+
+/// Sets `flags::IN_TLM` on edges that match a swissTLM3D way by the same rule (ADR 0007).
+/// Returns edges flagged.
+pub fn apply_tlm(w: &mut GraphWriter, lines: &[OfficialLine], tolerance_m: f64) -> u64 {
+    let mut marked = 0;
+    for (e, c) in match_edges(w, lines, tolerance_m).into_iter().enumerate() {
+        if c > 0 {
+            w.edge_attrs_mut(e as u32).flags |= flags::IN_TLM;
+            marked += 1;
+        }
+    }
+    marked
+}
+
+/// Per edge: the matched line category, 0 for no match.
+fn match_edges(w: &GraphWriter, lines: &[OfficialLine], tolerance_m: f64) -> Vec<u8> {
     let segs: Vec<Seg> = lines
         .iter()
         .enumerate()
@@ -196,8 +274,8 @@ pub fn apply_official(w: &mut GraphWriter, lines: &[OfficialLine], tolerance_m: 
         .collect();
     let tree = RTree::bulk_load(segs);
     let tol2 = tolerance_m * tolerance_m;
-    let writer = &*w;
-    let cats: Vec<u8> = (0..writer.edge_count() as u32)
+    let writer = w;
+    (0..writer.edge_count() as u32)
         .into_par_iter()
         .map(|e| {
             let samples = sample_lv95(writer.edge_geometry(e), SAMPLE_SPACING_M);
@@ -217,13 +295,5 @@ pub fn apply_official(w: &mut GraphWriter, lines: &[OfficialLine], tolerance_m: 
                 .max_by_key(|&c| (votes[c as usize], std::cmp::Reverse(c)))
                 .unwrap_or(0)
         })
-        .collect();
-    let mut marked = 0;
-    for (e, c) in cats.into_iter().enumerate() {
-        if c > 0 {
-            w.edge_attrs_mut(e as u32).official_category = c;
-            marked += 1;
-        }
-    }
-    marked
+        .collect()
 }

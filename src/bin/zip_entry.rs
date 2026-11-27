@@ -93,7 +93,10 @@ fn locate(size: u64, read_at: &dyn Fn(u64, u64) -> Res<Vec<u8>>, name: &str) -> 
         .rev()
         .find(|&i| u32_at(&tail, i) == 0x0605_4b50)
         .ok_or("no end of central directory")?;
-    let (mut cd_len, mut cd_off) = (u32_at(&tail, eocd + 12) as u64, u32_at(&tail, eocd + 16) as u64);
+    let (mut cd_len, mut cd_off) = (
+        u32_at(&tail, eocd + 12) as u64,
+        u32_at(&tail, eocd + 16) as u64,
+    );
     if eocd >= 20 && u32_at(&tail, eocd - 20) == 0x0706_4b50 {
         let z = read_at(u64_at(&tail, eocd - 20 + 8), 56)?;
         if u32_at(&z, 0) != 0x0606_4b50 {
@@ -104,7 +107,11 @@ fn locate(size: u64, read_at: &dyn Fn(u64, u64) -> Res<Vec<u8>>, name: &str) -> 
     let cd = read_at(cd_off, cd_len)?;
     let mut i = 0;
     while i + 46 <= cd.len() && u32_at(&cd, i) == 0x0201_4b50 {
-        let (nl, xl, cl) = (u16_at(&cd, i + 28) as usize, u16_at(&cd, i + 30) as usize, u16_at(&cd, i + 32) as usize);
+        let (nl, xl, cl) = (
+            u16_at(&cd, i + 28) as usize,
+            u16_at(&cd, i + 30) as usize,
+            u16_at(&cd, i + 32) as usize,
+        );
         let method = u16_at(&cd, i + 10);
         let mut comp = u32_at(&cd, i + 20) as u64;
         let mut size = u32_at(&cd, i + 24) as u64;
@@ -131,7 +138,12 @@ fn locate(size: u64, read_at: &dyn Fn(u64, u64) -> Res<Vec<u8>>, name: &str) -> 
                 return Err("bad local header".into());
             }
             let data = local + 30 + u16_at(&lh, 26) as u64 + u16_at(&lh, 28) as u64;
-            return Ok(Entry { data, comp, size, method });
+            return Ok(Entry {
+                data,
+                comp,
+                size,
+                method,
+            });
         }
         i += 46 + nl + xl + cl;
     }
@@ -158,12 +170,14 @@ mod tests {
         let mut enc = DeflateEncoder::new(Vec::new(), Compression::default());
         enc.write_all(&body).unwrap();
         let comp = enc.finish().unwrap();
-        let entries: [(&str, u16, &[u8], usize); 2] =
-            [("a.txt", 0, b"hello", 5), ("DIR\\b.shp", 8, &comp, body.len())];
+        let entries: [(&str, u16, &[u8], usize); 2] = [
+            ("a.txt", 0, b"hello", 5),
+            ("DIR\\b.shp", 8, &comp, body.len()),
+        ];
         let (mut z, mut cd) = (Vec::new(), Vec::new());
         for (name, method, data, size) in entries {
             let off = z.len() as u32;
-            let mut h = |v: &mut Vec<u8>, sig: u32| {
+            let h = |v: &mut Vec<u8>, sig: u32| {
                 v.extend(sig.to_le_bytes());
                 v.extend([20, 0]);
                 if sig == 0x0201_4b50 {
@@ -206,12 +220,22 @@ mod tests {
         let e = locate(z.len() as u64, &read_at, "DIR\\b.shp").unwrap();
         assert_eq!((e.method, e.size), (8, body.len() as u64));
         let mut out = Vec::new();
-        let n = extract(&z[e.data as usize..(e.data + e.comp) as usize], e.method, &mut out).unwrap();
+        let n = extract(
+            &z[e.data as usize..(e.data + e.comp) as usize],
+            e.method,
+            &mut out,
+        )
+        .unwrap();
         assert_eq!((n, out), (body.len() as u64, body));
 
         let e = locate(z.len() as u64, &read_at, "a.txt").unwrap();
         let mut out = Vec::new();
-        extract(&z[e.data as usize..(e.data + e.comp) as usize], e.method, &mut out).unwrap();
+        extract(
+            &z[e.data as usize..(e.data + e.comp) as usize],
+            e.method,
+            &mut out,
+        )
+        .unwrap();
         assert_eq!(out, b"hello");
         assert!(locate(z.len() as u64, &read_at, "nope").is_err());
     }

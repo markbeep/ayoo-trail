@@ -20,7 +20,7 @@ compile_error!(
 );
 
 const MAGIC: [u8; 4] = *b"TRGR";
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 const HEADER_LEN: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -115,6 +115,8 @@ pub mod flags {
     pub const MISSING_TAGS: u8 = 8;
     pub const FERRY: u8 = 16;
     pub const SURFACE_INFERRED: u8 = 32;
+    /// The way is on swisstopo's map (swissTLM3D `TLM_STRASSE`, ADR 0007).
+    pub const IN_TLM: u8 = 64;
 }
 
 /// Nine signed grade bands, forward direction, as length shares summing to 255:

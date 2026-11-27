@@ -1,4 +1,4 @@
-//! `trail-calc-import`: OSM → DEM → official trails → land cover → anchors → `graph.bin`.
+//! `trail-calc-import`: OSM → DEM → official trails → TLM ways → land cover → anchors → `graph.bin`.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -13,7 +13,9 @@ use trail_calc::import::alti3d::Alti3dTiles;
 use trail_calc::import::ch1903::wgs84_to_lv95;
 use trail_calc::import::dem::{apply_dem, AscGrid, DemStats};
 use trail_calc::import::landcover::{apply_landcover, collect_anchors};
-use trail_calc::import::official::{apply_official, read_official_gpkg, OFFICIAL_TOLERANCE_M};
+use trail_calc::import::official::{
+    apply_official, apply_tlm, read_official_gpkg, read_tlm_shp, OFFICIAL_TOLERANCE_M,
+};
 use trail_calc::import::osm::import_osm;
 use trail_calc::import::region;
 
@@ -39,6 +41,9 @@ struct Args {
     /// Default `$DATA_DIR/raw/wanderwege/SWISSTLM3D_WANDERWEGE.gpkg`.
     #[arg(long)]
     official: Option<PathBuf>,
+    /// swissTLM3D roads and paths (ADR 0007). Default `$DATA_DIR/raw/tlm/TLM_STRASSE.shp`.
+    #[arg(long)]
+    tlm: Option<PathBuf>,
     /// Default `$DATA_DIR/graph.bin`.
     #[arg(long)]
     out: Option<PathBuf>,
@@ -83,7 +88,10 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
     let official = args
         .official
         .unwrap_or_else(|| data.join("raw/wanderwege/SWISSTLM3D_WANDERWEGE.gpkg"));
-    for p in [&osm, &dem, &official] {
+    let tlm = args
+        .tlm
+        .unwrap_or_else(|| data.join("raw/tlm/TLM_STRASSE.shp"));
+    for p in [&osm, &dem, &official, &tlm] {
         if !p.exists() {
             return Err(format!("input not found: {}", p.display()).into());
         }
@@ -138,6 +146,10 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
     let lines = read_official_gpkg(&official, Some(clip))?;
     let marked = apply_official(&mut w, &lines, OFFICIAL_TOLERANCE_M);
     info!(lines = lines.len(), marked, elapsed = ?t.elapsed(), "official");
+    let t = Instant::now();
+    let lines = read_tlm_shp(&tlm, Some(clip))?;
+    let marked = apply_tlm(&mut w, &lines, OFFICIAL_TOLERANCE_M);
+    info!(lines = lines.len(), marked, elapsed = ?t.elapsed(), "tlm");
 
     let t = Instant::now();
     apply_landcover(&mut w, &extras);
@@ -160,7 +172,7 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
 fn print_summary(out: &Path, dem: &DemStats) -> Result<(), Box<dyn Error>> {
     let g = Graph::open(out)?;
     let km = |m: f64| m / 1000.0;
-    let (mut total, mut missing, mut forest_m) = (0.0, 0.0, 0.0);
+    let (mut total, mut missing, mut forest_m, mut in_tlm) = (0.0, 0.0, 0.0, 0.0);
     let mut surface = [(0.0, 0.0); 8];
     let (mut sac, mut official, mut urban) = ([0.0; 7], [0.0; 4], [0.0; 3]);
     let mut grade = [0.0; GRADE_BANDS];
@@ -176,6 +188,9 @@ fn print_summary(out: &Path, dem: &DemStats) -> Result<(), Box<dyn Error>> {
         sac[(a.sac as usize).min(6)] += len;
         if a.flags & flags::MISSING_TAGS != 0 {
             missing += len;
+        }
+        if a.flags & flags::IN_TLM != 0 {
+            in_tlm += len;
         }
         official[(a.official_category as usize).min(3)] += len;
         forest_m += len * a.forest_pct as f64;
@@ -212,6 +227,11 @@ fn print_summary(out: &Path, dem: &DemStats) -> Result<(), Box<dyn Error>> {
         "  missing tags: {:.1} km ({:.1} %)",
         km(missing),
         share(missing)
+    );
+    println!(
+        "  on swisstopo's map: {:.1} km ({:.1} %)",
+        km(in_tlm),
+        share(in_tlm)
     );
     let off: f64 = official[1..].iter().sum();
     println!("  official: {:.1} km ({:.1} %)", km(off), share(off));
