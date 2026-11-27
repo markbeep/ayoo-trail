@@ -49,6 +49,18 @@ License conclusions checked on this date:
 - **Cost**: one spatial join at import; `rstar` or a prepared geometry index.
 - **Status**: v1.
 
+## Ways on swisstopo's map (ADR 0007)
+
+- **Source**: `TLM_STRASSE.shp` from the swissTLM3D SHP release
+  (`data.geo.admin.ch/ch.swisstopo.swisstlm3d/swisstlm3d_2026-02/...shp.zip`), OGD.
+  Only that zip entry is fetched by HTTP Range (`trail-calc-zip-entry`): 434 MB of
+  the 3.6 GB zip, 1.1 GB unpacked. Every road and path in CH and FL.
+- **Derivation**: same match as official trails (≥ 50 % of 10 m samples within
+  20 m); sets the edge flag `IN_TLM`. 92.6 % of the CH graph's length matches
+  (the rest includes everything abroad).
+- **Cost**: part of the 3.4 min CH import (not timed on its own). The raw file is not needed after the import.
+- **Status**: built; the client's filter is on by default.
+
 ## Forest and land cover
 
 - **Source**: swissTLM3D land cover, or OSM `landuse`/`natural` polygons as a
@@ -135,6 +147,7 @@ License conclusions checked on this date:
 |---|---|---|---|
 | OSM import + attributes | `graph.bin` | monthly | minutes–hours |
 | Official trail join | graph attribute | yearly | minutes |
+| swisstopo way join (ADR 0007) | graph flag | yearly, with the swissTLM3D release | under the 3.4 min CH import |
 | Land cover raster | PMTiles + graph attribute | yearly | minutes |
 | Travel time | `transit.bin` (22 MB) | yearly, after the December timetable change | ~10 s for CH (1.4 GB `stop_times.txt`) |
 | Horizon / view score | `view.bin` (8.7 MB) | once, DEM changes | 80 s for CH, 16 threads |

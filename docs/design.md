@@ -139,7 +139,10 @@ Each edge is stored once. Reverse traversal swaps gain and loss and inverts the
 slope sign; other attributes are symmetric. `official_category` is 0 for none
 and 1–3 for the official network class (yellow/red/blue), so a marked Wanderweg
 can be weighted differently from an alpine route. `flags` holds informal /
-missing-tag / bridge / tunnel / ferry / surface-inferred. Gain and loss
+missing-tag / bridge / tunnel / ferry / surface-inferred / `IN_TLM` (the way is
+on swisstopo's map, ADR 0007; graph format v3). `Profile.tlm_only` closes edges
+without it, like `max_sac` closes harder grades: both form an `Access`, which also
+keys the cached connected components. Gain and loss
 accumulate with a 2 m vertical deadband to suppress DEM jitter and serve the
 climb statistics only. Edges are split at junctions only.
 
@@ -315,13 +318,16 @@ link (D91) reproduces the loop until the graph is rebuilt.
 ## 11. Frontend
 
 - Left panel (Kursbuch look, D114): start (searched, picked on the map, or the
-  last one used; no default, D111), distance, Find loops; the loops as timetable
-  rows; then one settings table (D106, D107): a multiplier per term, the hill and
-  technical shapes, hardest trail, climb goal (Off/Gentle/Hilly/Mountain/Max,
-  meters, strictness) and the penalties. Every number is a scrub field: drag
+  last one used; no default, D111), distance (one decimal), climb goal
+  (Off/Gentle/Hilly/Mountain/Max, meters, strictness), Find loops; the loops as
+  timetable rows; then the preferences on the route card's score bars (ADR 0008):
+  one row per bar, tapping it opens its controls (a multiplier per term, the hill
+  and technical shapes; Marked trails also holds the hardest grade and "Only ways
+  on swisstopo's map", ADR 0007), and an Advanced fold with the penalties. Before
+  a route exists the same rows show without bars. Every number is a scrub field: drag
   left/right (log scale for multipliers, Shift ×10), click to type, arrow keys
   step; it commits on release and changes regenerate live (D55). "Clear all"
-  (D108) leaves only the distance. Score bars on the route card are read-only.
+  (D108) leaves only the distance.
 - Presets follow the distance (30/60/90 m per km); a typed target is fixed
   meters; Max asks for as much climb as possible.
 - A "must-pass areas need at least N km" error offers "Use N km".

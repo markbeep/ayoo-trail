@@ -165,7 +165,7 @@ A one-scale monochrome of warm paper and near-black ink, with a single signal re
 - **Hairline** (line): row rules, column rules, segment dividers, quiet button outlines.
 
 ### Semantic
-- **Avoid Red** (avoid) and **Prefer Green** (prefer): only the effect words in the settings table. They are words, never fills.
+- **Avoid Red** (avoid) and **Prefer Green** (prefer): only the × values in the preference rows. They are words, never fills.
 - **Warn Amber** (warn) on **Warn Wash** (warn-wash): warning badges and query errors, always with a 1px currentColor border.
 - **Location Blue** (here): the your-location dot, the platform convention, kept apart from the red route.
 - **Route Candidate** (route-candidate) and **Route Casing** (route-casing): unselected loops on the map and the white casing under every loop line.
@@ -202,9 +202,9 @@ The outdoor base map (map-land through map-forest) is quiet and warm so the red 
 
 ## Layout
 
-A single 400px column flush left, full height, bounded by a 1px ink rule on its right; the map takes the rest. Inside, sections stack edge to edge with 1px ink rules between them: header bar (36px), query, loops table, settings table, route detail. Horizontal inset is 12px everywhere.
+A single 400px column flush left, full height, bounded by a 1px ink rule on its right; the map takes the rest. Inside, sections stack edge to edge with 1px ink rules between them: header bar (36px), query, loops table, route detail with the preference rows (or the preference rows alone before a route exists). Horizontal inset is 12px everywhere.
 
-Tables share one rhythm: 28px rows, 1px hairline under each row, 1px hairline between columns, 6px cell padding, figures right-aligned. Column heads sit on a stone row with an ink rule below. Loops use columns `1fr 64px 64px 52px` (loop, km, up, score); settings use `104px 1fr 84px 52px` (term, acts on, value, effect). The query is one ruled grid: start across the top, distance segments and the primary button below.
+Tables share one rhythm: 28px rows, 1px hairline under each row, 1px hairline between columns, 6px cell padding, figures right-aligned. Column heads sit on a stone row with an ink rule below. Loops use columns `1fr 64px 64px 52px` (loop, km, up, score); preference rows are described below. The query is one ruled grid: start across the top, distance segments and the primary button, then the climb segments across, then target and "stick to it" side by side.
 
 Map tools stack at the top right, 12px from the edges (10px on phones), with 6px gaps; zoom buttons share a border.
 
@@ -230,14 +230,14 @@ Square. Every radius is 0, including MapLibre's attribution, its info button and
 - **Focus:** a 2px ink outline everywhere, offset 1px (inset −2px inside fields and menus).
 
 ### Segments
-- **Style:** a row of equal cells in a 1px ink frame, hairline dividers, 30px tall (22px tight variant in settings), 700 13px.
+- **Style:** a row of equal cells in a 1px ink frame, hairline dividers, 30px tall (28px in preference panels), 700 13px.
 - **State:** hover fills stone; on is inverted ink. A custom-value cell ("Other") is an inline input inside the same frame.
 
 ### Loops table (signature)
 Timetable rows, one per loop: name, km, up, score. The column head row is stone with Archivo Narrow heads. The selected loop is inverted (ink ground, paper text) and its score turns a light signal red so it stays legible on ink. Rows fade to 35% while a live refresh replaces their figures.
 
-### Settings table (signature)
-One dense table of every setting (D107), grouped under stone group heads with a narrow-cut explanation ("below ×1 prefers, above avoids"). Each row: term, what it acts on, a scrub value field, and an effect word coloured avoid or prefer.
+### Preference rows (signature)
+Preferences live on the score bars (ADR 0008). One 30px row per bar, named as the bar: name `116px`, bar track `1fr`, score `30px`, the × it is set to `62px` (coloured avoid or prefer by its effect, muted "off" at ×1), chevron `14px`. Without a route the bar and score cells stay empty and the rows still line up. Tapping a row turns it stone and opens its panel below, hung off a 1px ink rule on the left: an optional muted fact line (the loop's figure for this term), then control lines (`1fr 104px`, label and scrub field, hairline between). The Marked trails panel also holds the T1–T6 segment and the "Only ways on swisstopo's map" switch. A collapsed "Advanced" fold ends the list. The head row carries "Why it scores N" (or "Preferences") with Defaults and Clear all as link buttons.
 
 ### Scrub field
 A right-aligned 800 tabular value on a stone well. Drag left or right to change it on a log scale; click to type (D106). Hover draws an ink border, the cursor is ew-resize; editing swaps to a paper input with an ink border. Disabled drops to 45% opacity.

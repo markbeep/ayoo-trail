@@ -57,7 +57,7 @@ Needs [mise](https://mise.jdx.dev) (pinned Rust, Node, just), plus `curl`, `jq` 
 
 ```sh
 mise install && (cd web && npm ci)
-just data demo      # OSM, swissALTI3D and Wanderwege into data/raw (`ch` for all of Switzerland, ~55 GB)
+just data demo      # OSM, swissALTI3D, Wanderwege and swissTLM3D ways into data/raw (`ch` for all of Switzerland, ~56 GB)
 just import demo    # build data/graph.bin
 just dev            # API on :8080, client on http://localhost:5173
 ```

@@ -3,6 +3,13 @@
 A web app that generates scenic trail-running loops from a distance and
 preference layers.
 
+## Ways
+
+**Way on swisstopo's map**:
+A graph edge that matches a swissTLM3D road or path (`IN_TLM`). With the
+filter on, only these are routed (ADR 0007).
+_Avoid_: verified way, TLM-backed way, existing way
+
 ## Travel time
 
 **Travel origin**:
