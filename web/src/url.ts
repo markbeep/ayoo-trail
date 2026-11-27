@@ -20,6 +20,8 @@ export interface Share {
   /** The loop's waypoints when it was edited, else null. */
   wps: LatLon[] | null;
   penalties: Penalties;
+  /** Only ways on swisstopo's map (ADR 0007); `v=0` in the link turns it off. */
+  tlmOnly: boolean;
 }
 
 /** The server's defaults (`Profile::default`, D109). */
@@ -53,6 +55,7 @@ export function encodeShare(s: Share): string {
   const parts = [`s=${pt(s.start)}`, `d=${s.km}`, `c=${c}`, `t=${s.strictness}`, `x=${s.maxSac}`,
     `w=${WEIGHTS.map((k) => Math.round(s.weights[k] * 100) / 100).join(",")}`];
   if (s.loop) parts.push(`l=${s.loop}`);
+  if (!s.tlmOnly) parts.push("v=0");
   if (PENALTIES.some(([k]) => s.penalties[k] !== DEFAULT_PENALTIES[k])) parts.push(`n=${PENALTIES.map(([k]) => s.penalties[k]).join(",")}`);
   if (s.zones.length) parts.push(`z=${s.zones.map((z) => `${pt(z)},${Math.round(z.radius_m)}${zoneFlag(z)}`).join(";")}`);
   if (s.checkpoints.length) parts.push(`k=${s.checkpoints.map((c) => `${pt(c)},${nameOut(c.name)}`).join(";")}`);
@@ -105,6 +108,7 @@ export function decodeShare(hash: string): Share | null {
       penalties: q.has("n")
         ? Object.fromEntries(PENALTIES.map(([k, lo, hi], i) => [k, num(nums(q.get("n")!)[i], lo, hi)])) as unknown as Penalties
         : { ...DEFAULT_PENALTIES },
+      tlmOnly: q.get("v") !== "0",
     };
   } catch {
     return null;

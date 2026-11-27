@@ -65,6 +65,8 @@ export const [strictness, setStrictnessRaw] = createSignal(0.8);
 export const [weights, setWeights] = createSignal<Weights>({ ...DEFAULT_WEIGHTS });
 /** Hardest SAC grade a loop may use, T1–T6 (D81). */
 export const [maxSac, setMaxSacRaw] = createSignal(3);
+/** Only ways on swisstopo's map (ADR 0007), on by default. */
+export const [tlmOnly, setTlmOnlyRaw] = createSignal(true);
 /** Repeat, area, stem and overlap penalties (D109). */
 export const [penalties, setPenaltiesRaw] = createSignal<Penalties>({ ...DEFAULT_PENALTIES });
 /** Avoid areas (D90). */
@@ -198,6 +200,10 @@ export function setClimb(c: Climb) {
   setClimbRaw(c);
   settingsChanged();
 }
+export function setTlmOnly(v: boolean) {
+  setTlmOnlyRaw(v);
+  settingsChanged();
+}
 export function setPenalty(k: keyof Penalties, v: number) {
   setPenaltiesRaw((p) => ({ ...p, [k]: v }));
   settingsChanged();
@@ -207,6 +213,7 @@ export function clearAll() {
   setWeights({ slope: 0, uphill: 0, downhill: 0, surface: 0, tech: 0, technical: 0, official: 0, forest: 0, urban: 0, traffic: 0, view: 0 });
   setClimbRaw("off");
   setMaxSacRaw(3);
+  setTlmOnlyRaw(true); // a way limit like the hardest grade: back to its default (ADR 0007)
   setPenaltiesRaw({ ...DEFAULT_PENALTIES });
   setZonesRaw([]);
   save({ zones: [] });
@@ -218,6 +225,7 @@ export function resetDefaults() {
   setClimbRaw({ preset: "hilly" });
   setStrictnessRaw(0.8);
   setMaxSacRaw(3);
+  setTlmOnlyRaw(true);
   setPenaltiesRaw({ ...DEFAULT_PENALTIES });
   settingsChanged();
 }
@@ -265,7 +273,7 @@ export const MAX_WAYPOINTS = 20;
 const withinDistance = (m: number) => Math.abs(m - distanceKm() * 1000) / (distanceKm() * 1000) <= 0.1;
 /** Re-route a loop through its waypoints under the current weights and its own climb pressure. */
 async function reroute(r: Route, wps: LatLon[], id: string): Promise<Route> {
-  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, maxSac(), climbTargetM(), zones(), penalties());
+  const next = await routeVia(wps, { ...weights(), climb_pressure: r.climb_pressure }, maxSac(), climbTargetM(), zones(), penalties(), tlmOnly());
   return { ...next, id, copyOf: r.copyOf, climb_pressure: r.climb_pressure, distance_met: withinDistance(next.distance_m) };
 }
 const replaceRoute = (id: string, r: Route) => setRoutes((rs) => rs.map((x) => (x.id === id ? r : x)));
@@ -344,7 +352,7 @@ export async function findRoutes(opts: { keepOpen?: boolean } = {}) {
   setErrorMsg(null);
   setPickingStart(false);
   try {
-    const rs = await generate(from, distanceKm() * 1000, climbGoal(), weights(), maxSac(), zones(), penalties());
+    const rs = await generate(from, distanceKm() * 1000, climbGoal(), weights(), maxSac(), zones(), penalties(), tlmOnly());
     if (mine !== seq) return; // a newer request superseded this one
     let all = rs;
     if (opts.keepOpen) {
@@ -375,7 +383,7 @@ export function shareLink(): string {
   const hash = encodeShare({
     start: start()!, km: distanceKm(), climb: climb(), strictness: strictness(),
     weights: weights(), maxSac: maxSac(), zones: [...zones()], checkpoints: [...checkpoints()], loop: i,
-    wps: r?.copyOf ? r.waypoints : null, penalties: penalties(),
+    wps: r?.copyOf ? r.waypoints : null, penalties: penalties(), tlmOnly: tlmOnly(),
   });
   // A query, not a hash: link-preview crawlers only send the server the query (ADR 0006).
   return `${location.origin}${location.pathname}?${hash}`;
@@ -393,6 +401,7 @@ export async function openShared() {
   setWeights({ ...DEFAULT_WEIGHTS, ...s.weights });
   setMaxSacRaw(s.maxSac);
   setPenaltiesRaw(s.penalties);
+  setTlmOnlyRaw(s.tlmOnly);
   setZonesRaw(s.zones);
   setCheckpointsRaw(s.checkpoints);
   flush(); // Solid 2.0 batches writes; findRoutes must read the shared values, not the stored ones

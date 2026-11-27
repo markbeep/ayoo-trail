@@ -3,7 +3,7 @@ import { DEFAULT_PENALTIES } from "../url";
 import { createEffect, createRoot, createSignal } from "solid-js";
 import { getHealth, routeVia } from "../api";
 import type { LatLon, Weights } from "../routes/types";
-import { setRoutes, setSelectedId, setStale, weights } from "../state";
+import { setRoutes, setSelectedId, setStale, tlmOnly, weights } from "../state";
 
 export const DEV_ROUTE = new URLSearchParams(location.search).get("dev") === "route";
 
@@ -39,7 +39,7 @@ async function reroute(points: LatLon[], w: Weights) {
   }
   setDevBusy(true);
   try {
-    const route = await routeVia(points, w, 3, null, [], DEFAULT_PENALTIES);
+    const route = await routeVia(points, w, 3, null, [], DEFAULT_PENALTIES, tlmOnly());
     if (mine !== seq) return; // a newer request superseded this one
     setRoutes([route]);
     setSelectedId(route.id);

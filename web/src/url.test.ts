@@ -15,6 +15,7 @@ const share: Share = {
   loop: 2,
   wps: [{ lat: 47.2985, lon: 9.095 }, { lat: 47.31, lon: 9.12 }, { lat: 47.2985, lon: 9.095 }],
   penalties: { repeat: 5, avoid_factor: 5, prefer_factor: 0.5, stem_m: 500, max_overlap: 0.5 },
+  tlmOnly: true,
 };
 
 test("a share link round-trips", () => {
@@ -83,4 +84,16 @@ test("links without penalties get the defaults", () => {
 test("long must-pass loops share up to the server's 80 km", () => {
   assert.equal(decodeShare(encodeShare({ ...share, km: 75 }))?.km, 75);
   assert.equal(decodeShare(encodeShare({ ...share, km: 81 })), null);
+});
+
+test("the swisstopo filter is on unless the link says v=0 (ADR 0007)", () => {
+  assert.ok(!encodeShare(share).includes("v="));
+  const off = encodeShare({ ...share, tlmOnly: false });
+  assert.ok(off.includes("&v=0"), off);
+  assert.equal(decodeShare(off)?.tlmOnly, false);
+  assert.equal(decodeShare("s=47.3,9.1&d=10&c=max&t=1&x=3")?.tlmOnly, true);
+});
+
+test("distances keep one decimal", () => {
+  assert.equal(decodeShare(encodeShare({ ...share, km: 16.5 }))?.km, 16.5);
 });
