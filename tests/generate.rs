@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use trail_calc::cost::{Exclusion, ExclusionMode, Profile};
 use trail_calc::generate::{generate, GenerateError, GenerateRequest, GeneratedRoute};
 use trail_calc::geodesy::haversine_m;
-use trail_calc::graph::{EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
+use trail_calc::graph::{flags, Access, EdgeAttrs, Graph, GraphWriter, LatLon, Surface};
 use trail_calc::route::route_geometry;
 
 const LAT: f64 = 46.0;
@@ -195,8 +195,87 @@ fn components_follow_the_sac_limit() {
     );
     let g = Graph::from_bytes(w.finish()).unwrap();
 
-    assert_ne!(g.edge_component(island, 3), g.main_component(3));
-    assert_eq!(g.edge_component(island, 5), g.main_component(5));
+    let sac = |max_sac| Access {
+        max_sac,
+        tlm_only: false,
+    };
+    assert_ne!(g.edge_component(island, sac(3)), g.main_component(sac(3)));
+    assert_eq!(g.edge_component(island, sac(5)), g.main_component(sac(5)));
+}
+
+/// Every grid edge gets `IN_TLM` except those `skip` picks (by edge id).
+fn tlm_grid(n: usize, step: f64, skip: impl Fn(u32) -> bool) -> GraphWriter {
+    let mut w = grid_writer(n, step);
+    for e in 0..w.edge_count() as u32 {
+        if !skip(e) {
+            w.edge_attrs_mut(e).flags |= flags::IN_TLM;
+        }
+    }
+    w
+}
+
+#[test]
+fn components_follow_the_tlm_filter() {
+    let mut w = tlm_grid(3, 200.0, |_| false);
+    let (px, py) = (at(-200.0, 0.0), at(-400.0, 0.0));
+    let (x, y) = (w.add_node(px, 500.0), w.add_node(py, 500.0));
+    let edge = |f| EdgeAttrs {
+        length_m: 200.0,
+        surface: Surface::Gravel,
+        sac: 1,
+        flags: f,
+        ..Default::default()
+    };
+    let o = at(0.0, 0.0);
+    w.add_edge(
+        0,
+        x,
+        edge(0),
+        &[(o.lat, o.lon, 500.0), (px.lat, px.lon, 500.0)],
+    );
+    let island = w.add_edge(
+        x,
+        y,
+        edge(flags::IN_TLM),
+        &[(px.lat, px.lon, 500.0), (py.lat, py.lon, 500.0)],
+    );
+    let g = Graph::from_bytes(w.finish()).unwrap();
+
+    let a = |tlm_only| Access {
+        max_sac: 3,
+        tlm_only,
+    };
+    assert_ne!(g.edge_component(island, a(true)), g.main_component(a(true)));
+    assert_eq!(
+        g.edge_component(island, a(false)),
+        g.main_component(a(false))
+    );
+}
+
+#[test]
+fn tlm_only_loops_use_only_tlm_ways() {
+    // Every third edge is missing from swisstopo's map.
+    let g = Graph::from_bytes(tlm_grid(8, 200.0, |e| e % 3 == 0).finish()).unwrap();
+    let mut r = req(at(700.0, 700.0), 3000.0);
+    r.profile.tlm_only = true;
+    let routes = generate(&g, &r).unwrap();
+    assert!(!routes.is_empty());
+    for rt in &routes {
+        for e in coverage(&g, rt).keys() {
+            assert_ne!(
+                g.edge_attrs(*e).flags & flags::IN_TLM,
+                0,
+                "edge {e} is not on swisstopo's map"
+            );
+        }
+    }
+    r.profile.tlm_only = false;
+    let any = generate(&g, &r).unwrap();
+    assert!(
+        any.iter()
+            .any(|rt| coverage(&g, rt).keys().any(|e| e % 3 == 0)),
+        "without the filter the skipped edges are used"
+    );
 }
 
 #[test]

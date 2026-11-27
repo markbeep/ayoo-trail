@@ -93,7 +93,10 @@ pub fn decode(q: &HashMap<String, String>) -> Option<SharedLoop> {
         };
         exclude.push(json!({ "lat": num(a[0])?, "lon": num(a.get(1)?)?, "radius_m": num(a.get(2)?)?, "mode": mode }));
     }
-    let mut profile = json!({ "weights": weights, "max_sac": max_sac, "exclude": exclude });
+    // Only ways on swisstopo's map unless `v=0` (ADR 0007).
+    let tlm_only = q.get("v").map(String::as_str) != Some("0");
+    let mut profile =
+        json!({ "weights": weights, "max_sac": max_sac, "exclude": exclude, "tlm_only": tlm_only });
     if let Some(n) = q.get("n") {
         let n: Vec<&str> = n.split(',').collect();
         for (i, k) in PENALTIES.iter().enumerate() {
@@ -161,5 +164,14 @@ mod tests {
         assert!(decode(&q("d=10&c=max&t=1&x=3")).is_none());
         assert!(decode(&q(&format!("{base}&c=max&z=47.3,9.1,300,q"))).is_none());
         assert!(decode(&q(&format!("{base}&c=max&w=1,x"))).is_none());
+    }
+
+    #[test]
+    fn swisstopo_filter_is_on_unless_v_is_0() {
+        let base = "s=47.3,9.1&d=10&t=1&x=3&c=max";
+        let tlm = |s: &str| decode(&q(s)).unwrap().generate["profile"]["tlm_only"].clone();
+        assert_eq!(tlm(base), json!(true));
+        assert_eq!(tlm(&format!("{base}&v=0")), json!(false));
+        assert_eq!(tlm(&format!("{base}&v=1")), json!(true));
     }
 }

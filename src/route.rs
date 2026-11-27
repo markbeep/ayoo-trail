@@ -115,7 +115,8 @@ pub fn route(g: &Graph, p: &Profile, start: Snap, end: Snap, visited: &Visited) 
         }
         // Same value as `edge_cost_with` without exclusions, from one record.
         let a = g.hot_edge(e);
-        (a.sac <= p.max_sac)
+        p.access()
+            .allows(a.sac, a.flags)
             .then(|| a.len_cm as f64 / 100.0 * table.hot_breakdown(a, dir).product() * pen)
     };
     let step = |edge, from_t, to_t| RouteStep { edge, from_t, to_t };

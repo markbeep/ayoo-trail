@@ -119,6 +119,20 @@ pub mod flags {
     pub const IN_TLM: u8 = 64;
 }
 
+/// Which edges a profile leaves open: the hardest grade and, with `tlm_only`, only ways on
+/// swisstopo's map (ADR 0007).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Access {
+    pub max_sac: u8,
+    pub tlm_only: bool,
+}
+
+impl Access {
+    pub fn allows(self, sac: u8, edge_flags: u8) -> bool {
+        sac <= self.max_sac && (!self.tlm_only || edge_flags & flags::IN_TLM != 0)
+    }
+}
+
 /// Nine signed grade bands, forward direction, as length shares summing to 255:
 /// [<=-25, -25..-20, -20..-15, -15..-8, -8..8, 8..15, 15..20, 20..25, >=25] percent.
 /// Backward traversal reads the array reversed.
@@ -680,9 +694,9 @@ pub struct Graph {
     bbox: Bbox,
     dem_source: u8,
     anchors: OnceLock<Vec<Anchor>>,
-    /// Per `max_sac` (0..=6): connected-component id per node over the edges with
-    /// `sac <= max_sac`, and the id of the largest component.
-    components: [OnceLock<(Vec<u32>, u32)>; 7],
+    /// Per `Access` (`max_sac` 0..=6, then the same with `tlm_only`): connected-component id
+    /// per node over the edges it allows, and the id of the largest component.
+    components: [OnceLock<(Vec<u32>, u32)>; 14],
     hot: OnceLock<Vec<HotEdge>>,
     /// Per edge and per node, from `view.bin` (D100); unset leaves every view at 0.
     edge_view: OnceLock<Vec<u8>>,
@@ -1020,22 +1034,24 @@ impl Graph {
         })[e as usize]
     }
 
-    /// Connected component of an edge over the edges a `max_sac` limit leaves open. Islands
+    /// Connected component of an edge over the edges an `Access` leaves open. Islands
     /// (station stairs, courtyards, paths cut off by harder trails) can't be reached from the
     /// main network, and A* only gives up on one after exploring everything reachable, so
     /// snaps stay inside the start's component.
-    pub fn edge_component(&self, e: u32, max_sac: u8) -> u32 {
-        self.components(max_sac).0[self.edge_from(e) as usize]
+    pub fn edge_component(&self, e: u32, access: Access) -> u32 {
+        self.components(access).0[self.edge_from(e) as usize]
     }
 
-    /// The largest connected component (the main network) under `max_sac`.
-    pub fn main_component(&self, max_sac: u8) -> u32 {
-        self.components(max_sac).1
+    /// The largest connected component (the main network) under `access`.
+    pub fn main_component(&self, access: Access) -> u32 {
+        self.components(access).1
     }
 
-    /// Union-find over the edges with `sac <= max_sac`, once per limit (~0.15 s on the CH graph).
-    fn components(&self, max_sac: u8) -> &(Vec<u32>, u32) {
-        let i = (max_sac as usize).min(self.components.len() - 1);
+    /// Union-find over the edges `access` allows, once per `Access` (~0.15 s on the CH graph).
+    fn components(&self, access: Access) -> &(Vec<u32>, u32) {
+        let max_sac = access.max_sac.min(6);
+        let access = Access { max_sac, ..access };
+        let i = max_sac as usize + if access.tlm_only { 7 } else { 0 };
         self.components[i].get_or_init(|| {
             fn find(p: &mut [u32], mut x: u32) -> u32 {
                 while p[x as usize] != x {
@@ -1047,7 +1063,8 @@ impl Graph {
             let n = self.node_count();
             let mut parent: Vec<u32> = (0..n as u32).collect();
             for e in 0..self.edge_count() as u32 {
-                if self.edge_attrs(e).sac as usize > i {
+                let a = self.edge_attrs(e);
+                if !access.allows(a.sac, a.flags) {
                     continue;
                 }
                 let (a, b) = (

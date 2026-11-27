@@ -11,7 +11,7 @@ use trail_calc::route::route_stats;
 
 fn main() {
     let g = Graph::open(Path::new("data/graph.bin")).unwrap();
-    g.main_component(3);
+    g.main_component(Profile::default().access());
     let km: f64 = std::env::var("KM")
         .ok()
         .and_then(|s| s.parse().ok())

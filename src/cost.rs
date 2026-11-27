@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::geodesy::{closest_on_segment, haversine_m, LocalProjection};
-use crate::graph::{flags, Direction, Graph, Highway, HotEdge, LatLon, GRADE_BANDS};
+use crate::graph::{flags, Access, Direction, Graph, Highway, HotEdge, LatLon, GRADE_BANDS};
 
 /// Slope factors for the four descent bands, steepest first (<=-25, -25..-20, -20..-15,
 /// -15..-8 %), for gentle / any / steep (D45, D53). Starting points to tune (Q17).
@@ -154,6 +154,9 @@ pub struct Profile {
     pub stem_m: f64,
     /// Generated loops sharing more than this share of the shorter one are dropped.
     pub max_overlap: f64,
+    /// Only ways on swisstopo's map (ADR 0007). Off unless asked for, so API callers and graphs
+    /// without the flag keep working; the client sends it on by default.
+    pub tlm_only: bool,
 }
 
 impl Default for Profile {
@@ -167,6 +170,7 @@ impl Default for Profile {
             prefer_factor: PREFER_FACTOR,
             stem_m: 500.0,
             max_overlap: 0.5,
+            tlm_only: false,
         }
     }
 }
@@ -198,6 +202,13 @@ fn min_weighted(table: &[f32], w: f32) -> f64 {
 }
 
 impl Profile {
+    pub fn access(&self) -> Access {
+        Access {
+            max_sac: self.max_sac,
+            tlm_only: self.tlm_only,
+        }
+    }
+
     pub fn validate(&self) -> Result<(), ProfileError> {
         let w = &self.weights;
         let signed = [w.surface, w.official, w.forest, w.urban, w.traffic, w.view];
@@ -477,9 +488,10 @@ fn touches(g: &Graph, e: u32, x: &Exclusion) -> bool {
     pts.windows(2).any(|s| near(s[0], s[1]))
 }
 
-/// Hard filters only: sac above `max_sac`, or a touching Block marker.
+/// Hard filters only: what `Profile::access` closes, or a touching Block marker.
 pub fn traversable(g: &Graph, e: u32, p: &Profile) -> bool {
-    if g.edge_attrs(e).sac > p.max_sac {
+    let a = g.edge_attrs(e);
+    if !p.access().allows(a.sac, a.flags) {
         return false;
     }
     !p.exclude
@@ -531,7 +543,7 @@ pub(crate) fn edge_cost_split(
     t: &FactorTable,
 ) -> Option<[(f64, f64); 2]> {
     let a = g.hot_edge(e);
-    if a.sac > p.max_sac || (!p.exclude.is_empty() && !traversable(g, e, p)) {
+    if !p.access().allows(a.sac, a.flags) || (!p.exclude.is_empty() && !traversable(g, e, p)) {
         return None;
     }
     let b = t.hot_breakdown(a, Direction::Forward);

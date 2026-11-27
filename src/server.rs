@@ -147,11 +147,11 @@ fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
         // Later waypoints prefer the first one's network; one on an island can't be reached,
         // and A* would only find that out after exploring the whole graph.
         let snap = match snaps.first() {
-            None => g.snap_start(p, SNAP_LIMIT_M, profile.max_sac, ok),
+            None => g.snap_start(p, SNAP_LIMIT_M, profile.access(), ok),
             Some(s0) => {
-                let home = g.edge_component(s0.edge, profile.max_sac);
+                let home = g.edge_component(s0.edge, profile.access());
                 g.snap_filtered(p, SNAP_LIMIT_M, |e| {
-                    ok(e) && g.edge_component(e, profile.max_sac) == home
+                    ok(e) && g.edge_component(e, profile.access()) == home
                 })
                 .or_else(|| g.snap_filtered(p, SNAP_LIMIT_M, ok))
             }
@@ -168,8 +168,8 @@ fn compute_route(g: &Graph, req: RouteRequest) -> Result<Value, ApiError> {
 
     let no_path = || unprocessable("no path between waypoints");
     if snaps.iter().any(|s| {
-        g.edge_component(s.edge, profile.max_sac)
-            != g.edge_component(snaps[0].edge, profile.max_sac)
+        g.edge_component(s.edge, profile.access())
+            != g.edge_component(snaps[0].edge, profile.access())
     }) {
         return Err(no_path());
     }

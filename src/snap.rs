@@ -4,7 +4,7 @@
 use std::ops::Range;
 
 use crate::geodesy::{closest_on_segment, haversine_m, LocalProjection};
-use crate::graph::{Bbox, Graph, LatLon};
+use crate::graph::{Access, Bbox, Graph, LatLon};
 
 pub const SNAP_LIMIT_M: f32 = 150.0;
 
@@ -120,19 +120,19 @@ impl Graph {
         self.snap_filtered(p, max_m, |_| true)
     }
 
-    /// Like `snap_filtered`, but on the main network (under `max_sac`) when it is within
+    /// Like `snap_filtered`, but on the main network (under `access`) when it is within
     /// `max_m`, so a start beside station stairs or a courtyard path doesn't land on an island.
     /// Else any component.
     pub fn snap_start(
         &self,
         p: LatLon,
         max_m: f32,
-        max_sac: u8,
+        access: Access,
         accept: impl Fn(u32) -> bool,
     ) -> Option<Snap> {
-        let main = self.main_component(max_sac);
+        let main = self.main_component(access);
         self.snap_filtered(p, max_m, |e| {
-            accept(e) && self.edge_component(e, max_sac) == main
+            accept(e) && self.edge_component(e, access) == main
         })
         .or_else(|| self.snap_filtered(p, max_m, accept))
     }

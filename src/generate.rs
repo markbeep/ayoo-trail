@@ -99,7 +99,7 @@ impl Candidate {
 pub fn generate(g: &Graph, req: &GenerateRequest) -> Result<Vec<GeneratedRoute>, GenerateError> {
     let p = &req.profile;
     let ok = |e: u32| traversable(g, e, p);
-    let start = match g.snap_start(req.start, SNAP_LIMIT_M, p.max_sac, ok) {
+    let start = match g.snap_start(req.start, SNAP_LIMIT_M, p.access(), ok) {
         Some(s) => s,
         None if g.snap(req.start).is_some() => return Err(GenerateError::StartBlocked),
         None => return Err(GenerateError::StartOffNetwork),
@@ -218,7 +218,7 @@ fn seed(
     musts: &[Snap],
 ) -> Option<Candidate> {
     let target = req.distance_m;
-    let sac = req.profile.max_sac;
+    let sac = req.profile.access();
     let home = g.edge_component(start.edge, sac);
     let proj = LocalProjection::new(start.pos.lat);
     let o = proj.project(start.pos);
@@ -311,7 +311,7 @@ fn seed(
 /// Must-pass areas snapped onto a reachable trail inside them (D97). Reachability past hard
 /// avoids is checked by the caller.
 fn must_passes(g: &Graph, p: &Profile, start: Snap) -> Result<Vec<Snap>, GenerateError> {
-    let home = g.edge_component(start.edge, p.max_sac);
+    let home = g.edge_component(start.edge, p.access());
     p.exclude
         .iter()
         .filter(|x| x.mode == ExclusionMode::Must)
@@ -321,7 +321,7 @@ fn must_passes(g: &Graph, p: &Profile, start: Snap) -> Result<Vec<Snap>, Generat
                 lon: x.lon,
             };
             g.snap_filtered(c, x.radius_m, |e| {
-                g.edge_component(e, p.max_sac) == home && traversable(g, e, p)
+                g.edge_component(e, p.access()) == home && traversable(g, e, p)
             })
             .ok_or(GenerateError::MustPassUnreachable)
         })

@@ -59,7 +59,14 @@ async fn main() -> std::io::Result<()> {
         let g = Graph::open(&graph_path).map_err(|e| {
             std::io::Error::other(format!("cannot open {}: {e}", graph_path.display()))
         })?;
-        g.main_component(Profile::default().max_sac); // label now, not on the first request
+        // Label now, not on the first request: the client's default has the swisstopo filter on.
+        g.main_component(
+            Profile {
+                tlm_only: true,
+                ..Profile::default()
+            }
+            .access(),
+        );
         if let Some(v) = &view {
             g.set_view(v); // before the routing records are packed
         }
