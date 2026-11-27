@@ -3,7 +3,7 @@ import { Layers, Plus, Minus, X, LocateFixed, LoaderCircle } from "@lucide/solid
 import { MapView, mapController } from "./components/MapView";
 import { DevRouteCard } from "./components/DevRouteCard";
 import { DEV_ROUTE } from "./dev/routeDebug";
-import { SettingsCard } from "./components/SettingsCard";
+import { Preferences } from "./components/Preferences";
 import { QueryCard } from "./components/QueryCard";
 import { RouteCard } from "./components/RouteCard";
 import { RouteTiles } from "./components/RouteTiles";
@@ -139,10 +139,9 @@ export function App() {
           <Show when={DEV_ROUTE}><DevRouteCard /></Show>
           <QueryCard />
           <Show when={routes().length} fallback={
-            <p class="empty">Pick a start and a distance, then find loops. Open Settings to fine-tune what they favour.</p>
+            <p class="empty">Pick a start and a distance, then find loops.</p>
           }><RouteTiles routes={routes()} /></Show>
-          <SettingsCard />
-          <Show when={selected()}>{(r) => <RouteCard route={r()} label={loopLabel(routes(), r())} />}</Show>
+          <Show when={selected()} fallback={<section class="card"><Preferences /></section>}>{(r) => <RouteCard route={r()} label={loopLabel(routes(), r())} />}</Show>
         </div>
       </aside>
 

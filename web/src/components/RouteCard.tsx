@@ -1,14 +1,15 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { Check, Download, Link, LoaderCircle, RefreshCw, Trash2, TriangleAlert, Undo2 } from "@lucide/solid";
 import type { Route } from "../routes/types";
 import {
-  FACTORS, checkpoints, costView, editError, findRoutes, deleteCopy, hoverIndex, refreshing, setCostView, shareLink, stale, undoEdit,
+  checkpoints, costView, editError, findRoutes, deleteCopy, hoverIndex, refreshing, setCostView, shareLink, stale, undoEdit,
 } from "../state";
 import { costBucket, termBucket } from "../map/controller";
 import { narrow } from "../layout";
 import { downloadGpx } from "../routes/gpx";
 import { km, meters, score } from "../routes/format";
 import { ElevationProfile } from "./ElevationProfile";
+import { Preferences } from "./Preferences";
 
 /** Plain words for each color of the cost ramp, best first. */
 const PREFERENCE = ["preferred", "good", "fine", "avoided", "strongly avoided"];
@@ -91,20 +92,11 @@ export function RouteCard(props: { route: Route; label: { name: string; star: st
         </div>
       </Show>
 
-      <h3 class="why">Why it scores {score(r().score)}<Show when={termsHere()}><span class="why-here"> · colors show the point you're on</span></Show><Show when={refreshing()}><span class="updating"><LoaderCircle size={13} class="spin" />Updating</span></Show></h3>
-      <ul class="bars">
-        <For each={bars()}>{(b) => (
-          <li class="bar" title={b.detail}>
-            <span class="bar-label">{FACTORS[b.key].label}</span>
-            <span class="track" aria-hidden="true"><span class="fill" style={{
-              width: `${Math.round((b.value ?? 0) * 100)}%`,
-              background: termsHere() && b.key !== "climb" ? `var(--cost-${termBucket(termsHere()![b.key]) + 1})` : undefined,
-            }} /></span>
-            <span class="bar-value"><Show when={b.value !== null} fallback={<span class="sr-only">, not scored. </span>}><span class="sr-only">, </span>{Math.round(b.value! * 100)}<span class="sr-only"> out of 100. </span></Show></span>
-            <span class="bar-detail">{b.detail}</span>
-          </li>
-        )}</For>
-      </ul>
+      <Preferences
+        bars={bars()}
+        colorOf={(k) => { const t = termsHere(); return t ? termBucket(t[k]) : undefined; }}
+        heading={<>Why it scores {score(r().score)}<Show when={termsHere()}><span class="why-here"> · colors show the point you're on</span></Show><Show when={refreshing()}><span class="updating"><LoaderCircle size={13} class="spin" />Updating</span></Show></>}
+      />
     </section>
   );
 }

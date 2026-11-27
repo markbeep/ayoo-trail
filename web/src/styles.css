@@ -210,13 +210,6 @@ input { caret-color: var(--signal); }
   margin-top: 8px; padding: 5px 8px; border: 1px dashed var(--ink); font-weight: 700; font-size: 13px;
 }
 
-.why { font-size: 12px; font-weight: 700; color: var(--muted); margin: 10px 0 0; padding-bottom: 3px; border-bottom: 1px solid var(--ink); }
-.bars { list-style: none; }
-.bar {
-  display: grid; grid-template-columns: 116px 1fr 30px; align-items: center; column-gap: 8px;
-  padding: 3px 0 4px; font-weight: 700; font-size: 13px; border-bottom: 1px solid var(--line);
-}
-.bar-detail { grid-column: 1 / -1; font-size: 12px; font-weight: 500; color: var(--muted); }
 .bar-value { font-weight: 800; font-size: 13px; text-align: right; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .track { height: 6px; background: var(--well); overflow: hidden; }
@@ -357,12 +350,12 @@ input { caret-color: var(--signal); }
   }
   /* Keep the open credits clear of the map buttons on the right. */
   .maplibregl-ctrl-attrib.maplibregl-compact-show { max-width: calc(100vw - 2 * var(--edge) - 56px); }
-  .bar { grid-template-columns: 108px 1fr 28px; }
+  .pref-row { grid-template-columns: 104px 1fr 26px 58px 14px; }
 }
 
 /* Numbers about to be replaced by a live refresh fade, so they don't read as the setting's effect (D75). */
-.route-card :is(.score, .bar), .tiles { transition: opacity .2s; }
-.route-card.refreshing :is(.score, .bar) { opacity: .35; }
+.route-card :is(.score, .pref-row), .tiles { transition: opacity .2s; }
+.route-card.refreshing :is(.score, .pref-row) { opacity: .35; }
 .updating { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; color: var(--ink); }
 
 /* ---------- drag editing and cost view (D54) ---------- */
@@ -410,42 +403,44 @@ input { caret-color: var(--signal); }
 /* Natural size, only scaled down to fit: Windy's images must not be stretched. */
 .info-img { display: block; max-width: 100%; height: auto; }
 
-/* ---------- settings: collapsed, then one collapsible group per topic (D106, D107, D115) ---------- */
-.settings { padding: 0; }
-.set-head { display: flex; align-items: center; gap: 12px; padding: 0 14px 0 0; }
-.settings.open .set-head { border-bottom: 1px solid var(--ink); }
-.set-toggle { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 14px; text-align: left; }
-.set-toggle:hover { background: var(--well); }
-.set-head h2 { font-size: 15px; font-weight: 800; }
-.set-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.set-hint { color: var(--muted); font-weight: 500; font-size: 13px; line-height: 1.3; }
-.set-chev { flex: none; color: var(--muted); transition: transform .15s; }
-.settings.open .set-toggle .set-chev, .set-group[open] > summary .set-chev { transform: rotate(180deg); }
-.set-intro { padding: 10px 14px; font-size: 13px; line-height: 1.4; color: var(--muted); border-bottom: 1px solid var(--ink); }
-.set-intro b { color: var(--ink); }
-
-.set-group { border-bottom: 1px solid var(--ink); }
-.set-group > summary {
-  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 14px;
-  cursor: pointer; list-style: none;
+/* ---------- preferences: one ruled row per score bar, its controls open inline (ADR 0008) ---------- */
+.prefs { margin-top: 10px; }
+.prefs-head { display: flex; align-items: baseline; gap: 12px; padding-bottom: 3px; border-bottom: 1px solid var(--ink); }
+.prefs-head h3 { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--muted); }
+.prefs-head .link-btn { font-size: 12px; }
+.card > .prefs:first-child { margin-top: 0; }
+.pref { border-bottom: 1px solid var(--line); }
+.pref.open { border-bottom-color: var(--ink); }
+.pref-row {
+  display: grid; grid-template-columns: 116px 1fr 30px 62px 14px; align-items: center; column-gap: 8px;
+  width: 100%; min-height: 30px; padding: 2px 0; text-align: left; font-weight: 700; font-size: 13px;
 }
-.set-group > summary::-webkit-details-marker { display: none; }
-.set-group > summary:hover { background: var(--well); }
-.set-group[open] > summary { background: var(--well); border-bottom: 1px solid var(--line); }
-.set-gtitle { font-size: 14px; font-weight: 800; }
-.set-actions { display: flex; gap: 14px; }
-
-.set-row {
-  display: flex; align-items: center; gap: 12px;
-  min-height: 56px; padding: 8px 14px; border-bottom: 1px solid var(--line);
-}
-.set-group .set-row:last-child { border-bottom: 0; }
-.set-row.wide { flex-direction: column; align-items: stretch; gap: 8px; }
-.set-label { font-weight: 700; font-size: 14px; }
-.set-value { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; width: 104px; }
-.set-note { color: var(--muted); font-weight: 600; font-size: 12px; min-height: 0; }
-.set-note:empty { display: none; }
-.set-row .seg > button { min-height: 36px; }
+.pref-row.static { border-bottom: 1px solid var(--line); }
+button.pref-row:hover { background: var(--well); }
+.pref.open > .pref-row { background: var(--well); }
+.pref-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 2px; }
+.pref-x { text-align: right; font-weight: 800; font-size: 13px; color: var(--ink); white-space: nowrap; }
+.pref-x[data-w="off"] { color: var(--muted); font-weight: 600; }
+.pref-x[data-w="avoid"] { color: var(--avoid); }
+.pref-x[data-w="prefer"] { color: var(--prefer); }
+.pref-chev { color: var(--muted); transition: transform .15s; }
+.pref.open .pref-chev, .pref-more[open] > summary .pref-chev { transform: rotate(180deg); }
+.pref-panel { padding: 4px 0 8px 10px; border-left: 1px solid var(--ink); margin-left: 2px; }
+.pref-hint { font-size: 12px; line-height: 1.35; color: var(--muted); padding: 2px 0 4px; }
+.pref-ctl { display: grid; grid-template-columns: 1fr 104px; align-items: center; gap: 8px; min-height: 32px; font-size: 13px; font-weight: 700; }
+.pref-ctl + .pref-ctl { border-top: 1px solid var(--line); }
+.pref-ctl .scrub, .pref-ctl .scrub-input { min-height: 28px; padding: 3px 6px; font-size: 14px; }
+.pref-ctl:has(.sac) { grid-template-columns: auto 1fr; }
+.seg.sac > button { flex: 1; min-height: 28px; font-size: 12px; }
+.pref-switch { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; border-top: 1px solid var(--line); font-size: 13px; font-weight: 700; text-align: left; }
+.pref-switch.active .switch { background: var(--ink); }
+.pref-switch.active .switch::after { transform: translateX(12px); background: var(--paper); }
+.pref-more > summary { display: flex; align-items: center; justify-content: space-between; min-height: 30px; padding: 0 0 0 2px; cursor: pointer; list-style: none; font-size: 12px; font-weight: 700; color: var(--muted); }
+.pref-more > summary::-webkit-details-marker { display: none; }
+.pref-more > summary:hover { background: var(--well); color: var(--ink); }
+.pref-more[open] > summary { border-bottom: 1px solid var(--line); }
+.pref-more .pref-ctl { padding-left: 2px; }
+@media (pointer: coarse) { .pref-row, .pref-ctl, .pref-switch, .pref-more > summary { min-height: 40px; } }
 .scrub, .scrub-input {
   display: inline-block; width: 100%; min-height: 34px; padding: 6px 8px; text-align: right; font: inherit;
   font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums;
@@ -458,8 +453,6 @@ input { caret-color: var(--signal); }
 .scrub-input { border-color: var(--ink); background: var(--paper); cursor: text; }
 /* iOS zooms the page into any focused field under 16px. */
 @media (pointer: coarse) { .scrub, .scrub-input { font-size: 16px; } }
-.set-note[data-w="avoid"] { color: var(--avoid); }
-.set-note[data-w="prefer"] { color: var(--prefer); }
 /* Typing on a phone: room below the last row so any field can scroll up above the keyboard. */
 .panel.typing .panel-scroll::after { content: ""; flex: none; height: 60dvh; }
 
@@ -475,6 +468,14 @@ input { caret-color: var(--signal); }
 .qgrid .start-field:focus-within { background: transparent; }
 .qgrid .seg { border: 0; border-top: 1px solid var(--line); flex: 1; }
 .qgo { margin: 0; min-height: 0; height: 100%; font-size: 14px; gap: 6px; }
+.qclimb { grid-column: 1 / -1; border-top: 1px solid var(--ink); padding: 2px 0 0; display: flex; flex-direction: column; }
+.qclimb .qlabel { padding: 0 6px; }
+.qclimb .seg > button { flex: 1; min-height: 30px; }
+.qclimb-x { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); padding: 0; }
+.qclimb-x:has(> .qpair:only-child) { grid-template-columns: 1fr; }
+.qpair { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 3px 6px; min-width: 0; }
+.qpair + .qpair { border-left: 1px solid var(--line); }
+.qpair .scrub, .qpair .scrub-input { width: 84px; flex: none; min-height: 26px; padding: 2px 6px; font-size: 14px; }
 .qgrid .start-results { margin: 2px -6px -4px; border-width: 1px 0 0; }
 
 /* Travel origins under the Travel time switch (ADR 0002): timetable rows, ink numbers. */
