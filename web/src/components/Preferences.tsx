@@ -71,7 +71,7 @@ function Panel(props: { k: TermKey }) {
             </span>
           </Ctl>
           <button role="switch" aria-checked={`${tlmOnly()}`} class={["pref-switch", { active: tlmOnly() }]} onClick={() => setTlmOnly(!tlmOnly())}>
-            Only ways on swisstopo's map<span class="switch" aria-hidden="true" />
+            swisstopo paths only<span class="switch" aria-hidden="true" />
           </button>
         </>
       );

@@ -16,7 +16,8 @@ The settings card goes. Each preference is edited on the score bar it acts on.
   follow it) moves to the query card next to the distance. The Elevation bar
   only shows how well the goal was met.
 - The Marked trails panel holds the way limits: its ×, the hardest allowed
-  grade (T1–T6) and "Only ways on swisstopo's map" (ADR 0007). The Technical
+  grade (T1–T6) and the switch "swisstopo paths only" (ADR 0007; the
+  owner picked this label over the longer "Only ways on swisstopo's map"). The Technical
   terrain panel keeps only "harder grades" and its strength.
 - Reuse, start stem, overlap and the avoid/prefer area strengths go into one
   collapsed "Advanced" fold at the end of the rows.
