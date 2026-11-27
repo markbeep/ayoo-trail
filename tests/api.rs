@@ -436,7 +436,7 @@ async fn share_link_page_carries_a_link_preview() {
             String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap()
         }
     };
-    let html = page("/?s=46.9,7.4005&d=0.5&c=max&t=0.6&x=3").await;
+    let html = page("/?s=46.9,7.4005&d=0.5&c=max&t=0.6&x=3&v=0").await;
     assert!(
         html.contains(r#"property="og:title" content="Loop A · 0."#),
         "{html}"

@@ -302,8 +302,8 @@ fn compute_loops(g: &Graph, b: GenerateBody) -> Result<Value, ApiError> {
             GenerateError::MustPassUnreachable => "a must-pass area has no reachable trail".into(),
             GenerateError::MustPassTooFar { min_m } => {
                 format!(
-                    "must-pass areas need at least {:.0} km",
-                    (min_m / 1000.0).ceil()
+                    "must-pass areas need at least {} km",
+                    (min_m / 100.0).ceil() / 10.0 // one decimal, rounded up so it fits
                 )
             }
             GenerateError::NoLoop => "no loop fits the hard avoid areas".into(),
